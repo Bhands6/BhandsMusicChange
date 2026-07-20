@@ -1,0 +1,1925 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mineradio Desktop Lyrics</title>
+  <style>
+    /* ==================== CSS 变量定义 ==================== */
+    /* 定义歌词样式相关的 CSS 自定义属性 */
+    :root{
+      --lyric-primary:#f6fdff;        /* 主要文字颜色 - 亮白色 */
+      --lyric-secondary:#a8f6ff;      /* 次要文字颜色 - 浅青色 */
+      --lyric-highlight:#fff0b8;      /* 高亮文字颜色 - 暖黄色 */
+      --lyric-glow:#9cffdf;           /* 发光效果颜色 - 青绿色 */
+      --lyric-font:Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif; /* 字体栈 */
+      --lyric-weight:900;             /* 字体粗细 */
+      --lyric-letter-spacing:0px;     /* 字间距 */
+      --lyric-line-height:1;          /* 行高 */
+      --lyric-size:58px;              /* 字体大小 */
+      --lyric-progress:0%;            /* 歌词进度百分比 */
+      --lyric-feather:5.5%;           /* 渐变羽化宽度 */
+      --lyric-fit-x:1;               /* 水平缩放比例 */
+      --lyric-scroll-x:0px;          /* 水平滚动偏移量 */
+      --lyric-edge-width:92px;        /* 边缘宽度 */
+      --lyric-mask-edge-width:92px;   /* 遮罩边缘宽度 */
+      --lyric-vertical-feather:46px;  /* 垂直羽化距离 */
+      --lyric-css-beat-glow:0px;     /* 节拍发光大小 */
+      --lyric-shadow-soft:rgba(156,255,223,.34);  /* 柔和阴影 */
+      --lyric-shadow-glow:rgba(156,255,223,.26);  /* 发光阴影 */
+      --lyric-shadow-hot:rgba(255,240,184,.22);   /* 高亮阴影 */
+      --lyric-edge:rgba(4,6,12,.42);              /* 边缘颜色 */
+      --lyric-drop:rgba(156,255,223,.38);         /* 投影颜色 */
+      --lyric-drop-paused:rgba(156,255,223,.22);  /* 暂停时投影颜色 */
+    }
+    /* ==================== 基础布局样式 ==================== */
+    /* 页面基础样式 - 全屏透明背景，禁止文本选择 */
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent;user-select:none}
+    /* body 默认隐藏，通过 .show 类显示，支持窗口拖拽 */
+    body{opacity:0;transition:opacity .22s ease;-webkit-app-region:no-drag}
+    body.show{opacity:1}  /* 显示状态 */
+    canvas{display:none}  /* 隐藏 canvas 元素，用于粒子效果绘制 */
+    /* ==================== 歌词容器布局 ==================== */
+    /* 外层包裹容器 - 全屏居中对齐，禁用鼠标事件 */
+    .wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 12px;pointer-events:none}
+    /* 舞台容器 - 歌词显示区域，支持 3D 变换和动画 */
+    .stage{
+      position:relative;
+      max-width:calc(100vw - 24px);
+      padding:104px 86px 94px;  /* 内边距，为锁定提示留空间 */
+      box-sizing:border-box;
+      pointer-events:auto;      /* 启用鼠标事件 */
+      cursor:default;
+      transform-style:preserve-3d;  /* 保留 3D 变换 */
+      transform-origin:center;
+      will-change:transform,filter; /* 优化动画性能 */
+      contain:layout style;         /* 限制重绘范围 */
+      backface-visibility:hidden;
+      -webkit-app-region:no-drag;   /* 禁止窗口拖拽 */
+    }
+    /* 解锁状态下显示移动光标 */
+    body.unlocked .stage{cursor:move}
+    body.unlocked .stage.hint-visible{cursor:move;-webkit-app-region:no-drag}
+    /* 歌词视口 - 承载歌词文本，带渐变遮罩效果 */
+    .lyric-viewport{
+      position:relative;
+      z-index:2;
+      display:block;
+      width:min(100%,1120px);
+      max-width:calc(100vw - 24px);
+      margin:0 auto;
+      padding:1.24em var(--lyric-edge-width) 1.34em;
+      box-sizing:border-box;
+      overflow:hidden;
+      text-align:center;
+      pointer-events:none;
+      isolation:isolate;
+      /* 水平渐变遮罩 - 边缘淡出效果 */
+      -webkit-mask-image:linear-gradient(90deg,transparent 0,#000 var(--lyric-mask-edge-width),#000 calc(100% - var(--lyric-mask-edge-width)),transparent 100%);
+      mask-image:linear-gradient(90deg,transparent 0,#000 var(--lyric-mask-edge-width),#000 calc(100% - var(--lyric-mask-edge-width)),transparent 100%);
+      filter:drop-shadow(0 1px 2.4px rgba(4,6,12,.58)) drop-shadow(0 0 4.8px rgba(4,6,12,.30));
+      transform:translateZ(0);  /* 启用硬件加速 */
+      will-change:transform,filter;
+    }
+    /* 解锁且提示可见时启用视口鼠标事件 */
+    body.unlocked .stage.hint-visible .lyric-viewport{pointer-events:auto;cursor:move;-webkit-app-region:no-drag}
+    /* ==================== 歌词滚动和文本样式 ==================== */
+    /* 歌词滚动容器 - 支持平滑滚动动画 */
+    .lyric-scroll{
+      display:inline-block;
+      transform:translate3d(var(--lyric-scroll-x),0,0) scaleX(var(--lyric-fit-x));
+      transform-origin:center;
+      will-change:transform;
+      backface-visibility:hidden;
+    }
+    /* 歌词文本行 - 核心样式，支持渐变填充和发光效果 */
+    .line{
+      position:relative;
+      z-index:2;
+      display:inline-block;
+      max-width:none;
+      color:#fff;
+      font-family:var(--lyric-font);
+      font-size:var(--lyric-size);
+      font-weight:var(--lyric-weight);
+      line-height:var(--lyric-line-height);
+      letter-spacing:var(--lyric-letter-spacing);
+      text-align:center;
+      white-space:nowrap;
+      overflow:visible;
+      text-overflow:clip;
+      padding:.20em .12em .34em;
+      margin:-.20em -.12em -.34em;
+      /* 文本渐变填充 - 使用 background-clip 实现文字渐变 */
+      background:linear-gradient(90deg,var(--lyric-primary),var(--lyric-primary));
+      -webkit-background-clip:text;
+      background-clip:text;
+      -webkit-text-fill-color:transparent;
+      -webkit-text-stroke:.18px rgba(255,255,255,.72);  /* 文字描边 */
+      paint-order:stroke fill;
+      /* 多层文字阴影 - 创建发光效果 */
+      text-shadow:0 0 1px rgba(255,255,255,.34),0 0 calc(6px + var(--lyric-css-beat-glow)) var(--lyric-shadow-soft),0 0 calc(14px + var(--lyric-css-beat-glow)) var(--lyric-shadow-glow);
+      filter:none;
+      opacity:0;  /* 初始隐藏，通过动画显示 */
+      transform:translate3d(0,0,0);
+      transform-origin:center;
+      backface-visibility:hidden;
+      will-change:opacity,filter,transform,background;
+    }
+    /* 高亮模式 - 歌词进度渐变效果 */
+    body.highlight .line{
+      background:linear-gradient(90deg,
+        var(--lyric-highlight) 0%,
+        var(--lyric-highlight) max(0%,calc(var(--lyric-progress) - var(--lyric-feather))),
+        var(--lyric-glow) calc(var(--lyric-progress) + 1.2%),
+        var(--lyric-primary) calc(var(--lyric-progress) + var(--lyric-feather)),
+        var(--lyric-primary) 100%);
+      -webkit-background-clip:text;
+      background-clip:text;
+    }
+    /* 歌词入场动画 - 使用 .in 类触发 */
+    .line.in{animation:lyr-in 820ms cubic-bezier(.16,.84,.32,1.02) forwards}
+    /* 暂停状态 - 降低透明度 */
+    body.paused .line{filter:none;opacity:.84}
+    /* ==================== 锁定提示和控制按钮 ==================== */
+    /* 锁定状态提示 - 显示在歌词上方，包含锁定图标和文字 */
+    .lock-hint{
+      position:absolute;
+      z-index:4;
+      left:50%;
+      top:72px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:7px;
+      min-width:92px;
+      min-height:30px;
+      padding:0 11px;
+      border-radius:999px;  /* 圆角药丸形状 */
+      border:1px solid color-mix(in srgb,var(--lyric-glow) 58%,rgba(255,255,255,.36));
+      background:rgba(4,6,10,.44);  /* 半透明深色背景 */
+      color:rgba(255,255,255,.84);
+      font:800 12px/1 "Microsoft YaHei",sans-serif;
+      text-shadow:0 1px 10px rgba(0,0,0,.55);
+      box-shadow:0 0 20px color-mix(in srgb,var(--lyric-glow) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.16);
+      opacity:0;  /* 初始隐藏 */
+      pointer-events:none;
+      transform:translateX(-50%) translateY(-8px) scale(.92);  /* 初始位置偏移和缩小 */
+      transition:opacity .16s ease,transform .16s ease;
+      -webkit-app-region:no-drag;
+    }
+    /* 锁图标 - 使用伪元素绘制 */
+    .lock-icon{
+      position:relative;
+      width:13px;
+      height:13px;
+      flex:0 0 auto;
+    }
+    /* 锁体 - 矩形部分 */
+    .lock-icon::before{content:"";position:absolute;left:2px;bottom:1px;width:9px;height:7px;border:1.7px solid var(--lyric-highlight);border-radius:2px;box-sizing:border-box}
+    /* 锁环 - 弧形部分 */
+    .lock-icon::after{content:"";position:absolute;left:3px;top:0;width:7px;height:8px;border:1.7px solid var(--lyric-highlight);border-bottom:0;border-radius:7px 7px 0 0;box-sizing:border-box}
+    /* 解锁状态 - 锁环旋转 */
+    body.unlocked .lock-icon::after{left:7px;transform:rotate(24deg);transform-origin:left bottom}
+    /* 关闭按钮 - 仅在解锁状态下显示 */
+    .lyrics-close{
+      display:none;
+      align-items:center;
+      justify-content:center;
+      height:22px;
+      width:auto;
+      margin-right:-4px;
+      border:0;
+      border-left:1px solid rgba(255,255,255,.14);  /* 左侧分隔线 */
+      padding:0 0 1px 9px;
+      background:transparent;
+      color:rgba(255,255,255,.82);
+      font:800 12px/1 "Microsoft YaHei",sans-serif;
+      cursor:pointer;
+      text-shadow:0 0 12px var(--lyric-primary);
+      -webkit-app-region:no-drag;
+    }
+    .lyrics-close:hover{color:#fff}  /* 悬停时变亮 */
+    body.unlocked .lyrics-close{display:flex}  /* 解锁时显示关闭按钮 */
+    /* 解锁且提示可见时启用锁定提示鼠标事件 */
+    body.unlocked .stage.hint-visible .lock-hint{pointer-events:auto;-webkit-app-region:no-drag}
+    /* 提示可见时显示锁定提示 */
+    .stage.hint-visible .lock-hint{opacity:.94;transform:translateX(-50%) translateY(0) scale(1)}
+    /* ==================== 动画关键帧 ==================== */
+    /* 歌词入场动画 - 从下方飞入，带 3D 旋转和模糊效果 */
+    @keyframes lyr-in{
+      0%{opacity:0;transform:translate3d(0,32px,-120px) rotateX(24deg) rotateY(-18deg) scale(.78);filter:blur(12px)}
+      58%{opacity:1;filter:blur(0)}  /* 中间点完成透明度动画 */
+      100%{opacity:1;transform:translate3d(0,0,0) rotateX(0deg) rotateY(0deg) scale(1);filter:blur(0)}
+    }
+  </style>
+</head>
+<body>
+  <!-- 粒子效果画布 - 用于绘制发光粒子 -->
+  <canvas id="fx"></canvas>
+  <div class="wrap">
+    <!-- 主舞台容器 - 歌词显示核心区域 -->
+    <div id="stage" class="stage">
+      <!-- 歌词视口 - 承载滚动歌词文本 -->
+      <div id="lyricViewport" class="lyric-viewport">
+        <div id="lyricScroller" class="lyric-scroll">
+          <div id="line" class="line" data-text="Mineradio">Mineradio</div>
+        </div>
+      </div>
+      <!-- 锁定提示 - 显示锁定/解锁状态和关闭按钮 -->
+      <div id="lockHint" class="lock-hint">
+        <span class="lock-icon"></span>
+        <span id="lockText">&#20013;&#38190;&#35299;&#38145;</span>  <!-- "中键解锁" -->
+        <button id="closeLyricsBtn" class="lyrics-close" type="button" aria-label="Close desktop lyrics">&#20851;&#38381;&#26700;&#38754;&#27468;&#35789;</button>  <!-- "关闭桌面歌词" -->
+      </div>
+    </div>
+  </div>
+  <script>
+    'use strict';
+    /* ==================== DOM 元素引用 ==================== */
+    var canvas = document.getElementById('fx');           // 粒子效果画布
+    var ctx = canvas.getContext('2d');                     // 2D 绘图上下文
+    var stage = document.getElementById('stage');          // 主舞台容器
+    var lyricViewport = document.getElementById('lyricViewport');  // 歌词视口
+    var line = document.getElementById('line');            // 歌词文本行元素
+    var lockHint = document.getElementById('lockHint');    // 锁定提示元素
+    var lockText = document.getElementById('lockText');    // 锁定提示文字
+    var closeLyricsBtn = document.getElementById('closeLyricsBtn');  // 关闭按钮
+
+    /* ==================== 渲染状态变量 ==================== */
+    var dpr = 1;                    // 设备像素比
+    var lastText = '';              // 上一次显示的歌词文本
+    var progressText = '';          // 当前进度对应的文本
+    var displayedProgress = 0;      // 当前显示的进度值
+    var baseFontSize = 58;          // 基础字体大小
+    var renderedFontSize = 58;      // 实际渲染的字体大小
+    var fitScaleX = 1;             // 水平适配缩放比例
+
+    /* ==================== 交互状态变量 ==================== */
+    var hoverCapture = false;       // 鼠标悬停捕获状态
+    var dragging = false;           // 拖拽状态
+    var dragPointerId = null;       // 拖拽指针 ID
+    var dragLast = { x:0, y:0 };   // 上次拖拽位置
+    var lastDrawAt = 0;            // 上次绘制时间戳
+    var layoutKey = '';             // 布局缓存键
+    var hoverInside = false;       // 鼠标是否在区域内
+    var hintVisible = false;       // 提示是否可见
+    var hintTimer = 0;             // 提示显示定时器
+    var lastPointerEvent = null;   // 上次指针事件
+
+    /* ==================== 滚动状态 ==================== */
+    var scrollState = {
+      needed:false,    // 是否需要滚动
+      overflow:0,      // 溢出宽度
+      limit:0,         // 滚动限制
+      offset:0,        // 当前偏移量
+      dir:-1,          // 滚动方向
+      holdUntil:0,     // 暂停滚动截止时间
+      lastAt:0         // 上次更新时间
+    };
+
+    /* ==================== 粒子系统 ==================== */
+    var particles = [];  // 粒子数组
+
+    /* ==================== 实时动画状态 ==================== */
+    var live = {
+      solar:0,    // 太阳光照强度
+      beat:0,     // 节拍强度
+      bass:0,     // 低音强度
+      scale:1,    // 缩放比例
+      glow:0,     // 发光强度
+      spark:0,    // 火花强度
+      lift:0      // 上升偏移量
+    };
+
+    /* ==================== 应用主状态 ==================== */
+    var state = {
+      enabled:false,           // 是否启用歌词显示
+      text:'Mineradio',        // 当前歌词文本
+      progress:0,              // 播放进度 (0-1)
+      progressSpan:4.8,        // 进度更新间隔（秒）
+      progressReceivedAt:0,    // 进度接收时间戳
+      playing:false,           // 是否正在播放
+
+      /* 播放状态 */
+      playbackTime:0,          // 当前播放时间
+      playbackDuration:0,      // 总时长
+      playbackRate:1,          // 播放速率
+      playbackReceivedAt:0,    // 播放状态接收时间
+      beatMapKey:'',           // 节拍映射键
+
+      /* 显示设置 */
+      size:1,                  // 大小缩放因子
+      opacity:.92,             // 整体透明度
+      clickThrough:true,       // 是否点击穿透（锁定状态）
+      lyricGlowParticles:false, // 是否显示粒子效果
+      cinema:true,             // 是否启用影院模式
+      highlightFollow:false,   // 高亮是否跟随进度
+      frameRate:60,            // 目标帧率
+
+      /* 发光效果设置 */
+      lyricGlow:true,          // 是否启用歌词发光
+      lyricGlowBeat:true,      // 发光是否跟随节拍
+      lyricGlowStrength:.35,   // 发光强度
+      highBloom:0,             // 高光泛光强度
+      beatGlow:0,              // 节拍发光强度
+      beatPulse:0,             // 节拍脉冲强度
+      bass:0,                  // 低音强度
+      feather:.055,            // 渐变羽化宽度
+
+      /* 字体设置 */
+      fontFamily:'Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif',
+      fontWeight:900,          // 字体粗细
+      letterSpacing:0,         // 字间距
+      lineHeight:1,            // 行高
+      lyricScale:1,            // 歌词缩放
+
+      /* 颜色配置 */
+      colors:{primary:'#f6fdff',secondary:'#a8f6ff',highlight:'#fff0b8',glow:'#9cffdf'},
+      displayColors:{primary:'#f6fdff',secondary:'#a8f6ff',highlight:'#fff0b8',glow:'#9cffdf'}
+    };
+    /* ==================== 桌面节拍系统 ==================== */
+    /* 节拍映射状态 - 用于同步音乐节拍和视觉效果 */
+    var desktopBeat = {
+      key:'',           // 当前节拍映射键
+      map:null,         // 节拍映射数据
+      camera:[],        // 镜头节拍事件数组
+      pulse:[],         // 脉冲节拍事件数组
+      events:[],        // 当前活跃的节拍事件
+      cameraIdx:0,      // 镜头节拍索引
+      pulseIdx:0,       // 脉冲节拍索引
+      prevTime:-1,      // 上次更新时间
+      lastTriggerAt:-10, // 上次触发时间
+      pulseDrive:0,     // 脉冲驱动值
+      glowDrive:0,      // 发光驱动值
+      bassDrive:0,      // 低音驱动值
+      lookahead:.075    // 预读取时间（秒）
+    };
+    /* 节拍组合类型 - 用于定义不同的节拍效果 */
+    var DESKTOP_BEAT_COMBOS = ['', 'downbeat', 'push', 'drop', 'rebound', 'accent'];
+    /* ==================== 工具函数 ==================== */
+    /**
+     * 数值钳制函数 - 将值限制在指定范围内
+     * @param {number} value - 输入值
+     * @param {number} min - 最小值
+     * @param {number} max - 最大值
+     * @param {number} fallback - 无效值时的默认值
+     * @returns {number} 钳制后的值
+     */
+    function clamp(value, min, max, fallback) {
+      var n = Number(value);
+      if (!isFinite(n)) n = fallback;
+      return Math.max(min, Math.min(max, n));
+    }
+
+    /**
+     * 伪随机数生成器 - 基于种子生成确定性随机数
+     * @param {number} seed - 随机种子
+     * @returns {number} 0-1 之间的伪随机数
+     */
+    function rand(seed){ return Math.abs(Math.sin(seed * 9283.173) * 43758.5453) % 1; }
+
+    /**
+     * 检查是否处于锁定状态
+     * @returns {boolean} 是否锁定
+     */
+    function isLocked(){ return state.clickThrough !== false; }
+
+    /**
+     * 设置 CSS 根变量
+     * @param {string} name - 变量名
+     * @param {string} value - 变量值
+     */
+    function setRootVar(name, value){ document.documentElement.style.setProperty(name, value); }
+
+    /* 颜色解析上下文 - 用于解析 CSS 颜色值 */
+    var colorCtx = document.createElement('canvas').getContext('2d');
+
+    /**
+     * 解析 CSS 颜色字符串为 RGBA 对象
+     * @param {string} color - CSS 颜色字符串
+     * @param {string} fallback - 默认颜色
+     * @returns {object} {r, g, b, a} 颜色对象
+     */
+    function parseCssColor(color, fallback) {
+      fallback = fallback || '#ffffff';
+      try {
+        colorCtx.fillStyle = fallback;
+        var safe = colorCtx.fillStyle;
+        colorCtx.fillStyle = String(color || fallback);
+        var css = colorCtx.fillStyle || safe;
+        /* 解析十六进制颜色 */
+        var hex = css.match(/^#([0-9a-f]{6})$/i);
+        if (hex) {
+          var n = parseInt(hex[1], 16);
+          return { r:(n >> 16) & 255, g:(n >> 8) & 255, b:n & 255, a:1 };
+        }
+        /* 解析 RGB/RGBA 颜色 */
+        var rgb = css.match(/^rgba?\(\s*([.\d]+)\s*,\s*([.\d]+)\s*,\s*([.\d]+)(?:\s*,\s*([.\d]+))?/i);
+        if (rgb) return { r:Math.round(rgb[1]), g:Math.round(rgb[2]), b:Math.round(rgb[3]), a:rgb[4] == null ? 1 : clamp(rgb[4], 0, 1, 1) };
+      } catch (e) {}
+      return { r:255, g:255, b:255, a:1 };  /* 默认白色 */
+    }
+    /**
+     * 提升歌词颜色亮度 - 确保颜色在暗背景下可见
+     * @param {string} color - 原始颜色
+     * @param {string} fallback - 默认颜色
+     * @param {number} minLum - 最小亮度值 (0-1)
+     * @returns {string} RGB 颜色字符串
+     */
+    function liftedLyricColor(color, fallback, minLum) {
+      var c = parseCssColor(color, fallback);
+      /* 计算感知亮度 (ITU-R BT.601) */
+      var lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
+      var floor = minLum == null ? .34 : minLum;
+      /* 如果亮度过低，提升 RGB 值 */
+      if (lum < floor) {
+        var lift = Math.round((floor - lum) * 255);
+        c.r = Math.min(255, c.r + lift);
+        c.g = Math.min(255, c.g + lift);
+        c.b = Math.min(255, c.b + lift);
+      }
+      return 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
+    }
+
+    /**
+     * 标准化歌词颜色 - 转换为标准 RGB 格式
+     * @param {string} color - 原始颜色
+     * @param {string} fallback - 默认颜色
+     * @returns {string} RGB 颜色字符串
+     */
+    function normalizeLyricColor(color, fallback) {
+      var c = parseCssColor(color, fallback);
+      return 'rgb(' + c.r + ',' + c.g + ',' + c.b + ')';
+    }
+
+    /**
+     * 添加透明度到颜色
+     * @param {string} color - 原始颜色
+     * @param {number} alpha - 透明度 (0-1)
+     * @returns {string} RGBA 颜色字符串
+     */
+    function colorWithAlpha(color, alpha) {
+      var c = parseCssColor(color, '#ffffff');
+      return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + clamp(alpha, 0, 1, 1) + ')';
+    }
+    /* ==================== 节拍事件处理函数 ==================== */
+    /**
+     * 解包桌面节拍事件 - 支持多种数据格式
+     * @param {number|object|Array} row - 节拍事件数据
+     * @returns {object} 标准化的节拍事件对象
+     */
+    function unpackDesktopBeatEvent(row) {
+      /* 数字格式 - 简化的时间戳 */
+      if (typeof row === 'number') {
+        return { time:row, strength:.42, confidence:.72, impact:.42, low:.62, body:.22, snap:.16, primary:true, camera:true, pulse:true, mass:.62, sharpness:.12 };
+      }
+      /* 对象格式 - 完整属性 */
+      if (!Array.isArray(row)) {
+        row = row || {};
+        return {
+          time:Number(row.time) || 0,
+          strength:row.strength == null ? .42 : Number(row.strength),        // 强度
+          confidence:row.confidence == null ? .72 : Number(row.confidence),  // 置信度
+          impact:row.impact == null ? (row.strength == null ? .42 : Number(row.strength)) : Number(row.impact),  // 冲击力
+          low:row.low == null ? .62 : Number(row.low),      // 低频强度
+          body:row.body == null ? .22 : Number(row.body),   // 中频强度
+          snap:row.snap == null ? .16 : Number(row.snap),   // 高频瞬态
+          combo:row.combo || undefined,                      // 组合类型
+          primary:row.primary !== false,                     // 是否为主节拍
+          camera:row.camera !== false,                       // 是否触发镜头效果
+          pulse:row.pulse !== false,                         // 是否触发脉冲
+          dj:!!row.dj,                                       // DJ 模式
+          grid:!!row.grid,                                   // 网格模式
+          kickOnly:!!row.kickOnly,                           // 仅底鼓
+          mass:row.mass == null ? .62 : Number(row.mass),   // 质量
+          sharpness:row.sharpness == null ? .12 : Number(row.sharpness),  // 锐度
+          step:row.step || 0                                 // 步进值
+        };
+      }
+      /* 数组格式 - 紧凑编码 */
+      var flags = row[8] || 0;
+      return {
+        time:row[0] || 0,
+        strength:row[1] == null ? .42 : row[1],
+        confidence:row[2] == null ? .72 : row[2],
+        impact:row[3] == null ? (row[1] || .42) : row[3],
+        low:row[4] == null ? .62 : row[4],
+        body:row[5] == null ? .22 : row[5],
+        snap:row[6] == null ? .16 : row[6],
+        combo:DESKTOP_BEAT_COMBOS[row[7] || 0] || undefined,
+        /* 位标志解析 */
+        primary:!!(flags & 1),     // bit 0: 主节拍
+        camera:!!(flags & 2),      // bit 1: 镜头效果
+        pulse:!!(flags & 4),       // bit 2: 脉冲效果
+        dj:!!(flags & 8),          // bit 3: DJ 模式
+        grid:!!(flags & 16),       // bit 4: 网格模式
+        kickOnly:!!(flags & 32),   // bit 5: 仅底鼓
+        mass:row[9] == null ? .62 : row[9],
+        sharpness:row[10] == null ? .12 : row[10],
+        step:row[11] || 0
+      };
+    }
+    /**
+     * 获取节拍事件时间
+     * @param {object} ev - 节拍事件
+     * @returns {number} 时间值（秒）
+     */
+    function desktopBeatEventTime(ev) {
+      return ev && isFinite(ev.time) ? Number(ev.time) : 0;
+    }
+
+    /**
+     * 排序节拍事件列表
+     * @param {Array} list - 原始事件列表
+     * @returns {Array} 排序后的事件数组
+     */
+    function sortDesktopBeatEvents(list) {
+      return (list || [])
+        .map(unpackDesktopBeatEvent)  // 解包为标准格式
+        .filter(function(ev){ return ev && isFinite(ev.time) && ev.time >= 0; })  // 过滤无效事件
+        .sort(function(a,b){ return desktopBeatEventTime(a) - desktopBeatEventTime(b); });  // 按时间排序
+    }
+
+    /**
+     * 清除节拍映射数据
+     * @param {string} key - 新的映射键
+     */
+    function clearDesktopBeatMap(key) {
+      desktopBeat.key = key || '';
+      desktopBeat.map = null;
+      desktopBeat.camera = [];
+      desktopBeat.pulse = [];
+      desktopBeat.events = [];
+      desktopBeat.cameraIdx = 0;
+      desktopBeat.pulseIdx = 0;
+      desktopBeat.prevTime = -1;
+      desktopBeat.lastTriggerAt = -10;
+      desktopBeat.pulseDrive = 0;
+      desktopBeat.glowDrive = 0;
+      desktopBeat.bassDrive = 0;
+    }
+
+    /**
+     * 标准化节拍映射数据
+     * @param {object} packed - 原始映射数据
+     * @returns {object|null} 标准化后的映射数据
+     */
+    function normalizeDesktopBeatMapPayload(packed) {
+      if (!packed) return null;
+      var camera = sortDesktopBeatEvents(packed.cameraBeats || packed.beats || packed.kicks || []);
+      var pulse = sortDesktopBeatEvents(packed.pulseBeats || packed.kicks || []);
+      return {
+        cameraBeats:camera,              // 镜头节拍数组
+        pulseBeats:pulse,                // 脉冲节拍数组
+        duration:Number(packed.duration) || 0,              // 总时长
+        partialUntilSec:Number(packed.partialUntilSec) || 0,  // 部分数据截止时间
+        visualBeatCount:Number(packed.visualBeatCount) || camera.length,  // 视觉节拍数量
+        tempoSource:packed.tempoSource || 'local'           // 节拍源
+      };
+    }
+
+    /**
+     * 同步节拍游标到指定时间
+     * @param {number} t - 目标时间（秒）
+     * @param {boolean} preserve - 是否保留驱动值
+     */
+    function syncDesktopBeatCursor(t, preserve) {
+      t = isFinite(t) ? Math.max(0, t) : 0;
+      desktopBeat.cameraIdx = 0;
+      desktopBeat.pulseIdx = 0;
+      /* 快进到当前时间之前的事件 */
+      while (desktopBeat.cameraIdx < desktopBeat.camera.length && desktopBeatEventTime(desktopBeat.camera[desktopBeat.cameraIdx]) < t - .040) desktopBeat.cameraIdx++;
+      while (desktopBeat.pulseIdx < desktopBeat.pulse.length && desktopBeatEventTime(desktopBeat.pulse[desktopBeat.pulseIdx]) < t - .026) desktopBeat.pulseIdx++;
+      desktopBeat.events = [];
+      desktopBeat.prevTime = t;
+      desktopBeat.lastTriggerAt = t - .42;
+      /* 如果不保留，重置驱动值 */
+      if (!preserve) {
+        desktopBeat.pulseDrive = 0;
+        desktopBeat.glowDrive = 0;
+        desktopBeat.bassDrive = 0;
+      }
+    }
+    /* ==================== 播放状态管理 ==================== */
+    /**
+     * 应用桌面播放状态
+     * @param {object} payload - 播放状态数据
+     */
+    function applyDesktopPlayback(payload) {
+      if (!payload) return;
+      state.playbackTime = Math.max(0, Number(payload.time) || 0);           // 当前时间
+      state.playbackDuration = Math.max(0, Number(payload.duration) || 0);   // 总时长
+      state.playbackRate = clamp(Number(payload.rate) || 1, .25, 4, 1);     // 播放速率
+      state.playbackReceivedAt = performance.now();  // 记录接收时间
+    }
+
+    /**
+     * 计算当前播放时间（考虑播放速率）
+     * @param {number} nowMs - 当前时间戳（毫秒）
+     * @returns {number} 当前播放时间（秒）
+     */
+    function currentDesktopPlaybackTime(nowMs) {
+      var t = Math.max(0, Number(state.playbackTime) || 0);
+      /* 如果正在播放，根据时间差和速率计算实际时间 */
+      if (state.playing) t += Math.max(0, nowMs - (state.playbackReceivedAt || nowMs)) * .001 * clamp(state.playbackRate, .25, 4, 1);
+      /* 限制不超过总时长 + 小缓冲 */
+      if (state.playbackDuration > 0) t = Math.min(state.playbackDuration + .12, t);
+      return t;
+    }
+
+    /**
+     * 应用节拍映射数据
+     * @param {object} next - 新的节拍映射数据
+     */
+    function applyDesktopBeatMapPayload(next) {
+      next = next || {};
+      var key = next.beatMapKey == null ? desktopBeat.key : String(next.beatMapKey || '');
+      var hasMapPayload = Object.prototype.hasOwnProperty.call(next, 'beatMap');
+      /* 如果没有新数据且键相同，跳过更新 */
+      if (!hasMapPayload && key === desktopBeat.key) return;
+      /* 如果没有映射数据，清除 */
+      if (!hasMapPayload) {
+        clearDesktopBeatMap(key);
+        return;
+      }
+      /* 标准化映射数据 */
+      var map = normalizeDesktopBeatMapPayload(next.beatMap);
+      if (!map || (!map.cameraBeats.length && !map.pulseBeats.length)) {
+        clearDesktopBeatMap(key);
+        return;
+      }
+      /* 更新节拍状态 */
+      desktopBeat.key = key;
+      desktopBeat.map = map;
+      desktopBeat.camera = map.cameraBeats;
+      desktopBeat.pulse = map.pulseBeats.length ? map.pulseBeats : map.cameraBeats;
+      /* 同步游标到当前播放时间 */
+      syncDesktopBeatCursor(currentDesktopPlaybackTime(performance.now()), false);
+    }
+
+    /**
+     * 缓入缓出函数 - 用于平滑动画过渡
+     * @param {number} t - 进度值 (0-1)
+     * @returns {number} 缓动后的值
+     */
+    function beatEaseInOut(t) {
+      t = clamp(t, 0, 1, 0);
+      return t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    }
+    /* ==================== 节拍调度系统 ==================== */
+    /**
+     * 调度桌面节拍镜头效果
+     * @param {object} ev - 节拍事件
+     */
+    function scheduleDesktopBeatCamera(ev) {
+      var time = desktopBeatEventTime(ev);
+      if (!isFinite(time)) return;
+
+      /* 解析事件参数 */
+      var strength = clamp(ev.strength == null ? .72 : ev.strength, 0, 1, .72);      // 强度
+      var confidence = clamp(ev.confidence == null ? .72 : ev.confidence, 0, 1, .72); // 置信度
+      var impact = clamp(ev.impact == null ? strength : ev.impact, 0, 1, strength);   // 冲击力
+
+      /* 过滤低强度事件 */
+      if (ev.primary === false && impact < .64) return;
+      if (impact < .16 && strength < .52) return;
+      if (confidence < .25 && strength < .66) return;
+
+      /* 频段参数 */
+      var low = clamp(ev.low == null ? .62 : ev.low, 0, 1.4, .62);      // 低频
+      var body = clamp(ev.body == null ? .22 : ev.body, 0, 1.2, .22);   // 中频
+      var snap = clamp(ev.snap == null ? .16 : ev.snap, 0, 1.2, .16);   // 高频瞬态
+      var mass = clamp(ev.mass == null ? (low * .72 + body * .34 + strength * .18) : ev.mass, 0, 1, .62);  // 质量
+      var sharpness = clamp(ev.sharpness == null ? snap : ev.sharpness, 0, 1, snap);  // 锐度
+
+      /* 组合类型 - 基于时间自动分配或使用指定值 */
+      var combo = ev.combo || (Math.floor(time * 2.7) % 4 === 0 ? 'downbeat' : undefined);
+
+      /* 最小间隔 - 防止节拍过密 */
+      var minGap = ev.dj ? Math.max(.245, Math.min(.430, ev.step ? ev.step * .54 : .315)) : .385;
+      if (time - desktopBeat.lastTriggerAt < minGap && strength < .88) return;
+      desktopBeat.lastTriggerAt = time;
+
+      /* 计算振幅 - 综合多个参数 */
+      var amp = Math.max(.08, Math.min(ev.dj ? .88 : .72, .13 + strength * .34 + confidence * .06 + mass * .15 + snap * .04));
+      amp *= .72 + impact * .48;
+
+      /* 根据组合类型调整振幅 */
+      if (combo === 'downbeat') amp *= 1.12;      // 强拍 - 增强
+      else if (combo === 'push') amp *= .84;       // 推进 - 稍弱
+      else if (combo === 'drop') amp *= .98;       // 下降 - 接近原值
+      else if (combo === 'rebound') amp *= .74;    // 反弹 - 较弱
+      else if (combo === 'accent') amp *= 1.14;    // 重音 - 最强
+
+      /* 计算时间参数 */
+      var attack = Math.max(.014, Math.min(.038, .028 * (1.18 - sharpness * .55)));   // 起音时间
+      var hold = Math.max(.014, Math.min(.052, .030 * (.62 + low * .55 + body * .25)));  // 保持时间
+      var release = Math.max(.110, Math.min(.255, .185 * (.76 + mass * .56 + body * .18 - sharpness * .18)));  // 释放时间
+
+      /* DJ 模式调整 */
+      if (ev.dj) {
+        attack = Math.max(.010, attack * .72);    // 更快起音
+        hold = Math.max(.016, hold * .82);        // 稍短保持
+        release = Math.max(.116, release * 1.04); // 更长释放
+        amp *= 1.10;                              // 增强振幅
+      }
+
+      /* 创建节拍事件对象 */
+      desktopBeat.events.push({
+        start:time - attack,  // 开始时间（提前起音）
+        hit:time,             // 命中时间
+        amp:Math.min(1, amp), // 振幅
+        attack:attack,        // 起音时长
+        hold:hold,            // 保持时长
+        release:release,      // 释放时长
+        low:low,              // 低频值
+        body:body,            // 中频值
+        snap:snap,            // 高频值
+        mass:mass,            // 质量值
+        combo:combo           // 组合类型
+      });
+
+      /* 限制事件数量 - 防止内存溢出 */
+      if (desktopBeat.events.length > 10) desktopBeat.events.splice(0, desktopBeat.events.length - 10);
+    }
+
+    /**
+     * 触发桌面节拍脉冲
+     * @param {object} ev - 节拍事件
+     */
+    function triggerDesktopBeatPulse(ev) {
+      var strength = clamp(ev.strength == null ? .42 : ev.strength, 0, 1, .42);
+      var impact = clamp(ev.impact == null ? strength : ev.impact, 0, 1, strength);
+      var low = clamp(ev.low == null ? .62 : ev.low, 0, 1.4, .62);
+      var body = clamp(ev.body == null ? .22 : ev.body, 0, 1.2, .22);
+      var combo = ev.combo;
+
+      /* 组合类型加成 */
+      var lift = combo === 'downbeat' ? .08 : (combo === 'drop' ? .04 : 0);
+
+      /* 计算脉冲值 */
+      var pulse = .14 + strength * .46 + impact * .18 + body * .08 + lift;
+      if (ev.dj) pulse = .12 + strength * .50 + impact * .28 + lift * .70;
+
+      /* 更新驱动值 - 取最大值 */
+      desktopBeat.pulseDrive = Math.max(desktopBeat.pulseDrive, Math.min(ev.dj ? .98 : .82, pulse));
+      desktopBeat.glowDrive = Math.max(desktopBeat.glowDrive, Math.min(1.16, .18 + impact * .52 + strength * .28));
+      desktopBeat.bassDrive = Math.max(desktopBeat.bassDrive, Math.min(1.08, low * (.40 + impact * .42) + body * .12));
+    }
+    /* ==================== 节拍系统主循环 ==================== */
+    /**
+     * 更新桌面节拍映射 - 每帧调用
+     * @param {number} t - 当前时间（秒）
+     * @param {number} dt - 时间增量（秒）
+     * @returns {object} 节拍状态 {active, beat, glow, bass}
+     */
+    function tickDesktopBeatMap(t, dt) {
+      var hasMap = !!(desktopBeat.map && (desktopBeat.camera.length || desktopBeat.pulse.length));
+      dt = clamp(dt, .001, .12, 1 / 60);
+
+      /* 如果没有映射或未播放，衰减驱动值 */
+      if (!hasMap || !state.playing || state.cinema === false) {
+        desktopBeat.pulseDrive *= Math.pow(.08, dt);  // 快速衰减
+        desktopBeat.glowDrive *= Math.pow(.10, dt);
+        desktopBeat.bassDrive *= Math.pow(.14, dt);
+        desktopBeat.events = [];
+        return { active:hasMap, beat:desktopBeat.pulseDrive, glow:desktopBeat.glowDrive, bass:desktopBeat.bassDrive };
+      }
+
+      /* 时间跳变检测 - 重新同步游标 */
+      if (desktopBeat.prevTime >= 0 && Math.abs(t - desktopBeat.prevTime) > .55) syncDesktopBeatCursor(t, false);
+      desktopBeat.prevTime = t;
+
+      /* 部分数据截止处理 */
+      if (desktopBeat.map.partialUntilSec && t > desktopBeat.map.partialUntilSec + desktopBeat.lookahead + .12) {
+        desktopBeat.pulseDrive *= Math.pow(.10, dt);
+        desktopBeat.glowDrive *= Math.pow(.12, dt);
+        desktopBeat.bassDrive *= Math.pow(.16, dt);
+        return { active:true, beat:desktopBeat.pulseDrive, glow:desktopBeat.glowDrive, bass:desktopBeat.bassDrive };
+      }
+
+      /* 处理镜头节拍事件 */
+      while (desktopBeat.cameraIdx < desktopBeat.camera.length) {
+        var cam = desktopBeat.camera[desktopBeat.cameraIdx];
+        if (desktopBeatEventTime(cam) > t + desktopBeat.lookahead) break;  // 预读取窗口
+        scheduleDesktopBeatCamera(cam);
+        desktopBeat.cameraIdx++;
+      }
+
+      /* 处理脉冲节拍事件 */
+      while (desktopBeat.pulseIdx < desktopBeat.pulse.length) {
+        var pulse = desktopBeat.pulse[desktopBeat.pulseIdx];
+        if (desktopBeatEventTime(pulse) > t + .018) break;  // 更小的预读取窗口
+        triggerDesktopBeatPulse(pulse);
+        desktopBeat.pulseIdx++;
+      }
+
+      /* 计算当前帧的节拍值 */
+      var beat = desktopBeat.pulseDrive;
+      var glow = desktopBeat.glowDrive;
+      var bass = desktopBeat.bassDrive;
+      var keep = [];
+
+      /* 遍历活跃事件，计算动画值 */
+      for (var i = 0; i < desktopBeat.events.length; i++) {
+        var ev = desktopBeat.events[i];
+        var local = t - ev.start;  // 事件本地时间
+        var end = ev.attack + ev.hold + ev.release;  // 事件总时长
+
+        /* 过滤过期或未开始的事件 */
+        if (local < -desktopBeat.lookahead || local > end + .060) continue;
+        keep.push(ev);
+        if (local < 0) continue;  // 未开始
+
+        /* 计算动画值 - 使用缓动函数 */
+        var val = 0;
+        if (local < ev.attack) val = beatEaseInOut(local / ev.attack);  // 起音阶段
+        else if (local < ev.attack + ev.hold) val = 1;                  // 保持阶段
+        else val = Math.pow(1 - clamp((local - ev.attack - ev.hold) / ev.release, 0, 1, 1), 1.72);  // 释放阶段
+
+        /* 更新最大值 */
+        beat = Math.max(beat, ev.amp * val * 1.38);
+        glow = Math.max(glow, (.18 + ev.amp * .92 + ev.mass * .12) * val);
+        bass = Math.max(bass, (ev.low * .62 + ev.body * .18 + ev.amp * .18) * val);
+      }
+
+      /* 更新事件列表 */
+      desktopBeat.events = keep;
+
+      /* 衰减驱动值 */
+      desktopBeat.pulseDrive *= Math.pow(.08, dt);
+      desktopBeat.glowDrive *= Math.pow(.10, dt);
+      desktopBeat.bassDrive *= Math.pow(.14, dt);
+
+      /* 返回钳制后的值 */
+      return {
+        active:true,
+        beat:clamp(beat, 0, 1.35, 0),
+        glow:clamp(glow, 0, 1.45, 0),
+        bass:clamp(bass, 0, 1.2, 0)
+      };
+    }
+    /* ==================== 粒子系统 ==================== */
+    /**
+     * 确保粒子数量足够
+     */
+    function ensureParticles(){
+      var count = 220;  // 目标粒子数量
+      while (particles.length < count) {
+        var i = particles.length + 1;
+        particles.push({
+          seed:i * 17.17,           // 随机种子
+          lane:rand(i),             // 轨道位置 (0-1)
+          phase:rand(i * 3.1),      // 相位偏移
+          depth:rand(i * 7.7),      // 深度值
+          size:.65 + rand(i * 2.3) * 1.55  // 粒子大小
+        });
+      }
+    }
+
+    /* ==================== 窗口和布局函数 ==================== */
+    /**
+     * 窗口大小改变处理
+     */
+    function resize(){
+      dpr = Math.min(1.5, Math.max(1, window.devicePixelRatio || 1));  // 限制像素比
+      canvas.width = Math.max(1, Math.floor(innerWidth * dpr));
+      canvas.height = Math.max(1, Math.floor(innerHeight * dpr));
+      canvas.style.width = innerWidth + 'px';
+      canvas.style.height = innerHeight + 'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);  // 应用像素比变换
+      fitLyricText(true);  // 重新适配文字
+    }
+
+    /**
+     * 测量文本行宽度
+     * @param {number} fontSize - 字体大小
+     * @returns {number} 文本宽度（像素）
+     */
+    function measureLineWidth(fontSize) {
+      ctx.save();
+      ctx.font = state.fontWeight + ' ' + fontSize + 'px ' + state.fontFamily;
+      var text = line.textContent || 'Mineradio';
+      var width = ctx.measureText(text).width;
+      ctx.restore();
+      /* 加上字间距 */
+      width += Math.max(0, Array.from(text).length - 1) * fontSize * state.letterSpacing;
+      return Math.max(1, width);
+    }
+
+    /**
+     * 计算歌词滚动初始保持时间
+     * @returns {number} 保持时间（毫秒）
+     */
+    function lyricScrollInitialHoldMs() {
+      return Math.round(clamp(state.progressSpan * 130, 140, 520, 320));
+    }
+
+    /**
+     * 歌词滚动缓动函数 - 五次方平滑插值
+     * @param {number} t - 进度值 (0-1)
+     * @returns {number} 缓动后的值
+     */
+    function lyricScrollEase(t) {
+      t = clamp(t, 0, 1, 0);
+      return t * t * t * (t * (t * 6 - 15) + 10);  // smootherstep
+    }
+    /* ==================== 歌词文字适配 ==================== */
+    /**
+     * 适配歌词文字大小和布局
+     * @param {boolean} force - 是否强制重新计算
+     */
+    function fitLyricText(force) {
+      /* 计算可用宽度 */
+      var safeWidth = Math.max(300, innerWidth - 8);
+      var edgeWidth = Math.round(clamp(safeWidth * .085, 54, 116, 92));  // 边缘宽度
+      var viewportWidth = Math.round(Math.max(280, Math.min(safeWidth - 12, innerWidth - Math.min(240, Math.max(88, innerWidth * .13)))));
+      var clearWidth = Math.max(160, viewportWidth - edgeWidth * 2);  // 清晰区域宽度
+      var readableWidth = clearWidth;
+      var maxHeight = Math.max(64, innerHeight - 188);  // 最大高度
+
+      /* 生成布局缓存键 */
+      var nextLayoutKey = [
+        line.textContent || '',
+        baseFontSize,
+        state.fontFamily,
+        state.fontWeight,
+        state.letterSpacing,
+        state.lineHeight,
+        innerWidth,
+        innerHeight
+      ].join('|');
+
+      /* 如果布局未改变，跳过计算 */
+      if (!force && nextLayoutKey === layoutKey) return;
+      layoutKey = nextLayoutKey;
+
+      /* 设置容器尺寸 */
+      stage.style.width = safeWidth + 'px';
+      stage.style.maxWidth = safeWidth + 'px';
+      lyricViewport.style.width = viewportWidth + 'px';
+      lyricViewport.style.maxWidth = Math.max(280, safeWidth - 12) + 'px';
+      setRootVar('--lyric-edge-width', edgeWidth + 'px');
+
+      /* 迭代缩小字体直到适配 */
+      var size = baseFontSize;
+      fitScaleX = 1;
+      var minSize = Math.max(24, Math.min(32, baseFontSize * .55));
+      var maxScrollableWidth = readableWidth * 1.76;
+
+      for (var i = 0; i < 24; i++) {
+        var width = measureLineWidth(size);
+        var height = size * state.lineHeight;
+        if ((width <= maxScrollableWidth && height <= maxHeight) || size <= minSize) break;
+        size = Math.max(minSize, size - Math.max(1.25, size * .062));
+      }
+
+      /* 计算水平缩放 */
+      var measuredWidth = measureLineWidth(size);
+      var maxRenderedWidth = readableWidth * 1.82;
+      if (measuredWidth > maxRenderedWidth) {
+        fitScaleX = clamp(maxRenderedWidth / measuredWidth, .72, 1, 1);
+      }
+
+      /* 计算滚动参数 */
+      var scaledWidth = measuredWidth * fitScaleX;
+      var travelWidth = Math.max(0, scaledWidth - clearWidth);
+      var clearTailMargin = Math.max(58, Math.min(edgeWidth * 1.18, size * 1.08));
+      var centeredTailLimit = scaledWidth > clearWidth * 1.28 ? Math.max(0, scaledWidth / 2 - clearWidth * .18) : 0;
+      scrollState.limit = travelWidth > 0 ? Math.max(travelWidth / 2 + clearTailMargin, centeredTailLimit) : 0;
+      scrollState.overflow = scrollState.limit * 2;
+      scrollState.needed = travelWidth > Math.max(16, size * .18);
+
+      /* 计算遮罩边缘宽度 */
+      var maskEdgeWidth = scrollState.needed ? Math.round(clamp(edgeWidth * .44, 26, 58, 42)) : edgeWidth;
+
+      /* 重置滚动状态（如果不需要滚动） */
+      if (!scrollState.needed) {
+        scrollState.offset = 0;
+        scrollState.dir = -1;
+        scrollState.holdUntil = 0;
+        scrollState.lastAt = 0;
+      } else {
+        var limit = scrollState.limit || scrollState.overflow / 2;
+        if (!isFinite(scrollState.offset) || Math.abs(scrollState.offset) > limit + 8) {
+          scrollState.offset = 0;
+          scrollState.dir = -1;
+          scrollState.holdUntil = performance.now() + lyricScrollInitialHoldMs();
+        }
+      }
+
+      /* 应用 CSS 变量 */
+      renderedFontSize = Math.round(size);
+      setRootVar('--lyric-size', renderedFontSize + 'px');
+      setRootVar('--lyric-vertical-feather', Math.round(clamp(renderedFontSize * .92, 38, 72, 46)) + 'px');
+      setRootVar('--lyric-letter-spacing', (renderedFontSize * state.letterSpacing).toFixed(2) + 'px');
+      setRootVar('--lyric-fit-x', fitScaleX.toFixed(4));
+      setRootVar('--lyric-mask-edge-width', maskEdgeWidth + 'px');
+      setRootVar('--lyric-scroll-x', scrollState.offset.toFixed(2) + 'px');
+
+      /* 发送热区边界 */
+      sendHotBounds();
+    }
+
+    /* ==================== 歌词滚动更新 ==================== */
+    /**
+     * 更新歌词滚动位置
+     * @param {number} nowMs - 当前时间戳（毫秒）
+     * @param {number} progress - 播放进度 (0-1)
+     */
+    function updateLyricScroll(nowMs, progress) {
+      /* 如果不需要滚动，重置偏移 */
+      if (!scrollState.needed) {
+        if (scrollState.offset !== 0) {
+          scrollState.offset = 0;
+          setRootVar('--lyric-scroll-x', '0px');
+        }
+        return;
+      }
+
+      var limit = Math.max(0, scrollState.limit || scrollState.overflow / 2);
+      scrollState.lastAt = nowMs;
+
+      if (limit > 0) {
+        var p = clamp(progress == null ? state.progress : progress, 0, 1, 0);
+        var rawP = currentRawProgress();
+        var finalCatch = clamp((rawP - .88) / .12, 0, 1, 0);
+        p = Math.max(p, rawP - .10 * finalCatch);
+
+        /* 计算滚动门限 */
+        var spanMs = Math.max(450, state.progressSpan * 1000);
+        var startGate = clamp(lyricScrollInitialHoldMs() / spanMs, .035, .18, .08);
+        var longLineBias = clamp(limit / Math.max(260, innerWidth), 0, .30, .12);
+        var shortLineBias = clamp((4.8 - state.progressSpan) / 8, 0, .16, 0);
+        var endGate = clamp(.84 - longLineBias * .38 - shortLineBias * .50, .62, .88, .78);
+        if (endGate <= startGate + .12) endGate = startGate + .12;
+
+        /* 计算滚动位置 */
+        var travel = lyricScrollEase((p - startGate) / (endGate - startGate));
+        var targetOffset = -limit * travel;
+        if (p >= endGate) targetOffset = -limit;
+        if (nowMs < scrollState.holdUntil && p < startGate) targetOffset = 0;
+
+        /* 限制滚动范围 */
+        scrollState.offset = Math.max(-limit, Math.min(0, Math.min(scrollState.offset, targetOffset)));
+      }
+
+      setRootVar('--lyric-scroll-x', scrollState.offset.toFixed(2) + 'px');
+    }
+
+    /**
+     * 重播歌词入场动画
+     * CSS 动画播放一次后无法直接重启，需要先移除类、触发重排、再添加类
+     */
+    function replayLineAnimation() {
+      line.classList.remove('in');  // 移除 .in 类，重置动画状态
+      void line.offsetWidth;        // 读取 offsetWidth 强制浏览器执行重排(reflow)
+      line.classList.add('in');      // 重新添加 .in 类，触发 @keyframes lyr-in 动画
+    }
+
+    /**
+     * 同步锁定/解锁状态到 DOM
+     * 切换 body 上的 CSS 类来控制歌词窗口的交互行为和视觉样式
+     */
+    function syncLockClasses() {
+      var locked = isLocked();
+      document.body.classList.toggle('locked', locked);    // 锁定时：歌词不可拖拽、可点击穿透
+      document.body.classList.toggle('unlocked', !locked); // 解锁时：可拖拽、显示关闭按钮
+      /* 更新提示文字：锁定态显示"中键解锁"，解锁态显示"中键锁定" */
+      if (lockText) lockText.textContent = locked ? '中键解锁' : '中键锁定';
+    }
+
+    /**
+     * 控制歌词窗口是否拦截鼠标事件
+     * 激活时窗口捕获 pointer 事件用于悬停检测（显示锁定提示等）
+     * 禁用时鼠标事件穿透到下层窗口，实现点击穿透效果
+     * @param {boolean} active - true=拦截鼠标事件, false=穿透鼠标事件
+     */
+    function setPointerCapture(active) {
+      active = !!active;
+      if (active === hoverCapture) return;  // 状态未变，跳过 IPC 通知
+      hoverCapture = active;
+      /* 通知主进程更新窗口的鼠标拦截策略 */
+      if (window.desktopOverlay && window.desktopOverlay.setLyricsPointerCapture) {
+        window.desktopOverlay.setLyricsPointerCapture(active).catch(function(){});
+      }
+    }
+
+    /**
+     * 发送歌词交互热区的边界坐标到主进程
+     * 主进程根据此边界决定在哪些区域拦截鼠标事件，区域外则点击穿透
+     */
+    function sendHotBounds() {
+      if (!window.desktopOverlay || !window.desktopOverlay.setLyricsHotBounds) return;
+      var rect = lyricViewport.getBoundingClientRect();
+      /* 在歌词视口矩形基础上向外扩展，形成更大的交互热区 */
+      var padX = Math.max(26, Math.min(72, innerWidth * .038));   // 水平扩展量，随窗口宽度自适应
+      var padY = Math.max(24, Math.min(56, innerHeight * .052));  // 垂直扩展量，随窗口高度自适应
+      window.desktopOverlay.setLyricsHotBounds({
+        left:rect.left - padX,    // 热区左边界
+        top:rect.top - padY,      // 热区上边界
+        right:rect.right + padX,  // 热区右边界
+        bottom:rect.bottom + padY // 热区下边界
+      }).catch(function(){});
+    }
+    /* ==================== 状态应用函数 ==================== */
+    /**
+     * 应用新状态到歌词显示
+     * @param {object} next - 新状态对象
+     */
+    function applyState(next){
+      next = next || {};
+
+      /* 合并状态 */
+      state = Object.assign({}, state, next);
+      state.colors = Object.assign({}, state.colors, next.colors || {});
+
+      /* 应用播放和节拍数据 */
+      applyDesktopPlayback(next.playback);
+      applyDesktopBeatMapPayload(next);
+
+      /* 应用运动参数 */
+      var motion = Object.assign({}, next.motion || {});
+      if (motion.lyricGlow != null) state.lyricGlow = !!motion.lyricGlow;
+      if (motion.lyricGlowBeat != null) state.lyricGlowBeat = !!motion.lyricGlowBeat;
+      if (motion.lyricGlowStrength != null) state.lyricGlowStrength = motion.lyricGlowStrength;
+      if (motion.highBloom != null) state.highBloom = motion.highBloom;
+      if (motion.beatGlow != null) state.beatGlow = motion.beatGlow;
+      if (motion.beatPulse != null) state.beatPulse = motion.beatPulse;
+      if (motion.bass != null) state.bass = motion.bass;
+
+      /* 处理歌词文本 */
+      var text = String(state.text || 'Mineradio').replace(/\s+/g, ' ').trim() || 'Mineradio';
+
+      /* 钳制数值参数 */
+      baseFontSize = Math.round(58 * clamp(state.size, .72, 1.55, 1));
+      state.progress = clamp(state.progress, 0, 1, 0);
+      state.progressSpan = clamp(state.progressSpan, .75, 18, 4.8);
+      state.progressReceivedAt = performance.now();
+      state.fontWeight = Math.round(clamp(state.fontWeight, 500, 900, 900) / 50) * 50;
+      state.letterSpacing = clamp(state.letterSpacing, -.04, .18, 0);
+      state.lineHeight = clamp(state.lineHeight, .86, 1.35, 1);
+      state.frameRate = normalizeFrameRate(state.frameRate);
+      state.lyricGlowStrength = clamp(state.lyricGlowStrength, 0, .85, .35);
+      state.highBloom = clamp(state.highBloom, 0, 1.45, 0);
+      state.beatGlow = clamp(state.beatGlow, 0, 1.7, 0);
+      state.beatPulse = clamp(state.beatPulse, 0, 1.4, 0);
+      state.bass = clamp(state.bass, 0, 1.2, 0);
+      state.feather = clamp(state.feather || (next && next.feather), .030, .075, .055);
+
+      /* 标准化显示颜色 */
+      state.displayColors = {
+        primary: normalizeLyricColor(state.colors.primary || '#f6fdff', '#f6fdff'),
+        secondary: normalizeLyricColor(state.colors.secondary || '#a8f6ff', '#a8f6ff'),
+        highlight: normalizeLyricColor(state.colors.highlight || '#fff0b8', '#fff0b8'),
+        glow: normalizeLyricColor(state.colors.glow || state.colors.secondary || '#9cffdf', '#9cffdf')
+      };
+
+      /* 应用 CSS 变量 */
+      setRootVar('--lyric-primary', state.displayColors.primary);
+      setRootVar('--lyric-secondary', state.displayColors.secondary);
+      setRootVar('--lyric-highlight', state.displayColors.highlight);
+      setRootVar('--lyric-glow', state.displayColors.glow);
+      setRootVar('--lyric-shadow-soft', colorWithAlpha(state.displayColors.primary, .36));
+      setRootVar('--lyric-shadow-glow', colorWithAlpha(state.displayColors.primary, .28));
+      setRootVar('--lyric-shadow-hot', colorWithAlpha(state.displayColors.highlight, .28));
+      setRootVar('--lyric-edge', 'rgba(4,6,12,.42)');
+      setRootVar('--lyric-drop', colorWithAlpha(state.displayColors.primary, .26));
+      setRootVar('--lyric-drop-paused', colorWithAlpha(state.displayColors.primary, .18));
+      setRootVar('--lyric-font', state.fontFamily || 'Inter,"Noto Sans SC","PingFang SC","Microsoft YaHei",Arial,sans-serif');
+      setRootVar('--lyric-weight', String(state.fontWeight));
+      setRootVar('--lyric-line-height', String(state.lineHeight));
+      setRootVar('--lyric-feather', (state.feather * 100).toFixed(2) + '%');
+
+      /* 应用 CSS 类 */
+      document.body.classList.toggle('show', !!state.enabled);
+      document.body.classList.toggle('paused', !state.playing);
+      document.body.classList.toggle('highlight', state.highlightFollow === true);
+      document.body.style.opacity = state.enabled ? String(clamp(state.opacity, .28, 1, .92)) : '0';
+
+      /* 同步锁定状态 */
+      syncLockClasses();
+
+      /* 如果禁用，清理交互状态 */
+      if (!state.enabled) {
+        hideInteractionHint();
+        setPointerCapture(false);
+      }
+
+      /* 如果文本改变，更新显示 */
+      if (text !== lastText) {
+        lastText = text;
+        progressText = text;
+        displayedProgress = state.progress;
+        scrollState.offset = 0;
+        scrollState.dir = -1;
+        scrollState.holdUntil = performance.now() + lyricScrollInitialHoldMs();
+        scrollState.lastAt = 0;
+        line.textContent = text;
+        line.setAttribute('data-text', text);
+        layoutKey = '';
+        replayLineAnimation();
+      }
+
+      /* 重新适配文字 */
+      fitLyricText(false);
+    }
+    /* ==================== 进度计算函数 ==================== */
+    /**
+     * 计算当前显示进度 - 带平滑插值
+     * @returns {number} 平滑后的进度值 (0-1)
+     */
+    function currentDisplayProgress() {
+      var target = clamp(state.progress, 0, 1, 0);
+      /* 如果正在播放，根据时间推算当前进度 */
+      if (state.playing && state.progressSpan > 0) {
+        target += Math.max(0, performance.now() - (state.progressReceivedAt || performance.now())) / (state.progressSpan * 1000);
+      }
+      target = clamp(target, 0, 1, target);
+
+      /* 如果文本改变，重置显示进度 */
+      if (progressText !== lastText) {
+        progressText = lastText;
+        displayedProgress = target;
+      }
+
+      var delta = target - displayedProgress;
+
+      /* 回退处理 - 缓慢追赶 */
+      if (delta < -0.018 && target > 0.035 && displayedProgress < 0.985) {
+        displayedProgress = clamp(displayedProgress + Math.max(delta * .018, -0.0028), 0, 1, displayedProgress);
+        return displayedProgress;
+      }
+
+      /* 正常插值 - 带缓动 */
+      var ease = delta >= 0 ? Math.min(.30, .074 + Math.abs(delta) * .50) : Math.min(.030, .008 + Math.abs(delta) * .045);
+      displayedProgress = clamp(displayedProgress + delta * ease, 0, 1, displayedProgress);
+      return displayedProgress;
+    }
+
+    /**
+     * 计算原始进度 - 无平滑
+     * @returns {number} 原始进度值 (0-1)
+     */
+    function currentRawProgress() {
+      var target = clamp(state.progress, 0, 1, 0);
+      if (state.playing && state.progressSpan > 0) {
+        target += Math.max(0, performance.now() - (state.progressReceivedAt || performance.now())) / (state.progressSpan * 1000);
+      }
+      return clamp(target, 0, 1, target);
+    }
+
+    /* ==================== Canvas 绘图函数 ==================== */
+    /**
+     * 绘制带字间距的文本
+     * @param {string} text - 文本内容
+     * @param {number} x - X 坐标
+     * @param {number} y - Y 坐标
+     * @param {number} fontSize - 字体大小
+     * @param {number} spacing - 字间距
+     * @param {boolean} stroke - 是否描边
+     */
+    function drawCanvasText(text, x, y, fontSize, spacing, stroke) {
+      var chars = Array.from(text || '');
+      /* 如果没有字间距或字符少于 2 个，直接绘制 */
+      if (!spacing || chars.length < 2) {
+        if (stroke) ctx.strokeText(text, x, y);
+        else ctx.fillText(text, x, y);
+        return;
+      }
+
+      /* 计算总宽度 */
+      var width = 0;
+      for (var i = 0; i < chars.length; i++) {
+        width += ctx.measureText(chars[i]).width;
+        if (i < chars.length - 1) width += spacing;
+      }
+
+      /* 逐字符绘制 */
+      var cursor = x - width / 2;
+      ctx.textAlign = 'left';
+      for (var c = 0; c < chars.length; c++) {
+        if (stroke) ctx.strokeText(chars[c], cursor, y);
+        else ctx.fillText(chars[c], cursor, y);
+        cursor += ctx.measureText(chars[c]).width + (c < chars.length - 1 ? spacing : 0);
+      }
+      ctx.textAlign = 'center';
+    }
+    /* ==================== 运动更新函数 ==================== */
+    /**
+     * 更新运动状态 - 计算发光和节拍值
+     * @param {number} now - 当前时间（秒）
+     * @param {object} offline - 离线节拍数据
+     * @returns {object} 发光参数
+     */
+    function updateMotion(now, offline) {
+      var glowStrength = state.lyricGlow ? state.lyricGlowStrength : 0;
+      var glowDrive = Math.min(1.7, Math.max(0, glowStrength / .50));
+      var cinemaBinding = state.cinema !== false;
+
+      /* 节拍源 - 优先使用离线数据 */
+      var beatSource = cinemaBinding && state.lyricGlowBeat ? Math.max(state.beatGlow, state.beatPulse * .86) : 0;
+      var offlineActive = !!(offline && offline.active);
+      var offlineBeat = offline && cinemaBinding ? clamp(offline.beat, 0, 1.35, 0) : 0;
+      var offlineGlow = offline && cinemaBinding ? clamp(offline.glow, 0, 1.45, 0) : 0;
+      var offlineBass = offline && cinemaBinding ? clamp(offline.bass, 0, 1.2, 0) : 0;
+
+      /* 合并节拍值 */
+      var cameraBeat = Math.max(beatSource, offlineBeat);
+      var localBeat = state.playing && cinemaBinding ? Math.pow(Math.max(0, Math.sin(now * 2.35)), 8) * (offlineActive ? .10 : .44) : 0;
+      var bassDrive = Math.max(state.bass, offlineBass);
+
+      /* 计算太阳光效果 - 基于多个参数的复合函数 */
+      var fallbackSolar = glowStrength > 0 ? (0.18 + (.5 + .5 * Math.sin(now * 1.05)) * .16 + Math.max(bassDrive * .32, cameraBeat * .12) + cameraBeat * 1.18 + offlineGlow * .22) * glowDrive : 0;
+      var solarTarget = glowStrength > 0 ? Math.min(1.45, Math.max(state.highBloom, offlineGlow, fallbackSolar * .56 + localBeat * .18)) : localBeat * .12;
+
+      /* 计算节拍目标值 */
+      var beatTarget = cinemaBinding ? Math.min(1.35, Math.max(state.lyricGlowBeat ? cameraBeat : offlineBeat * .72, localBeat)) : 0;
+
+      /* 平滑插值 - 快速响应，缓慢衰减 */
+      live.solar += (solarTarget - live.solar) * (solarTarget > live.solar ? .36 : .10);
+      live.beat += (beatTarget - live.beat) * (beatTarget > live.beat ? .62 : .18);
+      live.bass += (bassDrive - live.bass) * .22;
+
+      return { glowStrength:glowStrength, glowDrive:glowDrive };
+    }
+
+    /**
+     * 应用舞台运动效果
+     * @param {number} now - 当前时间（秒）
+     */
+    function applyStageMotion(now) {
+      var cinemaBinding = state.cinema !== false;
+      var motionBeat = cinemaBinding ? live.beat : 0;
+      var motionSolar = cinemaBinding ? live.solar : 0;
+      var motionBass = cinemaBinding ? live.bass : 0;
+
+      /* 计算上升偏移 */
+      var targetLift = cinemaBinding ? Math.min(22, motionBeat * 18 + motionSolar * 5.2 + motionBass * 4.4) : 0;
+      live.lift += (targetLift - live.lift) * (targetLift > live.lift ? .46 : .16);
+
+      /* 计算浮动效果 - 多重正弦波叠加 */
+      var floatY = Math.sin(now * 1.08) * -9.8 + Math.sin(now * 2.10 + .7) * 3.1;
+      var floatX = Math.sin(now * .70 + .4) * 6.2 + Math.sin(now * 1.18 + 1.1) * 2.6;
+
+      /* 应用节拍驱动的偏移 */
+      var bobY = floatY - live.lift;
+      var bobX = floatX + Math.sin(now * 1.55) * motionBeat * 3.4;
+
+      /* 计算旋转效果 */
+      var rotX = Math.sin(now * .86 + .2) * 3.25 - motionBeat * .92;
+      var rotY = Math.sin(now * .74 + 1.3) * -2.75 + motionBeat * .34;
+
+      /* 计算缩放 */
+      var scale = 1 + motionBeat * .115 + motionSolar * .034 + motionBass * .026;
+      live.scale += (scale - live.scale) * (scale > live.scale ? .46 : .16);
+
+      /* 应用 3D 变换 */
+      stage.style.transform = 'translate3d(' + bobX.toFixed(2) + 'px,' + bobY.toFixed(2) + 'px,0) rotateX(' + rotX.toFixed(3) + 'deg) rotateY(' + rotY.toFixed(3) + 'deg) scale(' + live.scale.toFixed(4) + ')';
+
+      /* 应用滤镜效果 */
+      stage.style.filter = 'brightness(' + (1.04 + motionBeat * .12 + motionSolar * .05).toFixed(3) + ') saturate(' + (1.08 + motionBeat * .10).toFixed(3) + ')';
+
+      /* 更新 CSS 变量 - 节拍发光大小 */
+      setRootVar('--lyric-css-beat-glow', (state.lyricGlow ? clamp(motionBeat * 8 + motionSolar * 3, 0, 12, 0) : 0).toFixed(2) + 'px');
+    }
+    /* ==================== Canvas 绘制函数 ==================== */
+    /**
+     * 绘制光环效果 - 背景发光
+     * @param {object} rect - 歌词区域矩形
+     * @param {object} motion - 运动参数
+     */
+    function drawAura(rect, motion) {
+      if (!state.lyricGlow || motion.glowStrength <= 0) return;
+
+      /* 计算中心点和半径 */
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height * .52;
+      var rx = Math.max(rect.width * .58, innerWidth * .16, 260) * (1 + live.solar * .10 + live.beat * .08);
+      var ry = Math.max(rect.height * 1.02, 66) * (1 + live.solar * .10 + live.beat * .08);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';  // 叠加模式
+      ctx.globalAlpha = clamp(state.opacity, .28, 1, .92);
+      ctx.translate(cx, cy);
+      ctx.scale(rx, ry);
+
+      /* 创建径向渐变 */
+      var g = ctx.createRadialGradient(0,0,0,0,0,1);
+      g.addColorStop(0.00, colorWithAlpha(state.displayColors.highlight, .24));
+      g.addColorStop(0.28, colorWithAlpha(state.displayColors.glow, .15));
+      g.addColorStop(0.64, colorWithAlpha(state.displayColors.secondary, .040));
+      g.addColorStop(0.90, colorWithAlpha(state.displayColors.glow, .006));
+      g.addColorStop(1.00, 'rgba(0,0,0,0)');
+
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0,0,1,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    /**
+     * 绘制高亮泛光 - 进度指示器
+     * @param {object} rect - 歌词区域矩形
+     * @param {number} progress - 播放进度 (0-1)
+     */
+    function drawHighlightBloom(rect, progress) {
+      if (!state.lyricGlow || state.highlightFollow !== true) return;
+
+      var p = clamp(progress, 0, 1, 0);
+      var x = rect.left + rect.width * p;
+      var y = rect.top + rect.height * .50 - live.lift * .10;
+      var rx = Math.max(42, Math.min(150, renderedFontSize * (1.05 + live.beat * .32)));
+      var ry = Math.max(24, Math.min(82, renderedFontSize * (.42 + live.beat * .18)));
+      var alpha = clamp(.18 + live.solar * .12 + live.beat * .18, .12, .48) * clamp(state.opacity, .28, 1, .92);
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha;
+      ctx.translate(x, y);
+      ctx.scale(rx, ry);
+
+      /* 创建径向渐变 */
+      var g = ctx.createRadialGradient(0,0,0,0,0,1);
+      g.addColorStop(0, colorWithAlpha(state.displayColors.highlight, .88));
+      g.addColorStop(.36, colorWithAlpha(state.displayColors.glow, .34));
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0,0,1,0,Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    /**
+     * 绘制发光文字 - 多层模糊叠加
+     * @param {object} rect - 歌词区域矩形
+     * @param {object} motion - 运动参数
+     */
+    function drawGlowText(rect, motion) {
+      if (!state.lyricGlow || motion.glowStrength <= 0) return;
+
+      /* 计算发光强度 */
+      var target = Math.min(1.08, (0.09 + live.solar * .38 + live.beat * .22) * Math.min(3, motion.glowDrive));
+      live.glow += (target - live.glow) * (target > live.glow ? .11 : .06);
+      if (live.glow <= .004) return;
+
+      var text = line.textContent || 'Mineradio';
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2;
+      var spacing = renderedFontSize * state.letterSpacing;
+
+      /* 根据热度选择颜色 */
+      var hotMix = Math.max(0, Math.min(1, live.solar * 1.05 + live.beat * .18));
+      var color = hotMix > .42 ? state.displayColors.highlight : state.displayColors.glow;
+
+      /* 定义发光层 - 从内到外 */
+      var layers = [
+        { blur:10, alpha:.54, stroke:Math.max(9, renderedFontSize * .09) },   // 内层
+        { blur:24, alpha:.38, stroke:Math.max(15, renderedFontSize * .15) },   // 中层
+        { blur:48, alpha:.20, stroke:Math.max(22, renderedFontSize * .22) },   // 外层
+        { blur:78, alpha:.09, stroke:Math.max(30, renderedFontSize * .30) }    // 最外层
+      ];
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = state.fontWeight + ' ' + renderedFontSize + 'px ' + state.fontFamily;
+      ctx.translate(cx, cy);
+      ctx.scale(fitScaleX * live.scale, live.scale);
+
+      /* 绘制每一层 */
+      for (var i = 0; i < layers.length; i++) {
+        ctx.save();
+        ctx.filter = 'blur(' + layers[i].blur + 'px)';
+        ctx.globalAlpha = live.glow * layers[i].alpha * clamp(state.opacity, .28, 1, .92);
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = layers[i].stroke;
+        ctx.lineJoin = 'round';
+        /* 绘制描边和填充 */
+        drawCanvasText(text, 0, 0, renderedFontSize, spacing, true);   // 描边
+        drawCanvasText(text, 0, 0, renderedFontSize, spacing, false);  // 填充
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    /**
+     * 绘制粒子效果
+     * @param {object} rect - 歌词区域矩形
+     * @param {object} motion - 运动参数
+     * @param {number} now - 当前时间（秒）
+     */
+    function drawParticles(rect, motion, now) {
+      /* 计算粒子强度 */
+      var target = state.lyricGlow && state.lyricGlowParticles ? Math.min(.50, (.12 + live.solar * .18 + live.beat * .16) * Math.min(1.7, motion.glowDrive)) : 0;
+      live.spark += (target - live.spark) * (target > live.spark ? .14 : .08);
+      if (live.spark <= .006) return;
+
+      ensureParticles();
+
+      /* 计算粒子区域 */
+      var width = Math.max(300, Math.min(innerWidth - 48, rect.width * 1.16 + 140));
+      var height = Math.max(74, rect.height * 1.34);
+      var cx = rect.left + rect.width / 2;
+      var cy = rect.top + rect.height / 2 + Math.sin(now * .55) * 3.5;
+
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+
+      /* 绘制每个粒子 */
+      for (var i=0;i<particles.length;i++) {
+        var p = particles[i];
+        var lane = Math.floor(p.lane * 5);       // 轨道
+        var local = (p.lane * 5) % 1;             // 轨道内位置
+        var speed = .018 + rand(p.seed) * .030 + lane * .002;  // 速度
+        var flow = (p.phase + now * speed) % 1;   // 流动位置
+        var edge = Math.sin(Math.PI * flow);      // 边缘因子
+
+        /* 计算粒子位置 */
+        var x = cx + (flow - .5) * width * (1.02 + rand(p.seed * 4.1) * .18);
+        var curve = Math.sin(flow * Math.PI * 2 * (.9 + rand(p.seed * 1.3) * .5) + p.seed + now * .32);
+        var y = cy + (lane - 2) * height * .13 + curve * height * (.16 + rand(p.seed * 2.2) * .18) + (local - .5) * height * .13 + Math.sin(now * (.42 + rand(p.seed) * .32) + p.seed) * (4 + live.beat * 6);
+
+        /* 计算粒子大小和闪烁 */
+        var tw = Math.pow(.5 + .5 * Math.sin(now * (.7 + rand(p.seed) * .4) + p.seed), 4);
+        var r = Math.max(.7, p.size * (.75 + edge * 1.45 + tw * .85 + live.beat * .55));
+
+        /* 创建粒子渐变 */
+        var grad = ctx.createRadialGradient(x,y,0,x,y,r*4.5);
+        grad.addColorStop(0, colorWithAlpha(state.displayColors.highlight, .96));
+        grad.addColorStop(.34, colorWithAlpha(state.displayColors.glow, .68));
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+
+        ctx.globalAlpha = live.spark * (0.16 + edge * .44 + tw * .24) * clamp(state.opacity, .28, 1, .92);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(x,y,r*4.5,0,Math.PI*2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    /* ==================== 主绘制循环 ==================== */
+    /**
+     * 主绘制函数 - 每帧调用
+     * @param {number} nowMs - 当前时间戳（毫秒）
+     */
+    function draw(nowMs){
+      /* 帧率限制 */
+      if (state.enabled) {
+        var interval = frameIntervalMs();
+        if (interval > 0 && lastDrawAt && nowMs - lastDrawAt < Math.max(4, interval - 1.25)) {
+          scheduleNextDraw();
+          return;
+        }
+      }
+
+      /* 计算时间增量 */
+      var dt = lastDrawAt ? Math.min(.12, Math.max(.001, (nowMs - lastDrawAt) / 1000)) : 1 / 60;
+      lastDrawAt = nowMs;
+      var now = nowMs * .001;  // 转换为秒
+
+      if (state.enabled) {
+        /* 更新进度 */
+        var progress = currentDisplayProgress();
+        setRootVar('--lyric-progress', (progress * 100).toFixed(2) + '%');
+
+        /* 更新节拍和运动 */
+        var offlineMotion = tickDesktopBeatMap(currentDesktopPlaybackTime(nowMs), dt);
+        var motion = updateMotion(now, offlineMotion);
+        applyStageMotion(now);
+        updateLyricScroll(nowMs, progress);
+      }
+
+      scheduleNextDraw();
+    }
+
+    /**
+     * 调度下一次绘制
+     */
+    function scheduleNextDraw() {
+      if (!state.enabled) {
+        /* 禁用时降低刷新率 */
+        setTimeout(function(){ requestAnimationFrame(draw); }, 250);
+        return;
+      }
+      requestAnimationFrame(draw);
+    }
+
+    /* ==================== 帧率控制 ==================== */
+    /**
+     * 标准化帧率值
+     * @param {number} value - 原始帧率
+     * @returns {number} 标准化后的帧率
+     */
+    function normalizeFrameRate(value) {
+      var n = Number(value);
+      if (!isFinite(n) || n <= 0) return 0;
+      if (n <= 26) return 24;
+      if (n <= 45) return 30;
+      if (n <= 90) return 60;
+      return 120;
+    }
+
+    /**
+     * 计算帧间隔（毫秒）
+     * @returns {number} 帧间隔
+     */
+    function frameIntervalMs() {
+      var fps = normalizeFrameRate(state.frameRate);
+      return fps > 0 ? 1000 / fps : 0;
+    }
+
+    /* ==================== 碰撞检测函数 ==================== */
+    /**
+     * 检测点是否在矩形内（带内边距）
+     * @param {object} evt - 鼠标事件
+     * @param {object} rect - 矩形区域
+     * @param {number} padX - 水平内边距
+     * @param {number} padY - 垂直内边距
+     * @returns {boolean} 是否在区域内
+     */
+    function pointInRect(evt, rect, padX, padY) {
+      return evt.clientX >= rect.left - padX && evt.clientX <= rect.right + padX && evt.clientY >= rect.top - padY && evt.clientY <= rect.bottom + padY;
+    }
+
+    /**
+     * 检测点是否在舞台内
+     * @param {object} evt - 鼠标事件
+     * @returns {boolean} 是否在舞台内
+     */
+    function pointInStage(evt) {
+      if (!state.enabled || !evt) return false;
+      if (dragging) return true;  // 拖拽中始终认为在内部
+
+      /* 解锁状态 - 整个舞台区域 */
+      if (!isLocked()) {
+        var stageRect = stage.getBoundingClientRect();
+        return pointInRect(evt, stageRect, 0, 0);
+      }
+
+      /* 锁定状态 - 歌词区域和提示区域 */
+      var padX = Math.max(24, Math.min(68, innerWidth * .034));
+      var padY = Math.max(22, Math.min(46, innerHeight * .045));
+      var lyricRect = lyricViewport.getBoundingClientRect();
+      if (pointInRect(evt, lyricRect, padX, padY)) return true;
+      var hintRect = lockHint.getBoundingClientRect();
+      return pointInRect(evt, hintRect, 10, 10);
+    }
+
+    /* ==================== 交互提示函数 ==================== */
+    /**
+     * 设置提示可见性
+     * @param {boolean} visible - 是否可见
+     */
+    function setHintVisible(visible) {
+      hintVisible = !!visible;
+      stage.classList.toggle('hint-visible', hintVisible);
+      setPointerCapture(!isLocked() && (hintVisible || dragging) && hoverInside);
+    }
+
+    /**
+     * 隐藏交互提示
+     */
+    function hideInteractionHint() {
+      hoverInside = false;
+      lastPointerEvent = null;
+      if (hintTimer) {
+        clearTimeout(hintTimer);
+        hintTimer = 0;
+      }
+      setHintVisible(false);
+      stage.classList.remove('hover');
+    }
+
+    /**
+     * 延迟显示交互提示
+     */
+    function scheduleInteractionHint() {
+      if (hintVisible || hintTimer) return;
+      hintTimer = setTimeout(function(){
+        hintTimer = 0;
+        if (!hoverInside || !lastPointerEvent || !pointInStage(lastPointerEvent)) return;
+        setHintVisible(true);
+      }, 1500);  // 1.5 秒延迟
+    }
+
+    /* ==================== 鼠标悬停处理 ==================== */
+    /**
+     * 更新悬停状态
+     * @param {object} evt - 鼠标事件
+     * @returns {boolean} 是否在区域内
+     */
+    function updateHover(evt) {
+      var inside = !!state.enabled && pointInStage(evt);
+      hoverInside = inside;
+      lastPointerEvent = evt || lastPointerEvent;
+      stage.classList.toggle('hover', inside || dragging);
+
+      /* 锁定状态处理 */
+      if (isLocked()) {
+        if (inside || dragging) {
+          scheduleInteractionHint();
+        } else {
+          hideInteractionHint();
+        }
+        setPointerCapture(false);
+        return inside;
+      }
+
+      /* 解锁状态处理 */
+      if (inside || dragging) {
+        scheduleInteractionHint();
+      } else {
+        hideInteractionHint();
+      }
+      setPointerCapture(inside || dragging);
+      return inside;
+    }
+
+    /* ==================== 锁定控制 ==================== */
+    /**
+     * 设置锁定状态
+     * @param {boolean} locked - 是否锁定
+     */
+    function setLocked(locked) {
+      state.clickThrough = !!locked;
+      syncLockClasses();
+      /* 通知桌面覆盖层 */
+      if (window.desktopOverlay && window.desktopOverlay.setLyricsLockState) {
+        window.desktopOverlay.setLyricsLockState(!!locked).catch(function(){});
+      }
+    }
+
+    /* ==================== 拖拽处理 ==================== */
+    /**
+     * 处理拖拽移动
+     * @param {object} evt - 指针事件
+     */
+    function moveDrag(evt) {
+      if (dragging && !isLocked() && window.desktopOverlay && window.desktopOverlay.moveLyricsBy) {
+        var dx = evt.screenX - dragLast.x;
+        var dy = evt.screenY - dragLast.y;
+        dragLast.x = evt.screenX;
+        dragLast.y = evt.screenY;
+        if (dx || dy) window.desktopOverlay.moveLyricsBy(dx, dy).catch(function(){});
+      }
+    }
+
+    /**
+     * 结束拖拽
+     * @param {object} evt - 指针事件
+     */
+    function endDrag(evt) {
+      if (!dragging) return;
+      /* 验证指针 ID */
+      if (evt && dragPointerId != null && evt.pointerId != null && evt.pointerId !== dragPointerId) return;
+      try {
+        /* 释放指针捕获 */
+        if (dragPointerId != null && stage.releasePointerCapture && stage.hasPointerCapture && stage.hasPointerCapture(dragPointerId)) {
+          stage.releasePointerCapture(dragPointerId);
+        }
+      } catch (e) {}
+      dragging = false;
+      dragPointerId = null;
+      setPointerCapture(false);
+    }
+    /* ==================== 事件监听器 ==================== */
+    /* 指针移动事件 - 处理拖拽和悬停 */
+    window.addEventListener('pointermove', function(evt){
+      /* 检测鼠标释放（拖拽中按钮松开） */
+      if (dragging && evt.buttons != null && (evt.buttons & 1) === 0) {
+        endDrag(evt);
+        updateHover(evt);
+        return;
+      }
+      updateHover(evt);
+      moveDrag(evt);
+    });
+
+    /* 鼠标移动事件 - 悬停处理（非拖拽） */
+    window.addEventListener('mousemove', function(evt){
+      if (!dragging) updateHover(evt);
+    });
+
+    /* 指针离开事件 */
+    window.addEventListener('pointerleave', function(){
+      if (dragging) {
+        setPointerCapture(true);  // 拖拽中保持捕获
+        return;
+      }
+      hideInteractionHint();
+    });
+
+    /* 鼠标离开事件 */
+    window.addEventListener('mouseleave', function(){
+      if (!dragging) hideInteractionHint();
+    });
+
+    /* 指针按下事件 - 开始拖拽或锁定切换 */
+    window.addEventListener('pointerdown', function(evt){
+      if (!pointInStage(evt)) return;
+      /* 忽略关闭按钮点击 */
+      if (closeLyricsBtn && closeLyricsBtn.contains(evt.target)) return;
+
+      /* 中键点击 - 切换锁定状态 */
+      if (evt.button === 1) {
+        evt.preventDefault();
+        hideInteractionHint();
+        return;
+      }
+
+      /* 锁定状态 - 忽略左键 */
+      if (isLocked()) {
+        hideInteractionHint();
+        setPointerCapture(false);
+        return;
+      }
+
+      /* 解锁状态左键 - 开始拖拽 */
+      if (evt.button === 0 && !isLocked()) {
+        dragging = true;
+        dragPointerId = evt.pointerId;
+        dragLast.x = evt.screenX;
+        dragLast.y = evt.screenY;
+        setPointerCapture(true);
+        try {
+          if (stage.setPointerCapture) stage.setPointerCapture(evt.pointerId);
+        } catch (e) {}
+        evt.preventDefault();
+      }
+    });
+
+    /* 指针释放和取消事件 */
+    window.addEventListener('pointerup', endDrag);
+    window.addEventListener('pointercancel', endDrag);
+
+    /* 窗口失焦事件 - 结束拖拽 */
+    window.addEventListener('blur', function(){
+      endDrag({ pointerId:dragPointerId });
+      hideInteractionHint();
+    });
+
+    /* 失去指针捕获事件 */
+    stage.addEventListener('lostpointercapture', endDrag);
+
+    /* 辅助点击事件 - 阻止中键默认行为 */
+    window.addEventListener('auxclick', function(evt){
+      if (evt.button === 1 && pointInStage(evt)) evt.preventDefault();
+    });
+
+    /* ==================== 关闭按钮事件 ==================== */
+    if (closeLyricsBtn) {
+      closeLyricsBtn.addEventListener('click', function(evt){
+        evt.preventDefault();
+        evt.stopPropagation();
+        state.enabled = false;
+        document.body.classList.remove('show');
+        setPointerCapture(false);
+        /* 通知桌面覆盖层关闭歌词 */
+        if (window.desktopOverlay && window.desktopOverlay.closeLyrics) {
+          window.desktopOverlay.closeLyrics().catch(function(){});
+        }
+      });
+    }
+
+    /* ==================== 消息和状态接口 ==================== */
+    /* 暴露状态应用函数到全局 */
+    window.__mineradioDesktopLyricsApplyState = applyState;
+
+    /* 监听状态消息 - 来自主窗口 */
+    window.addEventListener('message', function(event){
+      var data = event && event.data;
+      if (!data || data.type !== 'mineradio-desktop-lyrics-state') return;
+      applyState(data.payload || {});
+    });
+
+    /* 监听窗口大小改变 */
+    window.addEventListener('resize', resize);
+
+    /* ==================== 初始化 ==================== */
+    resize();  // 初始化布局
+
+    /* 从 URL 查询参数加载初始状态 */
+    (function applyQueryState(){
+      try {
+        var raw = new URLSearchParams(window.location.search).get('state');
+        if (raw) applyState(JSON.parse(raw));
+      } catch (e) {}
+    })();
+
+    /* 注册桌面覆盖层状态回调 */
+    if (window.desktopOverlay && window.desktopOverlay.onLyricsState) {
+      window.desktopOverlay.onLyricsState(applyState);
+    }
+
+    /* 启动绘制循环 */
+    requestAnimationFrame(draw);
+  </script>
+</body>
+</html>
