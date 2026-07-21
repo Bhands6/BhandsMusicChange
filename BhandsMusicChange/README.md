@@ -1,8 +1,16 @@
-# BhandsMusic
+<h1 align="center">
+  <span style="background: linear-gradient(90deg, #00f5d4, #00bbf9, #9b5de5, #f15bb5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 3em;">✦ BhandsMusic ✦</span>
+  <br>
+  <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架</sub>
+</h1>
 
-![BhandsMusic 暗场启动页](./docs/assets/readme/cinema-beat-smoke.png)
+<p align="center">
+  <img src="./docs/assets/readme/cinema-beat-smoke.png" width="720" alt="BhandsMusic 暗场启动页"/>
+</p>
 
+<p align="center">
 BhandsMusic 是一款 Windows 桌面沉浸式音乐播放器，把天气电台、搜索播放、歌词舞台、粒子视觉和 3D 歌单架组合成一个更接近现场感的私人音乐空间。
+</p>
 
 ## 立即下载 Windows 安装包
 
