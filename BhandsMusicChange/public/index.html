@@ -16235,6 +16235,7 @@ function playHomeSong(index) {
   currentIdx = Math.max(0, Math.min(playQueue.length - 1, index));
   safeRenderQueuePanel('home-song-card');
   safeShelfRebuild('home-song-card', true);
+  if (typeof setShelfPinnedOpen === 'function') setShelfPinnedOpen(true, true);
   forcePlaybackControlsInteractive();
   playQueueAt(currentIdx).catch(function(e){ console.warn('[HomeSongPlay]', e); });
 }
