@@ -322,6 +322,9 @@ body.home-wallpaper-preview #canvas-container{filter:none}
 .home-hero-art-wrap{position:absolute;right:28px;bottom:24px;width:160px;height:160px;pointer-events:none}
 .home-hero-art{width:100%!important;height:100%!important;border-radius:28px!important;transform:rotate(2deg)!important}
 .home-hero-art-glow{position:absolute;inset:-20px;border-radius:40px;background:radial-gradient(circle,color-mix(in srgb,var(--home-accent) 28%,transparent),transparent 70%);filter:blur(28px);opacity:.6;pointer-events:none}
+.home-hero-bg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;filter:blur(6px) saturate(1.4);transform:scale(1.06);opacity:0;transition:opacity .6s ease}
+.home-hero-bg.has-cover{opacity:1}
+.home-hero-bg-overlay{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(9,10,14,.72) 0%,rgba(9,10,14,.88) 50%,rgba(9,10,14,.96) 100%);pointer-events:none}
 .home-visual{grid-column:2;grid-row:2 / span 2;position:relative;align-self:center;justify-self:end;width:100%;max-width:300px;height:74px;margin-top:0;pointer-events:none;filter:drop-shadow(0 18px 34px rgba(0,0,0,.28))}
 .home-visual.generated .home-sleeve,.home-visual.generated .home-disc{display:none}
 .home-radio-img{display:none}
@@ -392,10 +395,10 @@ body.empty-home-active .home-visual{animation:home-visual-drift 8.8s ease-in-out
 @media (max-height:760px){#empty-home{top:132px;bottom:44px}.empty-home-shell{min-height:0}.home-hero{min-height:0;padding:22px}.home-hero-inner{grid-template-columns:minmax(0,1.22fr) minmax(136px,.54fr);column-gap:14px}.home-title{font-size:clamp(31px,3.75vw,48px);max-width:360px}.home-sub{font-size:12.5px;line-height:1.55;max-width:330px}.home-quick-row{margin-top:16px}.home-visual{height:206px;max-width:246px}.home-mosaic{height:132px;min-height:120px;margin-top:14px}.home-card{min-height:134px;padding:14px}.home-card-title{font-size:17px}.home-card-art{width:92px;height:92px;border-radius:21px}.home-tile{min-height:132px}.home-tile-cover{height:72px}}
 @media (max-height:700px){#empty-home{top:126px;bottom:34px}.home-hero{padding:20px}.home-title{font-size:clamp(28px,3.55vw,42px)}.home-sub{font-size:12px;line-height:1.42}.home-weather-meta{margin-top:12px}.home-quick-row{margin-top:12px}.home-visual{height:174px;max-width:216px}.home-mosaic{height:112px;min-height:104px}.home-card{min-height:112px;padding:12px}.home-card-title{font-size:15.5px}.home-card-sub{font-size:10.5px;line-height:1.28;-webkit-line-clamp:2;line-clamp:2}.home-card-art{width:70px;height:70px;border-radius:16px}.home-card::after{right:78px;height:48px}.home-tile{min-height:112px;padding:9px}.home-tile-cover{height:54px;margin-bottom:8px}.home-section-head{min-height:30px}}
 @media (max-width:840px){.empty-home-shell{grid-template-columns:minmax(250px,.86fr) minmax(360px,1.14fr)}.home-hero-inner{grid-template-columns:minmax(0,1fr)}.home-visual{display:none}.home-mosaic{height:124px;min-height:108px}.home-card{min-height:108px}.home-card-title{font-size:15px;max-width:68%}.home-card-sub{font-size:10.3px;max-width:62%}.home-card-art{width:66px;height:66px;border-radius:15px}.home-card::after{right:72px;width:24px;height:44px}.home-tile-title{font-size:11.5px}}
-@media (max-width:760px){#empty-home{top:150px;bottom:56px;width:calc(100vw - 40px)}.empty-home-shell{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;overflow:auto;padding-bottom:4px}.home-hero{grid-row:auto;min-height:344px}.home-mosaic{height:172px;min-height:150px}.home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-row{grid-template-columns:repeat(3,minmax(0,1fr))}.home-hero-art-wrap{width:120px;height:120px;right:18px;bottom:18px}.home-hero-art-glow{inset:-16px;filter:blur(20px)}}
+@media (max-width:760px){#empty-home{top:150px;bottom:56px;width:calc(100vw - 40px)}.empty-home-shell{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;overflow:auto;padding-bottom:4px}.home-hero{grid-row:auto;min-height:344px}.home-mosaic{height:172px;min-height:150px}.home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-row{grid-template-columns:repeat(3,minmax(0,1fr))}}
 body.empty-home-active.controls-visible #empty-home{bottom:128px}
 @media (max-height:760px){body.empty-home-active.controls-visible #empty-home{bottom:112px}}
-@media (max-width:620px){#empty-home{top:146px;bottom:44px;width:calc(100vw - 24px)}.home-hero{padding:20px;border-radius:22px}.home-hero-inner{display:flex;flex-direction:column}.home-visual{display:none}.home-mosaic{display:none}.home-grid{grid-template-columns:1fr}.home-tile-row{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-cover{height:auto;aspect-ratio:1}.home-tile-sub{display:block}.home-card-art{width:88px;height:88px}.home-card-title,.home-card-sub{max-width:68%}.home-hero-art-wrap{position:relative;right:auto;bottom:auto;width:100px;height:100px;margin:16px auto 0}.home-hero-art{border-radius:22px!important}.home-hero-art-glow{display:none}.home-hero-actions{justify-content:center}}
+@media (max-width:620px){#empty-home{top:146px;bottom:44px;width:calc(100vw - 24px)}.home-hero{padding:20px;border-radius:22px}.home-hero-inner{display:flex;flex-direction:column}.home-visual{display:none}.home-mosaic{display:none}.home-grid{grid-template-columns:1fr}.home-tile-row{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-cover{height:auto;aspect-ratio:1}.home-tile-sub{display:block}.home-card-art{width:88px;height:88px}.home-card-title,.home-card-sub{max-width:68%}.home-hero-actions{justify-content:center}}
 .home-visual.generated{height:74px!important;max-width:300px!important;align-self:center!important}
 @media (max-height:760px){.home-visual.generated{height:64px!important;max-width:260px!important}}
 
@@ -2012,7 +2015,9 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 <!-- 未播放时显示的首页，包含快捷卡片（歌单库、每日推荐、继续听、听歌画像）和推荐横栏 -->
 <section id="empty-home" aria-label="BhandsMusic home">
   <div class="empty-home-shell">
-    <div class="home-hero" onclick="playHomeSong(0)" style="cursor:pointer">
+    <div class="home-hero" id="hero-daily-bg" onclick="playHomeSong(0)" style="cursor:pointer">
+      <div class="home-hero-bg" id="hero-daily-art"></div>
+      <div class="home-hero-bg-overlay"></div>
       <div class="home-hero-inner home-construction-inner">
         <div class="home-title home-construction-title">
           <div class="home-card-label">Daily Mix</div>
@@ -2025,10 +2030,6 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
             </button>
             <button class="home-chip home-console-chip" type="button" onclick="event.stopPropagation();openHomePlayerConsole()">展开控制台</button>
           </div>
-        </div>
-        <div class="home-hero-art-wrap">
-          <div class="home-card-art home-hero-art" id="hero-daily-art"></div>
-          <div class="home-hero-art-glow" id="hero-daily-glow"></div>
         </div>
       </div>
     </div>
@@ -15438,11 +15439,6 @@ function setHomeArt(id, url, size) {
   el.style.backgroundImage = src ? 'url("' + cssImageUrl(src) + '")' : '';
   el.classList.toggle('has-cover', !!src);
   el.classList.toggle('home-skeleton', !src && homeDiscoverState.loading);
-  // 更新 hero 光晕效果
-  if (id === 'hero-daily-art') {
-    var glow = document.getElementById('hero-daily-glow');
-    if (glow) glow.style.opacity = src ? '0.6' : '0.2';
-  }
 }
 function compactHomeCount(n) {
   n = Number(n) || 0;
@@ -15751,7 +15747,7 @@ function renderHomeDiscover() {
     if (libSub) libSub.textContent = '播放后会继续补全推荐';
     setHomeArt('home-weather-art', '', 280);
     setHomeArt('home-daily-art', '', 280);
-    setHomeArt('hero-daily-art', '', 280);
+    setHomeArt('hero-daily-art', '', 800);
     setHomeArt('home-private-art', '', 280);
     setHomeArt('home-continue-art', summary.recent && summary.recent.cover, 280);
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || summary.recent && summary.recent.cover, 280);
@@ -15767,7 +15763,7 @@ function renderHomeDiscover() {
     if (libSub) libSub.textContent = cardSongC ? (cardSongC.artist || songSourceLabel(cardSongC) || '推荐歌曲') : (summary.topArtist ? ('歌手偏好 · ' + summary.topArtist.plays + ' 次') : '播放几首后生成你的偏好');
     setHomeArt('home-weather-art', (userPlaylists[0] && userPlaylists[0].cover) || (playlistItem && playlistItem.cover) || daily && daily.cover, 280);
     setHomeArt('home-daily-art', daily && daily.cover, 280);
-    setHomeArt('hero-daily-art', daily && daily.cover, 280);
+    setHomeArt('hero-daily-art', daily && daily.cover, 800);
     setHomeArt('home-private-art', cardSongB && cardSongB.cover || daily && daily.cover || summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-continue-art', summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || podcastItem && podcastItem.cover, 280);
