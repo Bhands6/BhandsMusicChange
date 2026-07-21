@@ -387,8 +387,8 @@ Function BhandsMusicNormalizeInstallDir
   ${EndIf}
 
   StrLen $1 "$0"
-  StrCpy $2 "$0" 10 -10
-  ${If} $1 < 10
+  StrCpy $2 "$0" 12 -12
+  ${If} $1 < 12
   ${OrIf} $2 != "\BhandsMusic"
   ${AndIf} $2 != "\bhandsmusic"
     StrCpy $0 "$0\BhandsMusic"
@@ -749,8 +749,8 @@ Function BhandsMusicValidateInstallDir
   ${EndIf}
 
   StrLen $0 "$INSTDIR"
-  StrCpy $1 "$INSTDIR" 10 -10
-  ${If} $0 < 10
+  StrCpy $1 "$INSTDIR" 12 -12
+  ${If} $0 < 12
   ${OrIf} $1 != "\BhandsMusic"
   ${AndIf} $1 != "\bhandsmusic"
     MessageBox MB_ICONSTOP|MB_OK "安装目录必须是独立的 BhandsMusic 文件夹。请选择一个上级目录，安装器会自动创建 BhandsMusic 子文件夹。"
@@ -940,8 +940,8 @@ Function un.BhandsMusicNormalizeInstallDir
   ${EndIf}
 
   StrLen $1 "$0"
-  StrCpy $2 "$0" 10 -10
-  ${If} $1 < 10
+  StrCpy $2 "$0" 12 -12
+  ${If} $1 < 12
   ${OrIf} $2 != "\BhandsMusic"
   ${AndIf} $2 != "\bhandsmusic"
     StrCpy $0 "$0\BhandsMusic"
