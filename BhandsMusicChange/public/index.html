@@ -12894,6 +12894,7 @@ function commitCoverCrop() {
 //             卡片间粒子穿梭, 切歌时飞出动画
 // ============================================================
 var shelfPinnedOpen = false;
+var shelfForceQueue = false;
 var shelfManager = null;
 var shelfOpenAnimAt = -10;
 var shelfHoverCue = { target: 0, value: 0, x: 0, y: 0, lastAt: 0, enteredAt: 0, zoneActive: false, guide: false };
@@ -13152,6 +13153,12 @@ function makeShelfManager() {
   }
 
   function currentItems() {
+    if (shelfForceQueue && playQueue.length) {
+      return playQueue.map(function(song, idx){
+        return { type:'queue', title: song.name, sub: song.artist || '未知歌手',
+          cover: songCoverSrc(song, 360), tag: idx === currentIdx ? '正在播放' : ('#' + (idx+1)), queueIndex: idx };
+      });
+    }
     if (hasAnyPlatformLogin() && (userPlaylists.length || myPodcastCollections.length)) {
       var source = activePlaylists();
       var items = source.map(function(pl){
@@ -16233,6 +16240,7 @@ function playHomeSong(index) {
   }
   playQueue = homeDiscoverState.songs.map(cloneSong);
   currentIdx = Math.max(0, Math.min(playQueue.length - 1, index));
+  shelfForceQueue = true;
   safeRenderQueuePanel('home-song-card');
   safeShelfRebuild('home-song-card', true);
   if (typeof setShelfPinnedOpen === 'function') setShelfPinnedOpen(true, true);
@@ -16243,6 +16251,7 @@ function openHomePlaylist(index) {
   homeForcedOpen = false;
   homeSuppressed = false;
   setHomeControlsLocked(false);
+  shelfForceQueue = false;
   if (!hasAnyPlatformLogin() && !homeDiscoverState.loggedIn) {
     runHomeSearch('');
     return;
@@ -19983,6 +19992,7 @@ async function loadPlaylistIntoQueueById(id, autoplay, title) {
   if (!id) return;
   homeForcedOpen = false;
   homeSuppressed = false;
+  shelfForceQueue = false;
   updateEmptyHomeVisibility();
   showLoading();
   var qqPlaylistId = String(id || '').indexOf('qq:') === 0 ? String(id).slice(3) : '';
