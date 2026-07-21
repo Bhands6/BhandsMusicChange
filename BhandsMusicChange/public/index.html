@@ -300,7 +300,7 @@ body.splash-active #empty-home,body.immersive-mode #empty-home{opacity:0!importa
 body.empty-home-active #canvas-container{filter:none}
 body.home-wallpaper-preview #canvas-container{filter:none}
 .empty-home-shell{height:100%;min-height:440px;display:grid;grid-template-columns:minmax(370px,.94fr) minmax(520px,1.06fr);grid-template-rows:auto 1fr;gap:14px;align-content:stretch}
-.home-hero{position:relative;grid-row:1 / span 2;min-height:438px;padding:28px;border-radius:28px;border:1px solid color-mix(in srgb,var(--home-accent) 22%,rgba(255,255,255,.085));background:linear-gradient(145deg,rgba(33,29,34,.64),rgba(9,10,14,.76) 48%,rgba(17,20,25,.70));box-shadow:0 28px 90px rgba(0,0,0,.34),0 0 0 1px color-mix(in srgb,var(--home-accent) 7%,transparent),inset 0 1px 0 rgba(255,255,255,.065);backdrop-filter:blur(30px) saturate(1.16);-webkit-backdrop-filter:blur(30px) saturate(1.16);overflow:hidden}
+.home-hero{position:relative;grid-row:1 / span 2;min-height:438px;padding:0;border-radius:28px;border:1px solid color-mix(in srgb,var(--home-accent) 22%,rgba(255,255,255,.085));background:linear-gradient(145deg,rgba(33,29,34,.64),rgba(9,10,14,.76) 48%,rgba(17,20,25,.70));box-shadow:0 28px 90px rgba(0,0,0,.34),0 0 0 1px color-mix(in srgb,var(--home-accent) 7%,transparent),inset 0 1px 0 rgba(255,255,255,.065);backdrop-filter:blur(30px) saturate(1.16);-webkit-backdrop-filter:blur(30px) saturate(1.16);overflow:hidden;display:flex;flex-direction:column}
 .home-hero::before{content:'';position:absolute;inset:0;background:linear-gradient(118deg,rgba(255,255,255,.060),transparent 24%,rgba(255,83,103,.070) 54%,rgba(122,215,194,.055) 82%,transparent 100%),linear-gradient(90deg,rgba(255,255,255,.032) 0 1px,transparent 1px 48px),linear-gradient(0deg,rgba(255,255,255,.024) 0 1px,transparent 1px 44px);opacity:.72;pointer-events:none}
 .home-hero::after{content:'';position:absolute;left:28px;right:28px;bottom:22px;height:1px;background:linear-gradient(90deg,color-mix(in srgb,var(--home-accent) 0%,transparent),color-mix(in srgb,var(--home-accent) 52%,transparent),rgba(36,66,255,.24),rgba(248,244,238,.18),color-mix(in srgb,var(--home-accent) 0%,transparent));opacity:.82;pointer-events:none}
 .home-hero-inner{position:relative;z-index:2;height:100%;display:grid;grid-template-columns:minmax(0,1.16fr) minmax(150px,.64fr);grid-template-rows:auto auto auto auto minmax(150px,1fr);column-gap:18px}
@@ -325,10 +325,13 @@ body.home-wallpaper-preview #canvas-container{filter:none}
 .home-hero-bg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;filter:blur(2px) saturate(1.2);transform:scale(1.03);opacity:0;transition:opacity .6s ease}
 .home-hero-bg.has-cover{opacity:1}
 .home-hero-bg-overlay{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(9,10,14,.48) 0%,rgba(9,10,14,.72) 60%,rgba(9,10,14,.88) 100%);pointer-events:none}
+.home-hero-cover-full{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;background-color:rgba(255,255,255,.04);opacity:0;transition:opacity .6s ease}
+.home-hero-cover-full.has-cover{opacity:1}
+.home-hero-cover-overlay{position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(9,10,14,.2) 0%,rgba(9,10,14,.5) 50%,rgba(9,10,14,.85) 100%);pointer-events:none}
 .home-hero-cover-wrap{position:relative;z-index:2;display:flex;justify-content:center;padding:24px 24px 0}
 .home-hero-cover{width:min(240px,50%);aspect-ratio:1;border-radius:24px;background-size:cover;background-position:center;background-color:rgba(255,255,255,.06);box-shadow:0 20px 60px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.08);opacity:0;transition:opacity .5s ease}
 .home-hero-cover.has-cover{opacity:1}
-.home-hero-bottom{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 24px 28px;gap:4px}
+.home-hero-bottom{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:16px 24px 28px;gap:4px;margin-top:auto}
 .home-hero-bottom .home-card-label{margin-bottom:4px}
 .home-hero-bottom .home-card-title{max-width:100%;font-size:clamp(20px,3vw,28px)}
 .home-hero-bottom .home-card-sub{max-width:100%}
@@ -406,7 +409,7 @@ body.empty-home-active .home-visual{animation:home-visual-drift 8.8s ease-in-out
 @media (max-width:760px){#empty-home{top:150px;bottom:56px;width:calc(100vw - 40px)}.empty-home-shell{grid-template-columns:1fr;grid-template-rows:auto auto 1fr;overflow:auto;padding-bottom:4px}.home-hero{grid-row:auto;min-height:344px}.home-mosaic{height:172px;min-height:150px}.home-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-row{grid-template-columns:repeat(3,minmax(0,1fr))}.home-hero-cover{width:min(180px,45%);border-radius:20px}}
 body.empty-home-active.controls-visible #empty-home{bottom:128px}
 @media (max-height:760px){body.empty-home-active.controls-visible #empty-home{bottom:112px}}
-@media (max-width:620px){#empty-home{top:146px;bottom:44px;width:calc(100vw - 24px)}.home-hero{padding:16px;border-radius:22px}.home-hero-inner{display:flex;flex-direction:column}.home-visual{display:none}.home-mosaic{display:none}.home-grid{grid-template-columns:1fr}.home-tile-row{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-cover{height:auto;aspect-ratio:1}.home-tile-sub{display:block}.home-card-art{width:88px;height:88px}.home-card-title,.home-card-sub{max-width:68%}.home-hero-cover-wrap{padding:16px 16px 0}.home-hero-cover{width:min(160px,50%);border-radius:18px}.home-hero-bottom{padding:12px 16px 20px}.home-hero-actions{justify-content:center}}
+@media (max-width:620px){#empty-home{top:146px;bottom:44px;width:calc(100vw - 24px)}.home-hero{border-radius:22px}.home-hero-inner{display:flex;flex-direction:column}.home-visual{display:none}.home-mosaic{display:none}.home-grid{grid-template-columns:1fr}.home-tile-row{grid-template-columns:repeat(2,minmax(0,1fr))}.home-tile-cover{height:auto;aspect-ratio:1}.home-tile-sub{display:block}.home-card-art{width:88px;height:88px}.home-card-title,.home-card-sub{max-width:68%}.home-hero-bottom{padding:12px 16px 20px}.home-hero-actions{justify-content:center}}
 .home-visual.generated{height:74px!important;max-width:300px!important;align-self:center!important}
 @media (max-height:760px){.home-visual.generated{height:64px!important;max-width:260px!important}}
 
@@ -454,7 +457,7 @@ body.desktop-shell.desktop-fullscreen .home-mosaic,html:fullscreen body.desktop-
 body.desktop-shell.desktop-fullscreen .home-mosaic-cell.has-cover,html:fullscreen body.desktop-shell .home-mosaic-cell.has-cover{background-size:contain;background-repeat:no-repeat;background-color:rgba(8,10,14,.54)}
 @media (max-height:760px){
   body.desktop-shell #empty-home{top:118px;bottom:34px}
-  body.desktop-shell .home-hero{min-height:330px;padding:22px}
+  body.desktop-shell .home-hero{min-height:330px;padding:0}
   body.desktop-shell .home-visual{height:196px;max-width:260px}
   body.desktop-shell .home-card{min-height:128px;padding:14px}
   body.desktop-shell .home-tile{min-height:130px}
@@ -464,7 +467,7 @@ body.desktop-shell.desktop-fullscreen .home-mosaic-cell.has-cover,html:fullscree
 @media (max-width:1120px){
   body.desktop-shell #empty-home{width:calc(100vw - 44px)}
   body.desktop-shell .empty-home-shell{grid-template-columns:minmax(300px,.88fr) minmax(430px,1.12fr);gap:12px}
-  body.desktop-shell .home-hero{padding:22px}
+  body.desktop-shell .home-hero{padding:0}
   body.desktop-shell .home-hero-inner{grid-template-columns:minmax(0,1.16fr) minmax(126px,.52fr);column-gap:14px}
   body.desktop-shell .home-title{font-size:clamp(30px,4vw,48px);max-width:340px}
   body.desktop-shell .home-sub{font-size:12.5px;line-height:1.5;max-width:314px}
@@ -483,7 +486,7 @@ body.desktop-shell.desktop-fullscreen .home-mosaic-cell.has-cover,html:fullscree
 }
 @media (max-height:700px){
   body.desktop-shell #empty-home{top:106px;bottom:30px}
-  body.desktop-shell .home-hero{min-height:0;padding:18px}
+  body.desktop-shell .home-hero{min-height:0;padding:0}
   body.desktop-shell .home-title{font-size:clamp(27px,3.5vw,40px)}
   body.desktop-shell .home-sub{font-size:11.8px;line-height:1.4}
   body.desktop-shell .home-weather-meta{margin-top:11px}
@@ -2024,9 +2027,8 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 <section id="empty-home" aria-label="BhandsMusic home">
   <div class="empty-home-shell">
     <div class="home-hero" id="hero-daily-bg" onclick="playHomeSong(0)" style="cursor:pointer">
-      <div class="home-hero-cover-wrap">
-        <div class="home-hero-cover" id="hero-daily-art"></div>
-      </div>
+      <div class="home-hero-cover-full" id="hero-daily-art"></div>
+      <div class="home-hero-cover-overlay"></div>
       <div class="home-hero-bottom">
         <div class="home-card-label">Daily Mix</div>
         <div class="home-card-title" id="hero-daily-title">每日推荐</div>
@@ -15754,7 +15756,7 @@ function renderHomeDiscover() {
     if (libSub) libSub.textContent = '播放后会继续补全推荐';
     setHomeArt('home-weather-art', '', 280);
     setHomeArt('home-daily-art', '', 280);
-    setHomeArt('hero-daily-art', '', 480);
+    setHomeArt('hero-daily-art', '', 800);
     setHomeArt('home-private-art', '', 280);
     setHomeArt('home-continue-art', summary.recent && summary.recent.cover, 280);
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || summary.recent && summary.recent.cover, 280);
@@ -15770,7 +15772,7 @@ function renderHomeDiscover() {
     if (libSub) libSub.textContent = cardSongC ? (cardSongC.artist || songSourceLabel(cardSongC) || '推荐歌曲') : (summary.topArtist ? ('歌手偏好 · ' + summary.topArtist.plays + ' 次') : '播放几首后生成你的偏好');
     setHomeArt('home-weather-art', (userPlaylists[0] && userPlaylists[0].cover) || (playlistItem && playlistItem.cover) || daily && daily.cover, 280);
     setHomeArt('home-daily-art', daily && daily.cover, 280);
-    setHomeArt('hero-daily-art', daily && daily.cover, 480);
+    setHomeArt('hero-daily-art', daily && daily.cover, 800);
     setHomeArt('home-private-art', cardSongB && cardSongB.cover || daily && daily.cover || summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-continue-art', summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || podcastItem && podcastItem.cover, 280);
