@@ -1,4 +1,4 @@
-# Mineradio Security Rebuild Log - 2026-06-24
+# BhandsMusic Security Rebuild Log - 2026-06-24
 
 ## Context
 
@@ -8,7 +8,7 @@
 
 ## Current Source Boundary
 
-- Active source repository: `E:\桌面\播放器软件\Mineradio\resources\app`
+- Active source repository: `E:\桌面\播放器软件\BhandsMusic\resources\app`
 - Current code version: `1.1.0`
 - Any generated `dist/` output must come from this current source tree and be scanned before upload.
 - `.playwright-cli/`, `output/`, and `tmp/` are ignored and must not be pushed.

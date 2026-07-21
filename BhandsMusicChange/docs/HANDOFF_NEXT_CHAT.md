@@ -1,11 +1,11 @@
-# Mineradio Next Chat Handoff
+# BhandsMusic Next Chat Handoff
 
-更新时间：2026-06-24
+更新时间：2026-07-21
 
 ## 新对话先执行
 
 ```powershell
-cd E:\桌面\播放器软件\Mineradio\resources\app
+cd E:\桌面\播放器软件\BhandsMusic\resources\app
 git status --short --branch
 git log --oneline -5 --decorate
 Get-Content AGENTS.md
@@ -24,23 +24,31 @@ Get-Content RELEASE.md
 
 ## 当前状态
 
-- 当前真实代码/Git 仓库：`E:\桌面\播放器软件\Mineradio\resources\app`
+- 当前真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
 - 当前版本：`v1.1.0`
 - 当前发布策略：纯净安装版，从当前可信源码重新构建；`v1.0.10` 及更早旧安装包需要隔离，不再建议安装或传播。
 - 本次发布不做 `v1.0.10 -> v1.1.0` 软件内本地更新，不上传 `latest.yml`，不生成快速补丁。
 - 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
-- GitHub 仓库已公开：`https://github.com/XxHuberrr/Mineradio`
-- `v1.1.0` Release：`https://github.com/XxHuberrr/Mineradio/releases/tag/v1.1.0`
+- GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
+- `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
 - GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
 
-## 本轮重点
+## 本轮重点（2026-07-21）
+
+- 品牌重命名 Mineradio → BhandsMusic，全项目 25+ 文件已替换。
+- GitHub 仓库改为 `Bhands6/BhandsMusicChange`，`package.json` 和所有文档已同步。
+- 修复 SSL 握手错误：重命名时 GitHub repo 名被误改，更新检查请求了不存在的仓库。
+- 3D 歌单架正对镜头：普通预设 `sideRotY`/`sideRotX` 归零，星河渲染覆盖归零，详情页 `ry` 归零。
+- 新增记忆条目：`docs/PROJECT_MEMORY.md` 已记录品牌重命名和歌单架正对。
+
+## 上轮重点（2026-06-24）
 
 - 已将 `E:\Download\默认测试.json` 设为首次启动默认用户存档和软件内默认视觉参数。
 - 新增 `public/default-user-fx-archive.json`，代码中 `PACKAGED_DEFAULT_FX_SNAPSHOT` 与该 JSON 已脚本比对一致。
-- 没有本地 `mineradio-lyric-layout-v1` 时，`readSavedLyricLayout()` 使用 packaged 默认快照；没有本地用户存档 key 时自动创建「默认测试」槽位。
+- 没有本地 `bhandsmusic-lyric-layout-v1` 时，`readSavedLyricLayout()` 使用 packaged 默认快照；没有本地用户存档 key 时自动创建「默认测试」槽位。
 - 已恢复详细日志和发布说明：`CHANGELOG.md`、`README.md`、`SECURITY.md`、`RELEASE.md`、`docs/SECURITY_REBUILD_2026-06-24.md`、`docs/RELEASE_NOTES_v1.1.0.md`。
-- 已生成安装包：`dist/Mineradio-1.1.0-Setup.exe`。
-- 已生成校验文件：`dist/Mineradio-1.1.0-SHA256SUMS.txt`。
+- 已生成安装包：`dist/BhandsMusic-1.1.0-Setup.exe`。
+- 已生成校验文件：`dist/BhandsMusic-1.1.0-SHA256SUMS.txt`。
 - 已发布资产：安装包、blockmap、SHA256SUMS；未上传 `latest.yml`。
 - 已批量给旧 Release（`v1.0.10` 到 `v0.9.9`）正文顶部追加旧安装包隔离警示。
 
@@ -69,9 +77,9 @@ $env:ALL_PROXY='socks5://127.0.0.1:10808'
 
 - 发布 `v1.1.0` 时不要上传 `dist/latest.yml`。
 - Release 建议上传：
-  - `dist/Mineradio-1.1.0-Setup.exe`
-  - `dist/Mineradio-1.1.0-Setup.exe.blockmap`
-  - `dist/Mineradio-1.1.0-SHA256SUMS.txt`
+  - `dist/BhandsMusic-1.1.0-Setup.exe`
+  - `dist/BhandsMusic-1.1.0-Setup.exe.blockmap`
+  - `dist/BhandsMusic-1.1.0-SHA256SUMS.txt`
 - Release 正文使用 `docs/RELEASE_NOTES_v1.1.0.md`。
 - Release 需要 `--latest=false` 或等价 API，避免旧版客户端通过 `/releases/latest` 自动发现。
 - 旧 release 尤其 `v1.0.10` 需要追加隔离警示，不要删除旧资产。

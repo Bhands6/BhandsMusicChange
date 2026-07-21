@@ -1,5 +1,5 @@
 /**
- * Mineradio 桌面播放器 - Electron 主进程
+ * BhandsMusic 桌面播放器 - Electron 主进程
  * 负责窗口管理、桌面歌词、壁纸模式、音乐平台登录、全局热键等功能
  */
 
@@ -39,14 +39,14 @@ const MIN_WINDOWED_WIDTH = 960;       // 窗口最小宽度
 const MIN_WINDOWED_HEIGHT = 540;      // 窗口最小高度
 
 // ==================== 应用信息常量 ====================
-const APP_NAME = 'Mineradio';                                   // 应用名称
-const APP_USER_MODEL_ID = 'com.mineradio.desktop';              // Windows 任务栏分组标识
+const APP_NAME = 'BhandsMusic';                                   // 应用名称
+const APP_USER_MODEL_ID = 'com.bhandsmusic.desktop';              // Windows 任务栏分组标识
 const APP_ICON_ICO = path.join(__dirname, '..', 'build', 'icon.ico'); // 应用图标路径
 
 // ==================== 音乐平台登录配置 ====================
-const NETEASE_LOGIN_PARTITION = 'persist:mineradio-netease-login'; // 网易云登录的 session 分区（持久化）
+const NETEASE_LOGIN_PARTITION = 'persist:bhandsmusic-netease-login'; // 网易云登录的 session 分区（持久化）
 const NETEASE_LOGIN_URL = 'https://music.163.com/#/login';        // 网易云登录页地址
-const QQ_LOGIN_PARTITION = 'persist:mineradio-qqmusic-login';     // QQ 音乐登录的 session 分区（持久化）
+const QQ_LOGIN_PARTITION = 'persist:bhandsmusic-qqmusic-login';     // QQ 音乐登录的 session 分区（持久化）
 const QQ_LOGIN_URL = 'https://y.qq.com/n/ryqq/profile';           // QQ 音乐登录页地址
 
 // ==================== Chromium 性能优化开关 ====================
@@ -166,13 +166,13 @@ function sendWindowState(win) {
  */
 function sendGlobalHotkeyAction(action) {
   if (!mainWindow || mainWindow.isDestroyed() || !action) return;
-  mainWindow.webContents.send('mineradio-global-hotkey', { action });
+  mainWindow.webContents.send('bhandsmusic-global-hotkey', { action });
 }
 
 // ==================== 全局快捷键管理 ====================
 
 /** 注销所有已注册的全局快捷键 */
-function unregisterMineradioGlobalHotkeys() {
+function unregisterBhandsMusicGlobalHotkeys() {
   for (const accelerator of registeredGlobalHotkeys.keys()) {
     try { globalShortcut.unregister(accelerator); } catch (e) {}
   }
@@ -184,8 +184,8 @@ function unregisterMineradioGlobalHotkeys() {
  * @param {Array<{action: string, accelerator: string}>} bindings - 快捷键绑定列表
  * @returns {{ok: boolean, results: Array}} 注册结果，包含每个快捷键的成功/失败状态及冲突信息
  */
-function configureMineradioGlobalHotkeys(bindings = []) {
-  unregisterMineradioGlobalHotkeys(); // 先清除旧的绑定
+function configureBhandsMusicGlobalHotkeys(bindings = []) {
+  unregisterBhandsMusicGlobalHotkeys(); // 先清除旧的绑定
   const results = [];
   const seen = new Set(); // 去重，防止同一快捷键注册多次
   for (const item of Array.isArray(bindings) ? bindings : []) {
@@ -368,8 +368,8 @@ function getUpdateDownloadDir() {
  */
 function shouldEnsureDesktopShortcut() {
   if (process.platform !== 'win32') return false;
-  if (process.env.MINERADIO_NO_DESKTOP_SHORTCUT === '1') return false;
-  return app.isPackaged || process.env.MINERADIO_CREATE_DESKTOP_SHORTCUT === '1';
+  if (process.env.BHANDSMUSIC_NO_DESKTOP_SHORTCUT === '1') return false;
+  return app.isPackaged || process.env.BHANDSMUSIC_CREATE_DESKTOP_SHORTCUT === '1';
 }
 
 /**
@@ -386,7 +386,7 @@ function ensureDesktopShortcut() {
       target,
       cwd: path.dirname(target),
       args: '',
-      description: 'Mineradio desktop music player',
+      description: 'BhandsMusic desktop music player',
       icon: fs.existsSync(APP_ICON_ICO) ? APP_ICON_ICO : target,
       iconIndex: 0,
       appUserModelId: APP_USER_MODEL_ID,
@@ -1102,13 +1102,13 @@ $ErrorActionPreference = "SilentlyContinue"
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class MineradioMousePoll {
+public class BhandsMusicMousePoll {
   [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
 }
 "@
 $prev = $false
 while ($true) {
-  $down = (([MineradioMousePoll]::GetAsyncKeyState(4) -band 0x8000) -ne 0)
+  $down = (([BhandsMusicMousePoll]::GetAsyncKeyState(4) -band 0x8000) -ne 0)
   if ($down -and -not $prev) {
     [Console]::Out.WriteLine("MMB")
     [Console]::Out.Flush()
@@ -1161,7 +1161,7 @@ function stopDesktopLyricsMousePoller() {
 function broadcastDesktopLyricsLockState() {
   const locked = desktopLyricsState.clickThrough !== false;
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('mineradio-desktop-lyrics-lock-state', { locked });
+    mainWindow.webContents.send('bhandsmusic-desktop-lyrics-lock-state', { locked });
   }
   sendDesktopLyricsState();
 }
@@ -1172,7 +1172,7 @@ function broadcastDesktopLyricsLockState() {
  */
 function broadcastDesktopLyricsEnabledState(enabled) {
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('mineradio-desktop-lyrics-enabled-state', { enabled: !!enabled });
+    mainWindow.webContents.send('bhandsmusic-desktop-lyrics-enabled-state', { enabled: !!enabled });
   }
 }
 
@@ -1195,7 +1195,7 @@ function positionDesktopLyricsWindow(payload = desktopLyricsState, options = {})
 /** 向歌词渲染进程发送当前歌词状态 */
 function sendDesktopLyricsState() {
   if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return;
-  desktopLyricsWindow.webContents.send('mineradio-desktop-lyrics-state', desktopLyricsState);
+  desktopLyricsWindow.webContents.send('bhandsmusic-desktop-lyrics-state', desktopLyricsState);
 }
 
 // ==================== 桌面歌词窗口生命周期 ====================
@@ -1246,7 +1246,7 @@ function createDesktopLyricsWindow(payload = {}) {
     focusable: false,          // 不抢焦点
     skipTaskbar: true,         // 不在任务栏显示
     show: false,               // 初始隐藏，等 ready 后再显示
-    title: 'Mineradio Desktop Lyrics',
+    title: 'BhandsMusic Desktop Lyrics',
     webPreferences: {
       preload: path.join(__dirname, 'overlay-preload.js'),
       contextIsolation: true,
@@ -1327,11 +1327,11 @@ function attachWallpaperToWorkerW(win) {
   const hwnd = nativeWindowHandleDecimal(win);
   const script = `
 $ErrorActionPreference = "Stop"
-if (-not ("MineradioNativeWin" -as [type])) {
+if (-not ("BhandsMusicNativeWin" -as [type])) {
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class MineradioNativeWin {
+public class BhandsMusicNativeWin {
   public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
   [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
   [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr FindWindowEx(IntPtr parent, IntPtr childAfter, string className, string windowName);
@@ -1342,23 +1342,23 @@ public class MineradioNativeWin {
 }
 "@
 }
-$progman = [MineradioNativeWin]::FindWindow("Progman", $null)
+$progman = [BhandsMusicNativeWin]::FindWindow("Progman", $null)
 $result = [IntPtr]::Zero
-[MineradioNativeWin]::SendMessageTimeout($progman, 0x052C, [IntPtr]::Zero, [IntPtr]::Zero, 0, 1000, [ref]$result) | Out-Null
+[BhandsMusicNativeWin]::SendMessageTimeout($progman, 0x052C, [IntPtr]::Zero, [IntPtr]::Zero, 0, 1000, [ref]$result) | Out-Null
 $script:workerw = [IntPtr]::Zero
-$enum = [MineradioNativeWin+EnumWindowsProc]{
+$enum = [BhandsMusicNativeWin+EnumWindowsProc]{
   param([IntPtr]$top, [IntPtr]$param)
-  $shell = [MineradioNativeWin]::FindWindowEx($top, [IntPtr]::Zero, "SHELLDLL_DefView", $null)
+  $shell = [BhandsMusicNativeWin]::FindWindowEx($top, [IntPtr]::Zero, "SHELLDLL_DefView", $null)
   if ($shell -ne [IntPtr]::Zero) {
-    $script:workerw = [MineradioNativeWin]::FindWindowEx([IntPtr]::Zero, $top, "WorkerW", $null)
+    $script:workerw = [BhandsMusicNativeWin]::FindWindowEx([IntPtr]::Zero, $top, "WorkerW", $null)
   }
   return $true
 }
-[MineradioNativeWin]::EnumWindows($enum, [IntPtr]::Zero) | Out-Null
+[BhandsMusicNativeWin]::EnumWindows($enum, [IntPtr]::Zero) | Out-Null
 if ($script:workerw -eq [IntPtr]::Zero) { $script:workerw = $progman }
 $target = [IntPtr]::new([Int64]${hwnd})
-[MineradioNativeWin]::SetParent($target, $script:workerw) | Out-Null
-[MineradioNativeWin]::SetWindowPos($target, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013) | Out-Null
+[BhandsMusicNativeWin]::SetParent($target, $script:workerw) | Out-Null
+[BhandsMusicNativeWin]::SetWindowPos($target, [IntPtr]::Zero, 0, 0, 0, 0, 0x0013) | Out-Null
 `;
   execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
     windowsHide: true,
@@ -1378,7 +1378,7 @@ function positionWallpaperWindow() {
 /** 向壁纸渲染进程发送当前壁纸状态 */
 function sendWallpaperState() {
   if (!wallpaperWindow || wallpaperWindow.isDestroyed()) return;
-  wallpaperWindow.webContents.send('mineradio-wallpaper-state', wallpaperState);
+  wallpaperWindow.webContents.send('bhandsmusic-wallpaper-state', wallpaperState);
 }
 
 /**
@@ -1409,7 +1409,7 @@ function createWallpaperWindow(payload = {}) {
     focusable: false,
     skipTaskbar: true,
     show: false,
-    title: 'Mineradio Wallpaper',
+    title: 'BhandsMusic Wallpaper',
     webPreferences: {
       preload: path.join(__dirname, 'overlay-preload.js'),
       contextIsolation: true,
@@ -1489,8 +1489,8 @@ ipcMain.handle('desktop-window-close', (event) => {
 // ==================== IPC 处理器：全局快捷键 ====================
 
 /** 配置全局快捷键绑定 */
-ipcMain.handle('mineradio-hotkeys-configure-global', (_event, bindings) => {
-  return configureMineradioGlobalHotkeys(bindings);
+ipcMain.handle('bhandsmusic-hotkeys-configure-global', (_event, bindings) => {
+  return configureBhandsMusicGlobalHotkeys(bindings);
 });
 
 // ==================== IPC 处理器：数据导入导出 ====================
@@ -1499,12 +1499,12 @@ ipcMain.handle('mineradio-hotkeys-configure-global', (_event, bindings) => {
  * 导出 JSON 文件（弹出保存对话框）
  * @param {object} payload - { defaultName: string, text?: string, data?: object }
  */
-ipcMain.handle('mineradio-export-json-file', async (event, payload = {}) => {
+ipcMain.handle('bhandsmusic-export-json-file', async (event, payload = {}) => {
   try {
     const owner = getSenderWindow(event);
-    const defaultName = String(payload.defaultName || 'mineradio-export.json').replace(/[\\/:*?"<>|]+/g, '-');
+    const defaultName = String(payload.defaultName || 'bhandsmusic-export.json').replace(/[\\/:*?"<>|]+/g, '-');
     const result = await dialog.showSaveDialog(owner, {
-      title: '导出 Mineradio 存档',
+      title: '导出 BhandsMusic 存档',
       defaultPath: defaultName.toLowerCase().endsWith('.json') ? defaultName : `${defaultName}.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -1521,11 +1521,11 @@ ipcMain.handle('mineradio-export-json-file', async (event, payload = {}) => {
  * 导入 JSON 文件（弹出打开对话框）
  * @returns {{ok: boolean, filePath?: string, text?: string}}
  */
-ipcMain.handle('mineradio-import-json-file', async (event) => {
+ipcMain.handle('bhandsmusic-import-json-file', async (event) => {
   try {
     const owner = getSenderWindow(event);
     const result = await dialog.showOpenDialog(owner, {
-      title: '导入 Mineradio 存档',
+      title: '导入 BhandsMusic 存档',
       properties: ['openFile'],
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -1567,7 +1567,7 @@ ipcMain.handle('qq-music-clear-login', async () => {
  * 安全校验：路径必须在更新目录内，防止任意文件执行
  * @param {string} filePath - 更新安装包路径
  */
-ipcMain.handle('mineradio-open-update-installer', async (_event, filePath) => {
+ipcMain.handle('bhandsmusic-open-update-installer', async (_event, filePath) => {
   try {
     const target = path.resolve(String(filePath || ''));
     const updateDir = path.resolve(getUpdateDownloadDir());
@@ -1584,7 +1584,7 @@ ipcMain.handle('mineradio-open-update-installer', async (_event, filePath) => {
 });
 
 /** 重启应用 */
-ipcMain.handle('mineradio-restart-app', async () => {
+ipcMain.handle('bhandsmusic-restart-app', async () => {
   try {
     app.relaunch();
     app.exit(0);
@@ -1597,7 +1597,7 @@ ipcMain.handle('mineradio-restart-app', async () => {
 // ==================== IPC 处理器：桌面歌词 ====================
 
 /** 启用/禁用桌面歌词 */
-ipcMain.handle('mineradio-desktop-lyrics-set-enabled', async (_event, enabled, payload) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-set-enabled', async (_event, enabled, payload) => {
   try {
     if (enabled) {
       createDesktopLyricsWindow(payload || {});
@@ -1612,7 +1612,7 @@ ipcMain.handle('mineradio-desktop-lyrics-set-enabled', async (_event, enabled, p
 });
 
 /** 更新桌面歌词配置（透明度、位置、锁定状态等） */
-ipcMain.handle('mineradio-desktop-lyrics-update', async (_event, payload) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-update', async (_event, payload) => {
   try {
     const nextState = { ...desktopLyricsState, ...(payload || {}) };
     if (nextState.enabled) {
@@ -1630,12 +1630,12 @@ ipcMain.handle('mineradio-desktop-lyrics-update', async (_event, payload) => {
 });
 
 /** 设置歌词窗口拖拽状态（预留接口） */
-ipcMain.handle('mineradio-desktop-lyrics-set-dragging', async () => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-set-dragging', async () => {
   return { ok: true };
 });
 
 /** 设置鼠标指针捕获状态（解锁时需要捕获以响应交互） */
-ipcMain.handle('mineradio-desktop-lyrics-set-pointer-capture', async (_event, active) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-set-pointer-capture', async (_event, active) => {
   try {
     desktopLyricsPointerCapture = !!active;
     applyDesktopLyricsMouseBehavior();
@@ -1646,7 +1646,7 @@ ipcMain.handle('mineradio-desktop-lyrics-set-pointer-capture', async (_event, ac
 });
 
 /** 设置歌词窗口的可交互热区（相对窗口坐标） */
-ipcMain.handle('mineradio-desktop-lyrics-set-hot-bounds', async (_event, bounds) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-set-hot-bounds', async (_event, bounds) => {
   try {
     const left = clampNumber(bounds && bounds.left, -2000, 4000, 0);
     const top = clampNumber(bounds && bounds.top, -2000, 4000, 0);
@@ -1660,7 +1660,7 @@ ipcMain.handle('mineradio-desktop-lyrics-set-hot-bounds', async (_event, bounds)
 });
 
 /** 设置歌词窗口锁定状态（锁定=点击穿透，解锁=可交互） */
-ipcMain.handle('mineradio-desktop-lyrics-set-lock-state', async (_event, locked) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-set-lock-state', async (_event, locked) => {
   try {
     desktopLyricsState = { ...desktopLyricsState, clickThrough: !!locked };
     if (desktopLyricsState.clickThrough !== false) desktopLyricsPointerCapture = false;
@@ -1673,7 +1673,7 @@ ipcMain.handle('mineradio-desktop-lyrics-set-lock-state', async (_event, locked)
 });
 
 /** 移动歌词窗口（相对偏移量，限制单次最大 160px） */
-ipcMain.handle('mineradio-desktop-lyrics-move-by', async (_event, dx, dy) => {
+ipcMain.handle('bhandsmusic-desktop-lyrics-move-by', async (_event, dx, dy) => {
   try {
     if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return { ok: false, error: 'NO_DESKTOP_LYRICS_WINDOW' };
     if (desktopLyricsState.clickThrough !== false) return { ok: false, error: 'DESKTOP_LYRICS_LOCKED' };
@@ -1694,7 +1694,7 @@ ipcMain.handle('mineradio-desktop-lyrics-move-by', async (_event, dx, dy) => {
 // ==================== IPC 处理器：壁纸模式 ====================
 
 /** 启用/禁用壁纸模式 */
-ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payload) => {
+ipcMain.handle('bhandsmusic-wallpaper-set-enabled', async (_event, enabled, payload) => {
   try {
     if (enabled) createWallpaperWindow(payload || {});
     else closeWallpaperWindow();
@@ -1705,7 +1705,7 @@ ipcMain.handle('mineradio-wallpaper-set-enabled', async (_event, enabled, payloa
 });
 
 /** 更新壁纸配置 */
-ipcMain.handle('mineradio-wallpaper-update', async (_event, payload) => {
+ipcMain.handle('bhandsmusic-wallpaper-update', async (_event, payload) => {
   try {
     wallpaperState = { ...wallpaperState, ...(payload || {}) };
     if (wallpaperState.enabled) {
@@ -1747,7 +1747,7 @@ async function createWindow() {
   process.env.PORT = String(port);
   process.env.COOKIE_FILE = path.join(app.getPath('userData'), '.cookie');
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
-  process.env.MINERADIO_UPDATE_DIR = getUpdateDownloadDir();
+  process.env.BHANDSMUSIC_UPDATE_DIR = getUpdateDownloadDir();
 
   // 迁移旧版 QQ Cookie 文件到新位置
   try {
@@ -1904,7 +1904,7 @@ if (!gotSingleInstanceLock) {
 
   // 退出前清理资源
   app.on('before-quit', () => {
-    unregisterMineradioGlobalHotkeys(); // 注销全局快捷键
+    unregisterBhandsMusicGlobalHotkeys(); // 注销全局快捷键
     closeOverlayWindows();              // 关闭覆盖层窗口
     if (localServer && localServer.close) localServer.close(); // 关闭本地服务器
   });

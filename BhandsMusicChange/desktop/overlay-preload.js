@@ -28,28 +28,28 @@ contextBridge.exposeInMainWorld('desktopOverlay', {
   // ==================== 事件监听（主进程 -> 渲染进程）====================
 
   /** 监听桌面歌词状态更新（歌词内容、锁定状态、透明度等） */
-  onLyricsState: (callback) => bind('mineradio-desktop-lyrics-state', callback),
+  onLyricsState: (callback) => bind('bhandsmusic-desktop-lyrics-state', callback),
 
   /** 监听壁纸状态更新 */
-  onWallpaperState: (callback) => bind('mineradio-wallpaper-state', callback),
+  onWallpaperState: (callback) => bind('bhandsmusic-wallpaper-state', callback),
 
   // ==================== 操作指令（渲染进程 -> 主进程）====================
 
   /** 设置歌词窗口拖拽状态 */
-  setLyricsDrag: (dragging) => ipcRenderer.invoke('mineradio-desktop-lyrics-set-dragging', !!dragging),
+  setLyricsDrag: (dragging) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-dragging', !!dragging),
 
   /** 设置鼠标指针捕获状态（解锁时捕获以响应交互） */
-  setLyricsPointerCapture: (active) => ipcRenderer.invoke('mineradio-desktop-lyrics-set-pointer-capture', !!active),
+  setLyricsPointerCapture: (active) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-pointer-capture', !!active),
 
   /** 设置歌词窗口的可交互热区（相对窗口坐标） */
-  setLyricsHotBounds: (bounds) => ipcRenderer.invoke('mineradio-desktop-lyrics-set-hot-bounds', bounds || {}),
+  setLyricsHotBounds: (bounds) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-hot-bounds', bounds || {}),
 
   /** 设置歌词锁定状态（锁定=点击穿透，解锁=可交互） */
-  setLyricsLockState: (locked) => ipcRenderer.invoke('mineradio-desktop-lyrics-set-lock-state', !!locked),
+  setLyricsLockState: (locked) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-lock-state', !!locked),
 
   /** 移动歌词窗口（相对偏移量 dx, dy） */
-  moveLyricsBy: (dx, dy) => ipcRenderer.invoke('mineradio-desktop-lyrics-move-by', Number(dx) || 0, Number(dy) || 0),
+  moveLyricsBy: (dx, dy) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-move-by', Number(dx) || 0, Number(dy) || 0),
 
   /** 关闭桌面歌词 */
-  closeLyrics: () => ipcRenderer.invoke('mineradio-desktop-lyrics-set-enabled', false, {}),
+  closeLyrics: () => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-enabled', false, {}),
 });

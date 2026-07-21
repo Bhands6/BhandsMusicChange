@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mineradio Desktop Lyrics</title>
+  <title>BhandsMusic Desktop Lyrics</title>
   <style>
     /* ==================== CSS 变量定义 ==================== */
     /* 定义歌词样式相关的 CSS 自定义属性 */
@@ -223,7 +223,7 @@
       <!-- 歌词视口 - 承载滚动歌词文本 -->
       <div id="lyricViewport" class="lyric-viewport">
         <div id="lyricScroller" class="lyric-scroll">
-          <div id="line" class="line" data-text="Mineradio">Mineradio</div>
+          <div id="line" class="line" data-text="BhandsMusic">BhandsMusic</div>
         </div>
       </div>
       <!-- 锁定提示 - 显示锁定/解锁状态和关闭按钮 -->
@@ -295,7 +295,7 @@
     /* ==================== 应用主状态 ==================== */
     var state = {
       enabled:false,           // 是否启用歌词显示
-      text:'Mineradio',        // 当前歌词文本
+      text:'BhandsMusic',        // 当前歌词文本
       progress:0,              // 播放进度 (0-1)
       progressSpan:4.8,        // 进度更新间隔（秒）
       progressReceivedAt:0,    // 进度接收时间戳
@@ -900,7 +900,7 @@
     function measureLineWidth(fontSize) {
       ctx.save();
       ctx.font = state.fontWeight + ' ' + fontSize + 'px ' + state.fontFamily;
-      var text = line.textContent || 'Mineradio';
+      var text = line.textContent || 'BhandsMusic';
       var width = ctx.measureText(text).width;
       ctx.restore();
       /* 加上字间距 */
@@ -1150,7 +1150,7 @@
       if (motion.bass != null) state.bass = motion.bass;
 
       /* 处理歌词文本 */
-      var text = String(state.text || 'Mineradio').replace(/\s+/g, ' ').trim() || 'Mineradio';
+      var text = String(state.text || 'BhandsMusic').replace(/\s+/g, ' ').trim() || 'BhandsMusic';
 
       /* 钳制数值参数 */
       baseFontSize = Math.round(58 * clamp(state.size, .72, 1.55, 1));
@@ -1467,7 +1467,7 @@
       live.glow += (target - live.glow) * (target > live.glow ? .11 : .06);
       if (live.glow <= .004) return;
 
-      var text = line.textContent || 'Mineradio';
+      var text = line.textContent || 'BhandsMusic';
       var cx = rect.left + rect.width / 2;
       var cy = rect.top + rect.height / 2;
       var spacing = renderedFontSize * state.letterSpacing;
@@ -1890,12 +1890,12 @@
 
     /* ==================== 消息和状态接口 ==================== */
     /* 暴露状态应用函数到全局 */
-    window.__mineradioDesktopLyricsApplyState = applyState;
+    window.__bhandsmusicDesktopLyricsApplyState = applyState;
 
     /* 监听状态消息 - 来自主窗口 */
     window.addEventListener('message', function(event){
       var data = event && event.data;
-      if (!data || data.type !== 'mineradio-desktop-lyrics-state') return;
+      if (!data || data.type !== 'bhandsmusic-desktop-lyrics-state') return;
       applyState(data.payload || {});
     });
 

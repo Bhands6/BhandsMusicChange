@@ -1,13 +1,13 @@
-# Mineradio AI Handoff
+# BhandsMusic AI Handoff
 
 这个文件是给后续接管本工作区的 AI 看的。每次完成一个任务后，都要更新本文件的「工作日志」和「未完成事项」，让下一位接手者能快速知道用户偏好、当前状态和最近做过什么。
 
 ## 当前权威入口（2026-06-24）
 
-- 当前真实代码/Git 仓库仍是 `E:\桌面\播放器软件\Mineradio\resources\app`。
-- 当前版本是 `v1.1.0` 纯净安装发布线；本轮已从当前可信源码重新生成并发布 `dist/Mineradio-1.1.0-Setup.exe`。
-- GitHub 仓库已公开：`https://github.com/XxHuberrr/Mineradio`
-- `v1.1.0` Release：`https://github.com/XxHuberrr/Mineradio/releases/tag/v1.1.0`
+- 当前真实代码/Git 仓库仍是 `E:\桌面\播放器软件\BhandsMusic\resources\app`。
+- 当前版本是 `v1.1.0` 纯净安装发布线；本轮已从当前可信源码重新生成并发布 `dist/BhandsMusic-1.1.0-Setup.exe`。
+- GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
+- `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
 - GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
 - `v1.0.10` 及更早旧安装包不再信任，需要在 GitHub Release/README/SECURITY 中标记隔离。
 - `v1.1.0` 不提供从 `v1.0.10` 的软件内本地更新，不上传 `latest.yml`，不生成 `v1.0.10 -> v1.1.0` 快速补丁。
@@ -18,10 +18,10 @@
 - 默认用中文沟通，语气直接、清楚、偏实干。
 - 用户希望你主动完成任务，不要只给方案。能本地验证就本地验证。
 - 除非用户明确要求“上传 GitHub / 推送 / push / 发布到 Release”，否则不要直接上传或推送到 GitHub；本地提交也要在最终说明里讲清楚。
-- 用户很在意视觉质感，尤其讨厌“默认白框”“太素”“没设计感”。Mineradio 视觉方向偏黑色、玻璃、舞台、音乐可视化。
+- 用户很在意视觉质感，尤其讨厌“默认白框”“太素”“没设计感”。BhandsMusic 视觉方向偏黑色、玻璃、舞台、音乐可视化。
 - 做网页、软件界面、安装器时，要优先考虑第一次打开的新用户是否知道软件是干什么的。
 - 发布软件时，不能只上传源码。GitHub Release 通常要包含可运行安装包 exe；但 `v1.1.0` 安全发布例外，不上传 `latest.yml`，避免旧版软件内更新直接拉取。
-- 安装器默认安装目录优先使用 `D:\Mineradio`，并创建桌面快捷方式。
+- 安装器默认安装目录优先使用 `D:\BhandsMusic`，并创建桌面快捷方式。
 - 更新逻辑优先轻量快速补丁；完整安装包作为兜底。
 - 搜索结果要尽量优先原唱/官方版本，不希望翻唱排在原唱前面。
 - 感谢名单曾确认：`emily、小天才e宝、应春日、锋将军、軌跡、林中、骊、风痕、花椰菜🥦`。
@@ -43,9 +43,9 @@
 
 `dist` 根部只保留当前可发布资产。`v1.1.0` 安全发布只上传安装包、可选 blockmap 和 SHA256，不上传 `latest.yml`：
 
-- `Mineradio-<version>-Setup.exe`
-- `Mineradio-<version>-Setup.exe.blockmap`
-- `Mineradio-<from>-to-<to>.patch.json`
+- `BhandsMusic-<version>-Setup.exe`
+- `BhandsMusic-<version>-Setup.exe.blockmap`
+- `BhandsMusic-<from>-to-<to>.patch.json`
 
 其它内容放到：
 
@@ -75,11 +75,19 @@
 
 ## 已完成工作日志
 
+### 2026-07-21
+
+- 品牌重命名：全项目 Mineradio → BhandsMusic，涉及 25+ 文件，包括源码、文档、配置。
+- GitHub 仓库迁移：`XxHuberrr/Mineradio` → `Bhands6/BhandsMusicChange`，`package.json` 和所有文档链接已同步更新。
+- 修复 SSL 握手错误：重命名时 GitHub 仓库名被误改导致更新检查请求不存在的仓库，已恢复正确的 owner/repo。
+- 3D 歌单架正对镜头：`shelfLayoutProfile()` 中 `sideRotY`/`sideRotX` 普通预设归零，星河预设渲染覆盖归零，详情页 `ry` 归零。骷髅预设角度不变。
+- 更新 `docs/PROJECT_MEMORY.md`：新增品牌重命名和歌单架正对两条记忆条目。
+
 ### 2026-06-24
 
 - 将 `E:\Download\默认测试.json` 接入为首次启动默认用户存档和默认视觉参数；新增 `public/default-user-fx-archive.json`，并让没有本地用户存档的新用户自动得到「默认测试」槽位。
 - 更新 `CHANGELOG.md`、`README.md`、`SECURITY.md`、`RELEASE.md`、`docs/SECURITY_REBUILD_2026-06-24.md` 和 `docs/RELEASE_NOTES_v1.1.0.md`，恢复详细日志并写明 `v1.0.10` 旧安装包隔离、`v1.1.0` 纯净安装、不走软件内更新。
-- 已执行 `npm run build:win`，第一次被旧代理 `127.0.0.1:26001` 拦截，切到 `127.0.0.1:10808` 后打包成功。产物：`dist/Mineradio-1.1.0-Setup.exe`、`.blockmap`、`Mineradio-1.1.0-SHA256SUMS.txt`。
+- 已执行 `npm run build:win`，第一次被旧代理 `127.0.0.1:26001` 拦截，切到 `127.0.0.1:10808` 后打包成功。产物：`dist/BhandsMusic-1.1.0-Setup.exe`、`.blockmap`、`BhandsMusic-1.1.0-SHA256SUMS.txt`。
 - 已运行 `git diff --check`、`node --check server.js`、前端 5 个内联脚本解析、默认 JSON 解析、Git 跟踪高风险残留检查；Defender 对新安装包和 `win-unpacked` 扫描后 `Get-MpThreatDetection` 查询为空。
 - 已发布 GitHub Release `v1.1.0`，上传安装包、blockmap、SHA256SUMS；未上传 `latest.yml`。已批量给旧 Release（`v1.0.10` 到 `v0.9.9`）追加旧安装包隔离警示。
 - 检查并更新新对话交接：`docs/HANDOFF_NEXT_CHAT.md` 已改为当前 `v1.1.0` 源码安全重建状态。
@@ -90,8 +98,8 @@
 
 ### 2026-06-18
 
-- 发布 `v1.0.4` 到 GitHub：`https://github.com/XxHuberrr/Mineradio/releases/tag/v1.0.4`。
-- 本次发布包含安装包 `Mineradio-1.0.4-Setup.exe`、`latest.yml`、blockmap，以及 `1.0.0/1.0.1/1.0.2/1.0.3 -> 1.0.4` 四个快速补丁 JSON。
+- 发布 `v1.0.4` 到 GitHub：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.0.4`。
+- 本次发布包含安装包 `BhandsMusic-1.0.4-Setup.exe`、`latest.yml`、blockmap，以及 `1.0.0/1.0.1/1.0.2/1.0.3 -> 1.0.4` 四个快速补丁 JSON。
 - 主要修复：最小化/隐藏时深度低占用但可见失焦不降帧；全屏 3D 视觉画布尺寸同步避免裁切；控制台隐藏残影；控制台玻璃色差滑条；左侧歌单详情分批加载和置顶；沉浸模式恢复左侧歌单栏、3D 歌单架和封面渐变背景。
 
 ### 2026-06-06
@@ -103,7 +111,7 @@
 - 视觉引导改成产品用途导向。
 - 增加完整安装包下载进度：大小、速度、ETA、状态提示。
 - 增加快速补丁通道：`/api/update/patch` 和 `/api/update/patch/status`。
-- 生成并上传 `Mineradio-0.9.10-to-0.9.11.patch.json`。
+- 生成并上传 `BhandsMusic-0.9.10-to-0.9.11.patch.json`。
 - 注意：已经安装的 `0.9.10` 本身没有补丁器，所以从 `0.9.10` 升到 `0.9.11` 仍需完整安装包一次。
 
 ### 2026-06-07
@@ -112,7 +120,7 @@
 - 加入深色标题栏、品牌页头、安装器侧栏、深色欢迎页。
 - 跳过默认白色安装模式页。
 - 用自定义深色目录页替代默认白色目录页，保留路径输入和 Browse 按钮。
-- 默认安装路径仍优先 `D:\Mineradio`。
+- 默认安装路径仍优先 `D:\BhandsMusic`。
 - 重新打包并覆盖 GitHub Release `v0.9.11` 的安装包、blockmap、latest.yml。
 - 提交：`28d3cef Restyle Windows installer`。
 
@@ -147,9 +155,9 @@
 - 用户明确要求上传 GitHub 后，已将 Home 视觉升级、封面清晰度控制、封面粒子割裂线修复和交接说明更新提交并推送到 `origin/main`。
 - 已推送提交：`21f6052 Polish home visuals and cover particles`。
 - 按用户“不能只上传源码，要包含软件 exe”的要求，继续升版本到 `0.9.12` 并重新构建 Windows 安装包。
-- 已生成 `dist/Mineradio-0.9.12-Setup.exe`、`dist/Mineradio-0.9.12-Setup.exe.blockmap`、`dist/latest.yml`。
-- 已生成轻量快速补丁 `dist/Mineradio-0.9.11-to-0.9.12.patch.json`，补丁只覆盖 `package.json`、`package-lock.json`、`public/index.html`，用于已安装 `0.9.11` 的用户快速更新视觉和封面粒子修复。
-- 已创建并核对 GitHub Release `v0.9.12`：`https://github.com/XxHuberrr/Mineradio/releases/tag/v0.9.12`，远端包含安装包、blockmap、`latest.yml` 和 `0.9.11-to-0.9.12` 快速补丁。
+- 已生成 `dist/BhandsMusic-0.9.12-Setup.exe`、`dist/BhandsMusic-0.9.12-Setup.exe.blockmap`、`dist/latest.yml`。
+- 已生成轻量快速补丁 `dist/BhandsMusic-0.9.11-to-0.9.12.patch.json`，补丁只覆盖 `package.json`、`package-lock.json`、`public/index.html`，用于已安装 `0.9.11` 的用户快速更新视觉和封面粒子修复。
+- 已创建并核对 GitHub Release `v0.9.12`：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v0.9.12`，远端包含安装包、blockmap、`latest.yml` 和 `0.9.11-to-0.9.12` 快速补丁。
 - 本地试做新版开场动画：参考 `ShipSwiftAnimatedLoop` 的霓虹通道分离、光流和切片感，但放弃环形方案，改为横向光刃切入、彩色尾迹、碎片条和黑金控制台背景，主要改动在 `public/index.html`。
 - 已用本地 Chrome/CDP 重播 splash 并截取 `updates/tmp/splash-replay-0700.png`、`updates/tmp/splash-replay-1800.png`、`updates/tmp/splash-replay-2900.png`；本次只是本地试效果，没有上传或推送 GitHub。
 - 用户反馈上一版“不如动画库惊艳”后，继续把 splash 背景从 2D canvas 升级为 WebGL shader：移植 `ShipSwiftAnimatedLoop` 的 `lineWidth / abs(f)` 高亮线场、RGB channel offset、Neon angular wobble 和 Warp 距离场，并保留 2D fallback。新预览截图为 `updates/tmp/splash-webgl3-0700.png`、`updates/tmp/splash-webgl3-1800.png`、`updates/tmp/splash-webgl3-2900.png`；仍未上传或推送 GitHub。
@@ -158,8 +166,8 @@
 - 根据用户反馈，移除 splash 中刻意的环形/花瓣式爆点，改为更自然的斜向流线相位同步高光，避免“环形像菊花”的观感。
 - splash 现在不再自动进入 Home：动画跑完后进入 `ready` 状态，显示轻量“点击进入”，用户点击任意位置或按 Enter/空格后才调用 `dismissSplash()`。这样用户可以停留欣赏动画。
 - 已用本地 Chrome/CDP 验证：`updates/tmp/splash-click-ready.png` 显示 6.4 秒后仍停在 splash 且 `className=ready`，`updates/tmp/splash-after-click.png` 显示点击后进入 Home；本次没有上传或推送 GitHub。
-- 用户随后明确要求上传 GitHub：已升级到 `0.9.13`，更新 `CHANGELOG.md` 和 `RELEASE.md`，生成 `dist/Mineradio-0.9.12-to-0.9.13.patch.json` 快速补丁，并重新构建 `dist/Mineradio-0.9.13-Setup.exe`、`dist/Mineradio-0.9.13-Setup.exe.blockmap`、`dist/latest.yml`。
-- 已推送提交 `4d9044a Prepare Mineradio 0.9.13 release` 到 `origin/main`，并创建 GitHub Release `v0.9.13`：`https://github.com/XxHuberrr/Mineradio/releases/tag/v0.9.13`。远端资产包含安装包、blockmap、`latest.yml` 和 `0.9.12-to-0.9.13` 快速补丁。
+- 用户随后明确要求上传 GitHub：已升级到 `0.9.13`，更新 `CHANGELOG.md` 和 `RELEASE.md`，生成 `dist/BhandsMusic-0.9.12-to-0.9.13.patch.json` 快速补丁，并重新构建 `dist/BhandsMusic-0.9.13-Setup.exe`、`dist/BhandsMusic-0.9.13-Setup.exe.blockmap`、`dist/latest.yml`。
+- 已推送提交 `4d9044a Prepare BhandsMusic 0.9.13 release` 到 `origin/main`，并创建 GitHub Release `v0.9.13`：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v0.9.13`。远端资产包含安装包、blockmap、`latest.yml` 和 `0.9.12-to-0.9.13` 快速补丁。
 - 注意：本机 `gh` 命令曾被失效代理 `HTTP_PROXY/HTTPS_PROXY=http://127.0.0.1:26001` 挡住。使用 GitHub CLI 发布时可在当前命令里临时清空 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY` 后再执行。
 
 ## 未完成/待确认事项

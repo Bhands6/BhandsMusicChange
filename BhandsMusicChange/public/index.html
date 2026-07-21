@@ -1,5 +1,5 @@
 <!--
-  Mineradio — 私人视觉电台
+  BhandsMusic — 私人视觉电台
   单文件架构：HTML 结构 + 内联 CSS + 内联 JavaScript
   依赖：Three.js（3D 粒子）、music-tempo（节拍分析）、GSAP（动画）
 -->
@@ -8,7 +8,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mineradio</title>
+<title>BhandsMusic</title>
 <meta name="referrer" content="no-referrer">
 
 <!-- 字体：Cinzel Decorative（标题装饰）、Inter（西文正文）、JetBrains Mono（等宽）、Noto Sans SC（中文）、UnifrakturCook（哥特装饰） -->
@@ -22,7 +22,7 @@
 <!-- 启动模式检测：根据 localStorage 决定使用 DIY 模式还是简洁模式 -->
 <script>
 try {
-  document.documentElement.classList.add(localStorage.getItem('mineradio-diy-player-mode-v1') === '1' ? 'diy-mode-preload' : 'simple-mode-preload');
+  document.documentElement.classList.add(localStorage.getItem('bhandsmusic-diy-player-mode-v1') === '1' ? 'diy-mode-preload' : 'simple-mode-preload');
 } catch (e) {
   document.documentElement.classList.add('simple-mode-preload');
 }
@@ -68,11 +68,11 @@ html.desktop-shell-root,html.desktop-shell-root body{background:transparent}   /
 /* 存档面板玻璃效果 */
 :root{
   --saved-panel-glass-bg:rgba(0,0,0,.10);--saved-panel-glass-filter:blur(12px) saturate(1.8) brightness(1.16);
-  --saved-panel-glass-svg-filter:url(#mineradio-control-glass-filter) saturate(1);
+  --saved-panel-glass-svg-filter:url(#bhandsmusic-control-glass-filter) saturate(1);
   --saved-panel-glass-shadow:inset 0 0 2px 1px rgba(255,255,255,.35),inset 0 0 10px 4px rgba(255,255,255,.15),0 4px 16px rgba(17,17,26,.05),0 8px 24px rgba(17,17,26,.05),0 16px 56px rgba(17,17,26,.05),inset 0 4px 16px rgba(17,17,26,.05),inset 0 8px 24px rgba(17,17,26,.05),inset 0 16px 56px rgba(17,17,26,.05);
   --saved-panel-glass-radius:50px;
   --saved-button-glass-bg:rgba(0,0,0,.10);--saved-button-glass-filter:blur(12px) saturate(1.8) brightness(1.16);
-  --saved-button-glass-svg-filter:url(#mineradio-control-glass-filter) saturate(1);
+  --saved-button-glass-svg-filter:url(#bhandsmusic-control-glass-filter) saturate(1);
   --saved-button-glass-shadow:inset 0 0 2px 1px rgba(255,255,255,.34),inset 0 0 10px 4px rgba(255,255,255,.13),0 10px 30px rgba(0,0,0,.18);
   --saved-button-glass-hover-bg:rgba(255,255,255,.055);
   --saved-button-glass-hover-shadow:inset 0 0 2px 1px rgba(255,255,255,.42),inset 0 0 12px 5px rgba(255,255,255,.17),0 12px 34px rgba(0,0,0,.22),0 0 18px rgba(255,255,255,.06)}
@@ -584,7 +584,7 @@ html.control-glass-svg-ok #bottom-bar{backdrop-filter:none;-webkit-backdrop-filt
 #bottom-bar::before{content:none}
 #bottom-bar::after{content:none}
 #bottom-bar.visible{opacity:.91;pointer-events:auto;transform:translateX(-50%) translateY(0) scale(1);filter:blur(0);background:rgba(0,0,0,.10);backdrop-filter:blur(12px) saturate(1.8) brightness(1.16);-webkit-backdrop-filter:blur(12px) saturate(1.8) brightness(1.16);box-shadow:inset 0 0 2px 1px rgba(255,255,255,.35),inset 0 0 10px 4px rgba(255,255,255,.15),0 4px 16px rgba(17,17,26,.05),0 8px 24px rgba(17,17,26,.05),0 16px 56px rgba(17,17,26,.05),inset 0 4px 16px rgba(17,17,26,.05),inset 0 8px 24px rgba(17,17,26,.05),inset 0 16px 56px rgba(17,17,26,.05)}
-html.control-glass-svg-ok #bottom-bar.visible{background:rgba(0,0,0,.10);backdrop-filter:url(#mineradio-control-glass-filter) saturate(1);-webkit-backdrop-filter:url(#mineradio-control-glass-filter) saturate(1)}
+html.control-glass-svg-ok #bottom-bar.visible{background:rgba(0,0,0,.10);backdrop-filter:url(#bhandsmusic-control-glass-filter) saturate(1);-webkit-backdrop-filter:url(#bhandsmusic-control-glass-filter) saturate(1)}
 #bottom-bar.soft-hidden{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(88px) scale(.972);filter:none;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none}
 body.home-controls-locked #bottom-bar{opacity:0!important;pointer-events:none!important;transform:translateX(-50%) translateY(92px) scale(.985)!important;filter:none!important;background:transparent!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:none!important}
 #bottom-bar.stage-mode{bottom:14px;width:calc(100vw - 56px)}
@@ -1566,8 +1566,8 @@ html.control-glass-svg-ok #playlist-panel{
   -webkit-backdrop-filter:var(--saved-panel-glass-filter)!important;
 }
 html.control-glass-svg-ok #search-box{
-  backdrop-filter:url(#mineradio-search-box-glass-filter) saturate(1)!important;
-  -webkit-backdrop-filter:url(#mineradio-search-box-glass-filter) saturate(1)!important;
+  backdrop-filter:url(#bhandsmusic-search-box-glass-filter) saturate(1)!important;
+  -webkit-backdrop-filter:url(#bhandsmusic-search-box-glass-filter) saturate(1)!important;
 }
 #home-btn,#upload-btn,#visual-guide-btn,#fx-fab,.top-account-pill,#top-right .icon-btn{
   background:var(--saved-button-glass-bg)!important;
@@ -1735,8 +1735,8 @@ html.control-glass-svg-ok .search-history-chip{
   border-color:transparent!important;
   color:rgba(var(--fc-accent-rgb),.78)!important;
   box-shadow:var(--saved-button-glass-shadow)!important;
-  backdrop-filter:url(#mineradio-search-pill-glass-filter) saturate(1)!important;
-  -webkit-backdrop-filter:url(#mineradio-search-pill-glass-filter) saturate(1)!important;
+  backdrop-filter:url(#bhandsmusic-search-pill-glass-filter) saturate(1)!important;
+  -webkit-backdrop-filter:url(#bhandsmusic-search-pill-glass-filter) saturate(1)!important;
   overflow:visible!important;
 }
 html.control-glass-svg-ok .search-mode-tabs button:hover,
@@ -1960,12 +1960,12 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 
   <!-- 主内容 -->
   <div class="splash-content">
-    <div class="splash-wordmark" id="splash-wordmark" aria-label="Mineradio">
+    <div class="splash-wordmark" id="splash-wordmark" aria-label="BhandsMusic">
       <span class="splash-word-mine">Bhands</span>
-      <span class="splash-word-radio" aria-label="radio">Mus<span class="splash-word-i" aria-hidden="true"></span><span class="splash-word-o">c</span></span>
+      <span class="splash-word-radio" aria-label="radio">Mus<span class="splash-word-i" aria-hidden="true">i</span><span class="splash-word-o">c</span></span>
     </div>
     <div class="splash-signal-line"></div>
-    <div class="splash-sub">private visual radio</div>
+    <div class="splash-sub">private music player</div>
     <div class="splash-enter" aria-hidden="true">点击进入</div>
   </div>
 </div>
@@ -2003,7 +2003,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 
 <!-- ==================== Home 首页 ==================== -->
 <!-- 未播放时显示的首页，包含快捷卡片（歌单库、每日推荐、继续听、听歌画像）和推荐横栏 -->
-<section id="empty-home" aria-label="Mineradio home">
+<section id="empty-home" aria-label="BhandsMusic home">
   <div class="empty-home-shell">
     <div class="home-hero">
       <div class="home-hero-inner home-construction-inner">
@@ -2084,7 +2084,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 <!-- 包含：视觉预设、用户存档、自定义颜色、歌词设置、桌面歌词/壁纸、3D/手势、高级参数 -->
 <div id="fx-panel">
   <div class="fx-head">
-    <div><div class="fx-title">视觉控制台</div><div class="fx-sub">MINERADIO VISUALS · 鼠标移开自动隐藏</div></div>
+    <div><div class="fx-title">视觉控制台</div><div class="fx-sub">BHANDSMUSIC VISUALS · 鼠标移开自动隐藏</div></div>
   </div>
 
   <div class="fx-section-label">视觉预设</div>
@@ -2424,7 +2424,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 <!-- 底部控件使用 SVG 滤镜实现玻璃折射效果 -->
 <svg id="control-glass-svg" class="control-glass-filter-svg" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
   <defs>
-    <filter id="mineradio-control-glass-filter" color-interpolation-filters="sRGB" x="-12%" y="-28%" width="124%" height="156%">
+    <filter id="bhandsmusic-control-glass-filter" color-interpolation-filters="sRGB" x="-12%" y="-28%" width="124%" height="156%">
       <feImage id="control-glass-map" x="0" y="0" width="100%" height="100%" preserveAspectRatio="none" result="map"></feImage>
       <feDisplacementMap in="SourceGraphic" in2="map" scale="180" xChannelSelector="R" yChannelSelector="B" result="dispRed"></feDisplacementMap>
       <feOffset in="dispRed" dx="-90" dy="0" result="dispRedShifted"></feOffset>
@@ -2442,7 +2442,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
       <feBlend in="rg" in2="blue" mode="screen" result="output"></feBlend>
       <feGaussianBlur in="output" stdDeviation="0.5"></feGaussianBlur>
     </filter>
-    <filter id="mineradio-search-box-glass-filter" color-interpolation-filters="sRGB" x="-24%" y="-34%" width="158%" height="168%">
+    <filter id="bhandsmusic-search-box-glass-filter" color-interpolation-filters="sRGB" x="-24%" y="-34%" width="158%" height="168%">
       <feImage id="search-box-glass-map" x="-10%" y="-4%" width="120%" height="108%" preserveAspectRatio="none" result="map"></feImage>
       <feDisplacementMap in="SourceGraphic" in2="map" scale="180" xChannelSelector="R" yChannelSelector="B" result="dispRed"></feDisplacementMap>
       <feOffset in="dispRed" dx="-90" dy="0" result="dispRedShifted"></feOffset>
@@ -2460,7 +2460,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
       <feBlend in="rg" in2="blue" mode="screen" result="output"></feBlend>
       <feGaussianBlur in="output" stdDeviation="0.5"></feGaussianBlur>
     </filter>
-    <filter id="mineradio-search-pill-glass-filter" color-interpolation-filters="sRGB" x="-48%" y="-68%" width="210%" height="236%">
+    <filter id="bhandsmusic-search-pill-glass-filter" color-interpolation-filters="sRGB" x="-48%" y="-68%" width="210%" height="236%">
       <feImage id="search-pill-glass-map" x="-24%" y="-14%" width="148%" height="128%" preserveAspectRatio="none" result="map"></feImage>
       <feDisplacementMap in="SourceGraphic" in2="map" scale="118" xChannelSelector="R" yChannelSelector="B" result="dispRed"></feDisplacementMap>
       <feOffset in="dispRed" dx="-34" dy="0" result="dispRedShifted"></feOffset>
@@ -2563,7 +2563,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
       <button id="login-provider-qq" class="qq" type="button" onclick="setLoginProvider('qq')">QQ 音乐</button>
     </div>
     <div class="login-intro">
-      <div class="login-intro-kicker">Mineradio</div>
+      <div class="login-intro-kicker">BhandsMusic</div>
       <div class="login-intro-title">音乐播放器，也是一座视觉舞台</div>
       <div class="login-intro-body">搜索或导入一首歌即可播放；登录后会同步歌单、红心和播客，让封面、歌词和粒子跟着音乐动起来。</div>
     </div>
@@ -2716,7 +2716,7 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
     <div class="update-panel-inner">
       <div class="update-panel-head">
         <div>
-          <div class="update-kicker">MINERADIO</div>
+          <div class="update-kicker">BHANDSMUSIC</div>
           <div id="update-modal-title" class="update-title">New release</div>
           <div id="update-modal-version" class="update-version">v1.0.10</div>
         </div>
@@ -2815,23 +2815,23 @@ var AUDIO_FADE_IN_MS = 460;
 var AUDIO_FADE_OUT_MS = 420;
 var AUDIO_SILENCE_GAIN = 0.0001;
 var userPlaylists = [], qqPlaylists = [], myPodcastCollections = [], myPodcastItems = {}, playlistCoverCache = {};
-var CUSTOM_COVER_STORE_KEY = 'mineradio-custom-covers';
-var CUSTOM_LYRIC_STORE_KEY = 'mineradio-custom-lyrics-v1';
-var CUSTOM_LYRIC_PREF_STORE_KEY = 'mineradio-custom-lyric-prefs-v1';
-var LYRIC_LAYOUT_STORE_KEY = 'mineradio-lyric-layout-v1';
+var CUSTOM_COVER_STORE_KEY = 'bhandsmusic-custom-covers';
+var CUSTOM_LYRIC_STORE_KEY = 'bhandsmusic-custom-lyrics-v1';
+var CUSTOM_LYRIC_PREF_STORE_KEY = 'bhandsmusic-custom-lyric-prefs-v1';
+var LYRIC_LAYOUT_STORE_KEY = 'bhandsmusic-lyric-layout-v1';
 var VISUAL_PRESET_SCHEMA = 'skull-preset-v2';
-var PLAYBACK_QUALITY_STORE_KEY = 'mineradio-playback-quality-v1';
-var UPLOAD_TIP_STORE_KEY = 'mineradio-upload-tip-seen';
-var DIY_MODE_STORE_KEY = 'mineradio-diy-player-mode-v1';
-var PLAYLIST_PANEL_PIN_STORE_KEY = 'mineradio-playlist-panel-pinned-v1';
-var USER_CAPSULE_AUTO_HIDE_STORE_KEY = 'mineradio-user-capsule-auto-hide-v1';
-var FX_FAB_AUTO_HIDE_STORE_KEY = 'mineradio-fx-fab-auto-hide-v1';
-var CONTROLS_AUTO_HIDE_STORE_KEY = 'mineradio-controls-auto-hide-v1';
-var FREE_CAMERA_STORE_KEY = 'mineradio-free-camera-v1';
-var HOTKEY_SETTINGS_STORE_KEY = 'mineradio-hotkey-settings-v1';
-var VISUAL_GUIDE_SEEN_STORE_KEY = 'mineradio-visual-guide-seen-v2';
-var LOCAL_BEATMAP_STORE_KEY = 'mineradio-local-beatmaps-v1';
-var LOCAL_BEAT_PREF_STORE_KEY = 'mineradio-local-beatmap-prefs-v1';
+var PLAYBACK_QUALITY_STORE_KEY = 'bhandsmusic-playback-quality-v1';
+var UPLOAD_TIP_STORE_KEY = 'bhandsmusic-upload-tip-seen';
+var DIY_MODE_STORE_KEY = 'bhandsmusic-diy-player-mode-v1';
+var PLAYLIST_PANEL_PIN_STORE_KEY = 'bhandsmusic-playlist-panel-pinned-v1';
+var USER_CAPSULE_AUTO_HIDE_STORE_KEY = 'bhandsmusic-user-capsule-auto-hide-v1';
+var FX_FAB_AUTO_HIDE_STORE_KEY = 'bhandsmusic-fx-fab-auto-hide-v1';
+var CONTROLS_AUTO_HIDE_STORE_KEY = 'bhandsmusic-controls-auto-hide-v1';
+var FREE_CAMERA_STORE_KEY = 'bhandsmusic-free-camera-v1';
+var HOTKEY_SETTINGS_STORE_KEY = 'bhandsmusic-hotkey-settings-v1';
+var VISUAL_GUIDE_SEEN_STORE_KEY = 'bhandsmusic-visual-guide-seen-v2';
+var LOCAL_BEATMAP_STORE_KEY = 'bhandsmusic-local-beatmaps-v1';
+var LOCAL_BEAT_PREF_STORE_KEY = 'bhandsmusic-local-beatmap-prefs-v1';
 var LOCAL_BEAT_COMBOS = ['', 'downbeat', 'push', 'drop', 'rebound', 'accent'];
 var HOTKEY_ACTIONS = [
   { key:'togglePlay', label:'播放 / 暂停', category:'播放', local:'Space', global:'Ctrl+Alt+Space' },
@@ -2869,8 +2869,8 @@ var homeDiscoverState = { loading: false, loaded: false, loggedIn: false, mode: 
 var homeDiscoverToken = 0;
 var homeVisualPresetActive = false;
 var homeVisualPrevPreset = 0;
-var HOME_LISTEN_STATS_KEY = 'mineradio-listen-stats-v1';
-var HOME_WEATHER_CITY_KEY = 'mineradio-weather-city';
+var HOME_LISTEN_STATS_KEY = 'bhandsmusic-listen-stats-v1';
+var HOME_WEATHER_CITY_KEY = 'bhandsmusic-weather-city';
 var homeWeatherRadioState = { loading: false, loaded: false, city: localStorage.getItem(HOME_WEATHER_CITY_KEY) || '上海', weather: null, radio: null, error: '', updatedAt: 0 };
 var homeWeatherToken = 0;
 var homeWeatherLoadTimer = null;
@@ -2884,8 +2884,8 @@ function markAppPerf(name) {
   try {
     var value = performance.now();
     appPerfMarks.push({ name: name, value: Math.round(value) });
-    if (performance && performance.mark) performance.mark('mineradio:' + name);
-    if (appPerfMarks.length <= 16) console.debug('[MineradioPerf]', name, Math.round(value) + 'ms');
+    if (performance && performance.mark) performance.mark('bhandsmusic:' + name);
+    if (appPerfMarks.length <= 16) console.debug('[BhandsMusicPerf]', name, Math.round(value) + 'ms');
   } catch (e) {}
 }
 markAppPerf('script-start');
@@ -2895,7 +2895,7 @@ function installStartupLongTaskObserver() {
     var observer = new PerformanceObserver(function(list){
       list.getEntries().forEach(function(entry){
         if (entry.startTime > 15000) return;
-        console.debug('[MineradioPerf] longtask', Math.round(entry.startTime) + 'ms', Math.round(entry.duration) + 'ms');
+        console.debug('[BhandsMusicPerf] longtask', Math.round(entry.startTime) + 'ms', Math.round(entry.duration) + 'ms');
       });
     });
     observer.observe({ entryTypes: ['longtask'] });
@@ -3719,7 +3719,7 @@ function collectRuntimePerfSnapshot(now) {
     deepSleep: isDeepBackgroundMode()
   };
 }
-window.__mineradioPerfSnapshot = collectRuntimePerfSnapshot;
+window.__bhandsmusicPerfSnapshot = collectRuntimePerfSnapshot;
 function trimRuntimeCaches(reason, aggressive) {
   var protectedCovers = collectProtectedCoverUrls();
   var protectedBeats = collectProtectedBeatMapKeys();
@@ -8094,7 +8094,7 @@ function customBackgroundMediaLabel(media) {
   if (!media) return '未设置';
   return media.type === 'video' ? '视频已设置' : '图片已设置';
 }
-var CUSTOM_BG_DB_NAME = 'mineradio-custom-background-v1';
+var CUSTOM_BG_DB_NAME = 'bhandsmusic-custom-background-v1';
 var CUSTOM_BG_STORE = 'media';
 var customBgObjectUrl = '';
 var customBgApplyToken = 0;
@@ -9906,7 +9906,7 @@ function forceLoadingSettled(reason) {
   }
   uniforms.uLoading.value = 0;
   loadingShownAt = 0;
-  if (reason && window.__mineradioDebugLoading) console.log('[LoadingSettled]', reason);
+  if (reason && window.__bhandsmusicDebugLoading) console.log('[LoadingSettled]', reason);
 }
 function recoverVisualsAfterBackground(reason) {
   applyRendererPowerMode();
@@ -12339,7 +12339,7 @@ function updateLocalBeatModal() {
   var desc = document.getElementById('local-beat-desc');
   if (desc) desc.textContent = mode === 'dj'
     ? '适合 DJ、长混音或鼓点密集的本地音频，会使用更稳定的低频锁拍并进入 DJ 视觉驱动。'
-    : '适合普通歌曲和日常播放，会沿用 Mineradio 电影视角的综合节奏分析。';
+    : '适合普通歌曲和日常播放，会沿用 BhandsMusic 电影视角的综合节奏分析。';
   var start = document.getElementById('local-beat-start-btn');
   var cancel = document.getElementById('local-beat-cancel-btn');
   var later = document.getElementById('local-beat-later-btn');
@@ -12888,8 +12888,8 @@ function shelfLayoutProfile() {
     sideEntryX: skullShelf ? (portrait ? 0.30 : 0.50) : (portrait ? 0.38 : 0.82),
     sideDetailShift: skullShelf ? (portrait ? 0.00 : 0.00) : (portrait ? 0.38 : 0.82),
     sideScale: (skullShelf ? (portrait ? 0.84 : (narrow ? 1.04 : 1.22)) : (portrait ? 0.70 : (narrow ? 0.86 : 1))) * shelfCtl.size,
-    sideRotY: (skullShelf ? (portrait ? -0.085 : -0.190) : (portrait ? 0.12 : 0.28)) + shelfCtl.angle,
-    sideRotX: skullShelf ? (portrait ? 0.018 : 0.030) : (portrait ? 0.022 : 0.042),
+    sideRotY: (skullShelf ? (portrait ? -0.085 : -0.190) : 0) + shelfCtl.angle,
+    sideRotX: skullShelf ? (portrait ? 0.018 : 0.030) : 0,
     stageX: shelfCtl.x,
     stageXStep: portrait ? 0.92 : (narrow ? 1.22 : 1.55),
     stageY: (portrait ? -2.46 : -2.20) + shelfCtl.y,
@@ -12900,7 +12900,7 @@ function shelfLayoutProfile() {
       y: (skullShelf ? (portrait ? -0.40 : -0.68) : (portrait ? 0.10 : 0.18)) + shelfCtl.y * 0.55,
       z: (skullShelf ? (portrait ? 1.10 : 1.22) : (portrait ? 1.28 : 1.36)) + shelfCtl.z * 0.45,
       rx: skullShelf ? (portrait ? 0.006 : 0.014) : (portrait ? -0.004 : -0.008),
-      ry: (skullShelf ? (portrait ? -0.070 : -0.165) : (portrait ? 0.00 : 0.020)) + shelfCtl.angle * 0.55,
+      ry: (skullShelf ? (portrait ? -0.070 : -0.165) : 0) + shelfCtl.angle * 0.55,
       scale: (skullShelf ? detailScale * (portrait ? 0.88 : 1.02) : detailScale) * shelfCtl.size,
       rowStep: skullShelf ? (portrait ? 0.37 : 0.43) : (portrait ? 0.36 : 0.42),
       rowScale: skullShelf ? (portrait ? 0.90 : 1.02) : (portrait ? 0.88 : (narrow ? 0.96 : 1.00))
@@ -13505,10 +13505,10 @@ function makeShelfManager() {
         card.mesh.rotateX(layout.sideRotX - delta * 0.008 - parY * 0.004 * parWeight);
         card.mesh.rotateY(layout.sideRotY + (1 - reveal) * 0.012 + parX * 0.006 * parWeight);
       } else {
-        var safeRotY = wallpaperShelfPose ? 0.12 : layout.sideRotY;
-        var safeEntryRotY = wallpaperShelfPose ? 0.05 : 0.16;
+        var safeRotY = wallpaperShelfPose ? 0 : layout.sideRotY;
+        var safeEntryRotY = wallpaperShelfPose ? 0.02 : 0.16;
         card.mesh.rotation.y = (safeShelfPose ? safeRotY : layout.sideRotY) + (1 - reveal) * safeEntryRotY + parX * (safeShelfPose ? 0.014 : 0.038) * parWeight;
-        var safeRotX = wallpaperShelfPose ? 0.020 : layout.sideRotX;
+        var safeRotX = wallpaperShelfPose ? 0 : layout.sideRotX;
         card.mesh.rotation.x = -delta * (safeShelfPose ? safeRotX : layout.sideRotX) - parY * (safeShelfPose ? 0.010 : 0.024) * parWeight;
       }
       card.mesh.scale.setScalar(scale);
@@ -15668,7 +15668,7 @@ function renderHomeDiscover() {
   var weatherKicker = document.getElementById('home-weather-kicker');
   var weatherMeta = document.getElementById('home-weather-meta');
   if (weatherTitle) weatherTitle.textContent = '我的音乐库';
-  if (weatherKicker) weatherKicker.textContent = 'Mineradio · Your Library';
+  if (weatherKicker) weatherKicker.textContent = 'BhandsMusic · Your Library';
   if (sub) {
     if (loggedOutHome) sub.textContent = '登录后会把你的歌单、常听歌手和最近播放放在这里；也可以直接搜索或导入本地音乐。';
     else sub.textContent = '从你的歌单、最近播放和常听歌手开始，天气电台放在需要氛围的时候再开。';
@@ -17288,7 +17288,7 @@ function avatarSrc(url) {
 var searchTimer = null;
 var searchRequestSeq = 0;
 var searchLastResultQuery = '';
-var SEARCH_HISTORY_STORE_KEY = 'mineradio-search-history';
+var SEARCH_HISTORY_STORE_KEY = 'bhandsmusic-search-history';
 var $input = document.getElementById('search-input');
 var $results = document.getElementById('search-results');
 var $loading = document.getElementById('loading-overlay');
@@ -18913,7 +18913,7 @@ function normalizeControlGlassChromaticOffset(value) {
 function applyControlGlassChromaticOffset() {
   if (!fx) return;
   fx.controlGlassChromaticOffset = normalizeControlGlassChromaticOffset(fx.controlGlassChromaticOffset);
-  var filter = document.getElementById('mineradio-control-glass-filter');
+  var filter = document.getElementById('bhandsmusic-control-glass-filter');
   if (!filter) return;
   var dx = String(-Math.round(fx.controlGlassChromaticOffset));
   filter.querySelectorAll('feOffset').forEach(function(node){
@@ -18926,7 +18926,7 @@ function supportsControlGlassSvgFilter() {
     var ua = navigator.userAgent || '';
     if ((/Safari/.test(ua) && !/Chrome/.test(ua)) || /Firefox/.test(ua)) return false;
     var div = document.createElement('div');
-    div.style.backdropFilter = 'url(#mineradio-control-glass-filter)';
+    div.style.backdropFilter = 'url(#bhandsmusic-control-glass-filter)';
     return div.style.backdropFilter !== '';
   } catch (e) {
     return false;
@@ -20021,8 +20021,8 @@ function updatePlaybackProgressUi() {
   if (timeDisplay) timeDisplay.textContent = formatProgramTime(currentSec) + ' / ' + (durationSec > 0 ? formatProgramTime(durationSec) : '0:00');
 }
 function bindPlaybackProgressEvents(audioEl) {
-  if (!audioEl || audioEl._mineradioProgressBound) return;
-  audioEl._mineradioProgressBound = true;
+  if (!audioEl || audioEl._bhandsmusicProgressBound) return;
+  audioEl._bhandsmusicProgressBound = true;
   ['loadedmetadata', 'durationchange', 'timeupdate', 'seeked', 'play', 'pause', 'emptied'].forEach(function(name){
     audioEl.addEventListener(name, updatePlaybackProgressUi);
   });
@@ -20224,8 +20224,8 @@ var lyricColorPresets = [
   { name:'酒红', color:'#6d1f35' },
   { name:'墨黑', color:'#111318' },
 ];
-var USER_FX_ARCHIVE_STORE_KEY = 'mineradio-user-fx-archives-v1';
-var USER_FX_ARCHIVE_EXPORT_TYPE = 'mineradio-user-fx-archive';
+var USER_FX_ARCHIVE_STORE_KEY = 'bhandsmusic-user-fx-archives-v1';
+var USER_FX_ARCHIVE_EXPORT_TYPE = 'bhandsmusic-user-fx-archive';
 var USER_FX_ARCHIVE_SCHEMA = 1;
 function defaultUserFxArchiveName(index) {
   return '存档 ' + (index + 1);
@@ -20643,7 +20643,7 @@ function userFxArchiveExportPayload(slot) {
   };
 }
 function safeArchiveFileName(name) {
-  return String(name || 'Mineradio 用户存档').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 48) + '.json';
+  return String(name || 'BhandsMusic 用户存档').replace(/[\\/:*?"<>|]+/g, '-').slice(0, 48) + '.json';
 }
 function exportUserFxArchive(index) {
   var slot = userFxArchiveAt(index);
@@ -22062,7 +22062,7 @@ function ensureHotkeyModal() {
   modal.innerHTML =
     '<div class="hotkey-dialog" role="dialog" aria-modal="true" aria-label="热键设置">' +
       '<div class="hotkey-head">' +
-        '<div><div class="hotkey-title">热键设置</div><div class="hotkey-sub">局内热键只在 Mineradio 窗口内生效；全局热键会向系统注册，并检测是否被占用。</div></div>' +
+        '<div><div class="hotkey-title">热键设置</div><div class="hotkey-sub">局内热键只在 BhandsMusic 窗口内生效；全局热键会向系统注册，并检测是否被占用。</div></div>' +
         '<button class="hotkey-close" type="button" data-hotkey-close aria-label="关闭">×</button>' +
       '</div>' +
       '<div class="hotkey-toolbar">' +
@@ -22087,7 +22087,7 @@ function ensureHotkeyModal() {
 }
 function hotkeyStatusMarkup(scope, actionKey, binding, duplicate) {
   if (!binding) return '<span class="hotkey-status">未设置</span>';
-  if (duplicate && duplicate[binding] > 1) return '<span class="hotkey-status conflict"><span class="source-icon">!</span>Mineradio 内部重复</span>';
+  if (duplicate && duplicate[binding] > 1) return '<span class="hotkey-status conflict"><span class="source-icon">!</span>BhandsMusic 内部重复</span>';
   if (scope === 'local') return '<span class="hotkey-status ok">可用</span>';
   var status = hotkeyGlobalStatus[actionKey];
   if (!status) return '<span class="hotkey-status">待检测</span>';
@@ -22908,7 +22908,7 @@ function syncUpdatePreviewStateClass() {
   if (foot) {
     if (isDownloading) foot.textContent = (updatePreviewState.message || (isPatch ? '正在下载快速补丁' : '正在下载完整安装包')) + (updateProgressDetailText() ? ' · ' + updateProgressDetailText() : '');
     else if (isError) foot.textContent = '下载失败：' + (updatePreviewState.errorReason || updatePreviewState.errorDetail || updatePreviewState.message || '请稍后重试') + (updatePreviewState.failedAttempts && updatePreviewState.failedAttempts.length ? ' · 已尝试 ' + updatePreviewState.failedAttempts.length + ' 条线路' : '');
-    else if (isReady && isPatch) foot.textContent = updatePreviewState.restartRequired ? '快速补丁已应用，重启 Mineradio 后生效。' : '快速补丁已应用。';
+    else if (isReady && isPatch) foot.textContent = updatePreviewState.restartRequired ? '快速补丁已应用，重启 BhandsMusic 后生效。' : '快速补丁已应用。';
     else if (isReady) foot.textContent = updatePreviewState.cached ? '已复用上次校验通过的安装包，不会重复下载。' : '安装包已准备好，点击按钮后再打开安装。';
     else if (updatePreviewState.patchAvailable) foot.textContent = '优先使用轻量补丁，只更新缺失或变更的资源文件；不适用时可下载完整安装包。';
     else foot.textContent = updatePreviewState.updateAvailable ? '没有可用快速补丁时会下载完整安装包。' : '当前版本已是最新。';
@@ -23166,7 +23166,7 @@ async function restartForAppliedPatch() {
       return;
     }
   } catch (e) {}
-  showToast('请手动重启 Mineradio 让补丁生效');
+  showToast('请手动重启 BhandsMusic 让补丁生效');
 }
 
 async function openDownloadedUpdateInstaller(filePath) {
@@ -24548,7 +24548,7 @@ var visualGuideSteps = [
   {
     target: 'stage',
     kicker: '01 / Welcome',
-    title: 'Mineradio 是用来听歌的视觉播放器',
+    title: 'BhandsMusic 是用来听歌的视觉播放器',
     body: '它不是单纯歌单页：搜索或导入一首歌后，封面、歌词、粒子和镜头会跟着音乐一起动。'
   },
   {
@@ -25648,7 +25648,7 @@ function splashEaseOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-function initMineradioSplashWebgl(canvas) {
+function initBhandsMusicSplashWebgl(canvas) {
   var gl = null;
   try {
     gl = canvas.getContext('webgl', {
@@ -25820,7 +25820,7 @@ function initMineradioSplashWebgl(canvas) {
   return true;
 }
 
-function drawMineradioSplashWebgl(elapsed) {
+function drawBhandsMusicSplashWebgl(elapsed) {
   var gl = splashGl;
   if (!gl || !splashGlProgram || !splashGlUniforms) return;
   gl.viewport(0, 0, splashCanvas.width, splashCanvas.height);
@@ -25833,10 +25833,10 @@ function drawMineradioSplashWebgl(elapsed) {
   gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
-(function initMineradioSplashCanvas() {
+(function initBhandsMusicSplashCanvas() {
   splashCanvas = document.getElementById('splash-canvas');
   if (!splashCanvas) return;
-  if (!reduceSplashMotion && initMineradioSplashWebgl(splashCanvas)) {
+  if (!reduceSplashMotion && initBhandsMusicSplashWebgl(splashCanvas)) {
     splashCtx = null;
   } else {
     splashCtx = splashCanvas.getContext('2d');
@@ -25901,15 +25901,15 @@ function drawMineradioSplashWebgl(elapsed) {
   }
   resize();
   window.addEventListener('resize', resize);
-  drawMineradioSplash();
+  drawBhandsMusicSplash();
 })();
 
-function drawMineradioSplash() {
+function drawBhandsMusicSplash() {
   if (!splashAnimating || (!splashCtx && !splashGl)) return;
-  requestAnimationFrame(drawMineradioSplash);
+  requestAnimationFrame(drawBhandsMusicSplash);
   var elapsed = (performance.now() - splashStartedAt) / 1000;
   if (splashGl && splashGlProgram) {
-    drawMineradioSplashWebgl(elapsed);
+    drawBhandsMusicSplashWebgl(elapsed);
     return;
   }
   splashCtx.clearRect(0, 0, splashW, splashH);
@@ -26065,7 +26065,7 @@ function drawMineradioSplash() {
   splashCtx.restore();
 }
 
-function playMineradioIntroSound() {
+function playBhandsMusicIntroSound() {
   if (splashSoundPlayed) return;
   try {
     var AudioContextCtor = window.AudioContext || window.webkitAudioContext;
@@ -26074,7 +26074,7 @@ function playMineradioIntroSound() {
     splashAudioCtx = ctx;
     if (ctx.state === 'suspended' && ctx.resume) {
       ctx.resume().then(function(){
-        if (!splashSoundPlayed) playMineradioIntroSound();
+        if (!splashSoundPlayed) playBhandsMusicIntroSound();
       }).catch(function(){});
       if (ctx.state === 'suspended') return;
     }
@@ -26147,7 +26147,7 @@ function armSplashSoundFallback() {
   if (splashSoundFallbackArmed) return;
   splashSoundFallbackArmed = true;
   function unlock() {
-    if (!splashSoundPlayed) playMineradioIntroSound();
+    if (!splashSoundPlayed) playBhandsMusicIntroSound();
     document.removeEventListener('pointerdown', unlock, true);
     document.removeEventListener('keydown', unlock, true);
   }
@@ -26211,7 +26211,7 @@ function markSplashReadyToEnter() {
   s.classList.add('ready');
   s.setAttribute('role', 'button');
   s.setAttribute('tabindex', '0');
-  s.setAttribute('aria-label', '点击进入 Mineradio');
+  s.setAttribute('aria-label', '点击进入 BhandsMusic');
 }
 
 document.addEventListener('DOMContentLoaded', function(){
@@ -26221,7 +26221,7 @@ document.addEventListener('DOMContentLoaded', function(){
   armSplashSoundFallback();
   prewarmHomeWallpaperPreview();
   function requestSplashEnter() {
-    playMineradioIntroSound();
+    playBhandsMusicIntroSound();
     if (splashReadyToEnter) dismissSplash();
   }
   s.addEventListener('click', requestSplashEnter);
@@ -26237,7 +26237,7 @@ document.addEventListener('DOMContentLoaded', function(){
     splashTimer = setTimeout(markSplashReadyToEnter, 900);
     return;
   }
-  playMineradioIntroSound();
+  playBhandsMusicIntroSound();
   splashTimer = setTimeout(markSplashReadyToEnter, 5000);
 });
 
@@ -26255,7 +26255,7 @@ function currentDesktopSongMeta() {
   var song = playQueue && currentIdx >= 0 ? playQueue[currentIdx] : null;
   song = song || currentLyricSong && currentLyricSong() || {};
   return {
-    title: song.name || song.title || 'Mineradio',
+    title: song.name || song.title || 'BhandsMusic',
     artist: song.artist || song.ar || song.author || '',
     cover: (typeof songCoverSrc === 'function' && song) ? (songCoverSrc(song, 360) || song.cover || '') : (song.cover || '')
   };
@@ -26301,7 +26301,7 @@ function currentDesktopLyricSnapshot() {
       progressSpan: 4.8
     };
   }
-  return { text: normalizeDesktopLyricText(currentDesktopSongMeta().title || 'Mineradio'), progress: 0, progressSpan: 4.8 };
+  return { text: normalizeDesktopLyricText(currentDesktopSongMeta().title || 'BhandsMusic'), progress: 0, progressSpan: 4.8 };
 }
 function desktopOverlayColorValue(value, fallback) {
   var raw = String(value || '').trim();
@@ -26678,7 +26678,7 @@ var renderPerfState = {
   lastRenderAt: 0,
   lastSampleAt: performance.now()
 };
-window.__mineradioPerf = renderPerfState;
+window.__bhandsmusicPerf = renderPerfState;
 var splashWarmRenderLast = 0;
 function isMainSceneCoveredBySplash() {
   return document.body.classList.contains('splash-active') && !document.body.classList.contains('splash-revealing');

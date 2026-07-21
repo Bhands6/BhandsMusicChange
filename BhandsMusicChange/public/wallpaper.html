@@ -1,5 +1,5 @@
 <!--
-  Mineradio 壁纸模式渲染页面
+  BhandsMusic 壁纸模式渲染页面
   被 Electron 主进程嵌入 Windows 桌面 WorkerW 层，实现动态壁纸效果。
   通过 desktopOverlay.onWallpaperState 接收主进程推送的状态更新。
   使用 Canvas 2D 绘制粒子动画和专辑封面模糊背景。
@@ -9,7 +9,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mineradio Wallpaper</title>
+  <title>BhandsMusic Wallpaper</title>
   <style>
     /* 全屏铺满，深色背景，无滚动条 */
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050608}
@@ -30,7 +30,7 @@
     // 由主进程通过 desktopOverlay.onWallpaperState 推送更新
     var state = {
       enabled:false,       // 是否启用
-      title:'Mineradio',   // 当前歌曲标题
+      title:'BhandsMusic',   // 当前歌曲标题
       artist:'',           // 当前歌手
       cover:'',            // 封面 URL
       playing:false,       // 是否正在播放（影响粒子速度）

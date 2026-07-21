@@ -40,17 +40,17 @@ contextBridge.exposeInMainWorld('desktopWindow', {
 
   // ==================== 应用更新 ====================
   /** 打开更新安装程序（路径安全校验在主进程执行） */
-  openUpdateInstaller: (filePath) => ipcRenderer.invoke('mineradio-open-update-installer', filePath),
+  openUpdateInstaller: (filePath) => ipcRenderer.invoke('bhandsmusic-open-update-installer', filePath),
   /** 重启应用 */
-  restartApp: () => ipcRenderer.invoke('mineradio-restart-app'),
+  restartApp: () => ipcRenderer.invoke('bhandsmusic-restart-app'),
 
   // ==================== 全局快捷键 ====================
   /** 配置全局快捷键绑定（bindings: [{action, accelerator}]） */
-  configureGlobalHotkeys: (bindings) => ipcRenderer.invoke('mineradio-hotkeys-configure-global', bindings || []),
+  configureGlobalHotkeys: (bindings) => ipcRenderer.invoke('bhandsmusic-hotkeys-configure-global', bindings || []),
   /** 导出数据为 JSON 文件（弹出保存对话框） */
-  exportJsonFile: (payload) => ipcRenderer.invoke('mineradio-export-json-file', payload || {}),
+  exportJsonFile: (payload) => ipcRenderer.invoke('bhandsmusic-export-json-file', payload || {}),
   /** 导入 JSON 数据文件（弹出打开对话框） */
-  importJsonFile: () => ipcRenderer.invoke('mineradio-import-json-file'),
+  importJsonFile: () => ipcRenderer.invoke('bhandsmusic-import-json-file'),
 
   /**
    * 监听全局快捷键触发事件
@@ -60,15 +60,15 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   onGlobalHotkey: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});
-    ipcRenderer.on('mineradio-global-hotkey', listener);
-    return () => ipcRenderer.removeListener('mineradio-global-hotkey', listener);
+    ipcRenderer.on('bhandsmusic-global-hotkey', listener);
+    return () => ipcRenderer.removeListener('bhandsmusic-global-hotkey', listener);
   },
 
   // ==================== 桌面歌词 ====================
   /** 启用/禁用桌面歌词（payload 包含 y、opacity、clickThrough 等配置） */
-  setDesktopLyricsEnabled: (enabled, payload) => ipcRenderer.invoke('mineradio-desktop-lyrics-set-enabled', !!enabled, payload || {}),
+  setDesktopLyricsEnabled: (enabled, payload) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-set-enabled', !!enabled, payload || {}),
   /** 更新桌面歌词配置（透明度、位置、锁定状态等） */
-  updateDesktopLyrics: (payload) => ipcRenderer.invoke('mineradio-desktop-lyrics-update', payload || {}),
+  updateDesktopLyrics: (payload) => ipcRenderer.invoke('bhandsmusic-desktop-lyrics-update', payload || {}),
 
   /**
    * 监听桌面歌词锁定状态变化
@@ -78,8 +78,8 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   onDesktopLyricsLockState: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});
-    ipcRenderer.on('mineradio-desktop-lyrics-lock-state', listener);
-    return () => ipcRenderer.removeListener('mineradio-desktop-lyrics-lock-state', listener);
+    ipcRenderer.on('bhandsmusic-desktop-lyrics-lock-state', listener);
+    return () => ipcRenderer.removeListener('bhandsmusic-desktop-lyrics-lock-state', listener);
   },
 
   /**
@@ -90,15 +90,15 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   onDesktopLyricsEnabledState: (callback) => {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, payload) => callback(payload || {});
-    ipcRenderer.on('mineradio-desktop-lyrics-enabled-state', listener);
-    return () => ipcRenderer.removeListener('mineradio-desktop-lyrics-enabled-state', listener);
+    ipcRenderer.on('bhandsmusic-desktop-lyrics-enabled-state', listener);
+    return () => ipcRenderer.removeListener('bhandsmusic-desktop-lyrics-enabled-state', listener);
   },
 
   // ==================== 壁纸模式 ====================
   /** 启用/禁用壁纸模式 */
-  setWallpaperMode: (enabled, payload) => ipcRenderer.invoke('mineradio-wallpaper-set-enabled', !!enabled, payload || {}),
+  setWallpaperMode: (enabled, payload) => ipcRenderer.invoke('bhandsmusic-wallpaper-set-enabled', !!enabled, payload || {}),
   /** 更新壁纸配置 */
-  updateWallpaperMode: (payload) => ipcRenderer.invoke('mineradio-wallpaper-update', payload || {}),
+  updateWallpaperMode: (payload) => ipcRenderer.invoke('bhandsmusic-wallpaper-update', payload || {}),
 
   // ==================== 窗口状态监听 ====================
   /**
