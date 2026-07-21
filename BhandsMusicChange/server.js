@@ -679,7 +679,7 @@ function yamlScalar(text, key) {
   return match[1].trim().replace(/^['"]|['"]$/g, '');
 }
 function githubReleaseDownloadUrl(version, fileName) {
-  const tag = 'v' + normalizeVersion(version);
+  const tag = 'BhandsMusic-V' + normalizeVersion(version);
   const encodedOwner = encodeURIComponent(UPDATE_CONFIG.owner);
   const encodedRepo = encodeURIComponent(UPDATE_CONFIG.repo);
   const encodedName = String(fileName || '').split('/').map(part => encodeURIComponent(part)).join('/');
@@ -713,7 +713,7 @@ function parseLatestYmlUpdateInfo(text, reason) {
       name: 'BhandsMusic v' + latestVersion,
       version: latestVersion,
       publishedAt: releaseDate,
-      htmlUrl: `https://github.com/${UPDATE_CONFIG.owner}/${UPDATE_CONFIG.repo}/releases/tag/v${latestVersion}`,
+      htmlUrl: `https://github.com/${UPDATE_CONFIG.owner}/${UPDATE_CONFIG.repo}/releases/tag/BhandsMusic-V${latestVersion}`,
       downloadUrl,
       asset,
       patch: null,
