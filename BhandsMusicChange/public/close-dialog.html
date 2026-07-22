@@ -45,6 +45,17 @@
 </div>
 <script>
   const { ipcRenderer } = require('electron');
+  // 加载系统设置，预填状态
+  ipcRenderer.invoke('get-system-settings').then(function(settings) {
+    if (settings && settings.remember) {
+      document.getElementById('remember').checked = true;
+      var desc = document.querySelector('.dialog-desc');
+      var labels = { minimize: '最小化到托盘', exit: '直接退出', ask: '每次询问' };
+      if (desc && settings.behavior && labels[settings.behavior]) {
+        desc.textContent = '当前设置: ' + labels[settings.behavior];
+      }
+    }
+  });
   function send(action) {
     const remember = document.getElementById('remember').checked;
     ipcRenderer.send('close-dialog-action', { action, remember });

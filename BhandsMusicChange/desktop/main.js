@@ -1799,9 +1799,20 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
-  // 页面加载完成后发送窗口状态
+  // 页面加载完成后发送窗口状态 + 推送系统设置
   mainWindow.webContents.once('did-finish-load', () => {
     sendWindowState(mainWindow);
+    // 启动后推送系统设置到渲染进程
+    const sysSettings = readSystemSettings();
+    const script = `(function(){
+      if(typeof systemSettings!=='undefined'){
+        systemSettings.behavior=${JSON.stringify(sysSettings.behavior||'ask')};
+        systemSettings.remember=${sysSettings.remember===true};
+        if(typeof syncSystemSettingsUI==='function') syncSystemSettingsUI();
+        if(typeof applySystemSettingsUI==='function') applySystemSettingsUI();
+      }
+    })()`;
+    mainWindow.webContents.executeJavaScript(script).catch(() => {});
   });
 
   // 全屏时按 Escape 退出全屏
@@ -1864,12 +1875,46 @@ async function createWindow() {
       fs.writeFileSync(prefPath, JSON.stringify(pref), 'utf8');
     } catch (e) {}
   }
+  // 系统设置文件读写
+  const SYSTEM_SETTINGS_PATH = path.join(app.getPath('userData'), 'system-settings.json');
+  function readSystemSettings() {
+    try {
+      if (fs.existsSync(SYSTEM_SETTINGS_PATH)) return JSON.parse(fs.readFileSync(SYSTEM_SETTINGS_PATH, 'utf8'));
+    } catch (e) {}
+    return { behavior: 'ask', remember: false };
+  }
+  function writeSystemSettings(settings) {
+    try { fs.writeFileSync(SYSTEM_SETTINGS_PATH, JSON.stringify(settings), 'utf8'); } catch (e) {}
+  }
+  // IPC: 保存系统设置
+  ipcMain.on('save-system-settings', (_event, settings) => {
+    writeSystemSettings(settings);
+    // 清除旧的对话框偏好，避免冲突
+    try { fs.unlinkSync(path.join(app.getPath('userData'), 'close-pref.json')); } catch (e) {}
+  });
+  // IPC: 获取系统设置
+  ipcMain.handle('get-system-settings', () => {
+    return readSystemSettings();
+  });
   // IPC: 接收关闭对话框用户选择
   ipcMain.on('close-dialog-action', (_event, data) => {
-    if (data.remember) saveClosePreference({ action: data.action });
+    if (data.remember) {
+      saveClosePreference({ action: data.action });
+      // 同步到系统设置
+      const behaviorMap = { exit: 'exit', minimize: 'minimize', cancel: 'ask' };
+      const newSettings = { behavior: behaviorMap[data.action] || 'ask', remember: true };
+      writeSystemSettings(newSettings);
+    }
     if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
       closeDialogWindow.destroy();
       closeDialogWindow = null;
+    }
+    // 直接刷新主窗口的系统设置 UI
+    if (mainWindow && !mainWindow.isDestroyed() && !forceQuit) {
+      const sysSettings = readSystemSettings();
+      mainWindow.webContents.executeJavaScript(
+        `typeof applySystemSettingsUI === 'function' && applySystemSettingsUI()`
+      ).catch(() => {});
     }
     if (data.action === 'exit') {
       forceQuit = true;
@@ -1881,7 +1926,20 @@ async function createWindow() {
   mainWindow.on('close', (e) => {
     if (forceQuit) return;
     e.preventDefault();
-    // 如果已经记住选择，直接执行
+    // 1. 优先检查系统设置（关闭行为面板）
+    const sysSettings = readSystemSettings();
+    const behavior = sysSettings.behavior || 'ask';
+    const remember = sysSettings.remember === true;
+    if (remember && behavior !== 'ask') {
+      if (behavior === 'exit') {
+        forceQuit = true;
+        app.quit();
+      } else if (behavior === 'minimize') {
+        mainWindow.hide();
+      }
+      return;
+    }
+    // 2. 检查对话框记住偏好（兼容旧逻辑）
     const saved = readClosePreference();
     if (saved) {
       if (saved.action === 'exit') {
@@ -1892,7 +1950,7 @@ async function createWindow() {
       }
       return;
     }
-    // 弹出自定义关闭对话框
+    // 3. 弹出自定义关闭对话框
     if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
       closeDialogWindow.focus();
       return;

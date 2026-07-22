@@ -100,6 +100,19 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   /** 更新壁纸配置 */
   updateWallpaperMode: (payload) => ipcRenderer.invoke('bhandsmusic-wallpaper-update', payload || {}),
 
+  // ==================== 系统设置 ====================
+  /** 保存系统设置（关闭行为等） */
+  saveSystemSettings: (settings) => ipcRenderer.send('save-system-settings', settings),
+  /** 获取系统设置 */
+  getSystemSettings: () => ipcRenderer.invoke('get-system-settings'),
+  /** 监听系统设置变化（对话框选择后同步） */
+  onSystemSettingsChanged: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = () => callback();
+    ipcRenderer.on('system-settings-changed', listener);
+    return () => ipcRenderer.removeListener('system-settings-changed', listener);
+  },
+
   // ==================== 窗口状态监听 ====================
   /**
    * 监听窗口状态变化（最大化、全屏、焦点、显示器信息等）

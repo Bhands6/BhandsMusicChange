@@ -2380,6 +2380,23 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
     </div>
   </div>
 
+  <div class="fx-advanced" id="fx-system-settings">
+    <div class="fx-advanced-head" onclick="document.getElementById('fx-system-settings').classList.toggle('open')">
+      <span>系统设置</span><span class="arrow">▶</span>
+    </div>
+    <div class="fx-advanced-body">
+      <div class="fx-section-label">关闭应用</div>
+      <div class="fx-seg" id="close-behavior-seg" title="点击关闭按钮时的默认行为">
+        <button data-close-behavior="ask" class="active" onclick="setCloseBehavior('ask')">每次询问</button>
+        <button data-close-behavior="minimize" onclick="setCloseBehavior('minimize')">最小化到托盘</button>
+        <button data-close-behavior="exit" onclick="setCloseBehavior('exit')">直接退出</button>
+      </div>
+      <div class="fx-toggle-grid">
+        <div class="fx-toggle" id="t-rememberClose" onclick="toggleRememberClose()" title="记住关闭行为，下次不再弹窗"><span>记住关闭选择</span><span class="dot"></span></div>
+      </div>
+    </div>
+  </div>
+
   <div class="fx-actions">
     <button class="fx-mini-btn" onclick="resetFx()">恢复默认</button>
   </div>
@@ -20509,6 +20526,19 @@ function applyFxArchiveSnapshot(snapshot) {
   if (shelfManager && shelfManager.refreshTheme) shelfManager.refreshTheme();
   setCamMode(fx.cam);
   updateFxInputs();
+  applySystemSettingsUI();
+  if (typeof window.desktopWindow !== 'undefined') {
+    // 对话框选择后同步
+    if (window.desktopWindow.onSystemSettingsChanged) {
+      window.desktopWindow.onSystemSettingsChanged(function() {
+        applySystemSettingsUI();
+      });
+    }
+    // 窗口获得焦点时也刷新设置（兜底同步）
+    window.addEventListener('focus', function() {
+      applySystemSettingsUI();
+    });
+  }
   applySavedLyricPaletteState();
   refreshCurrentLyricStyle();
   applyDesktopLyricsState(true);
@@ -22611,6 +22641,49 @@ function toggleFx(key) {
     }
     showToast(fx.aiDepth ? '已开启后台 AI 立体增强' : '已关闭 AI 立体增强, 使用轻量弧面');
   }
+}
+// ---- 系统设置：关闭行为 ----
+var systemSettings = { behavior: 'ask', remember: false };
+function getCloseBehavior() { return systemSettings.behavior; }
+function setCloseBehavior(behavior) {
+  systemSettings.behavior = behavior;
+  document.querySelectorAll('#close-behavior-seg button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-close-behavior') === behavior);
+  });
+  if (typeof window.desktopWindow !== 'undefined' && window.desktopWindow.saveSystemSettings) {
+    window.desktopWindow.saveSystemSettings(systemSettings);
+  }
+  showToast('关闭行为: ' + (behavior === 'ask' ? '每次询问' : behavior === 'minimize' ? '最小化到托盘' : '直接退出'));
+}
+function getRememberClose() { return systemSettings.remember; }
+function toggleRememberClose() {
+  systemSettings.remember = !systemSettings.remember;
+  var toggle = document.getElementById('t-rememberClose');
+  if (toggle) toggle.classList.toggle('on', systemSettings.remember);
+  if (typeof window.desktopWindow !== 'undefined' && window.desktopWindow.saveSystemSettings) {
+    window.desktopWindow.saveSystemSettings(systemSettings);
+  }
+  showToast(systemSettings.remember ? '已记住关闭选择' : '取消记住关闭选择');
+}
+function applySystemSettingsUI() {
+  if (typeof window.desktopWindow !== 'undefined' && window.desktopWindow.getSystemSettings) {
+    window.desktopWindow.getSystemSettings().then(function(settings) {
+      if (settings) {
+        systemSettings.behavior = settings.behavior || 'ask';
+        systemSettings.remember = settings.remember === true;
+      }
+      syncSystemSettingsUI();
+    });
+  } else {
+    syncSystemSettingsUI();
+  }
+}
+function syncSystemSettingsUI() {
+  document.querySelectorAll('#close-behavior-seg button').forEach(function(btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-close-behavior') === systemSettings.behavior);
+  });
+  var rememberToggle = document.getElementById('t-rememberClose');
+  if (rememberToggle) rememberToggle.classList.toggle('on', systemSettings.remember);
 }
 function toggleFxPanel(force) {
   var el = document.getElementById('fx-panel');
