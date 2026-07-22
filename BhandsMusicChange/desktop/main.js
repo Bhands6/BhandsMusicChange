@@ -4,7 +4,7 @@
  */
 
 // ==================== 依赖导入 ====================
-const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dialog, Tray, Menu } = require('electron');
 const net = require('net');
 const path = require('path');
 const fs = require('fs');
@@ -26,6 +26,7 @@ let desktopLyricsHotBounds = null;        // 歌词窗口的可交互热区（�
 let desktopLyricsLastMiddleAt = 0;        // 上次中键点击时间戳（防抖）
 let wallpaperWindow = null;               // 壁纸窗口实例
 let wallpaperState = {};                  // 壁纸模式状态
+let appTray = null;                       // 系统托盘图标
 let htmlFullscreenActive = false;         // HTML5 全屏是否激活（如视频全屏）
 let windowFullscreenActive = false;       // 窗口原生全屏是否激活
 let mainWindowStateTimer = null;          // 主窗口状态发送防抖定时器
@@ -1811,10 +1812,25 @@ async function createWindow() {
     }
   });
 
-  // 窗口准备好后显示
+  // 窗口准备好后显示 + 创建系统托盘
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
     sendWindowState(mainWindow);
+    // 创建系统托盘图标
+    if (!appTray) {
+      appTray = new Tray(APP_ICON_ICO);
+      appTray.setToolTip(APP_NAME);
+      appTray.on('click', () => {
+        mainWindow.show();
+        mainWindow.focus();
+      });
+      const trayMenu = Menu.buildFromTemplate([
+        { label: '显示主窗口', click: () => { mainWindow.show(); mainWindow.focus(); } },
+        { type: 'separator' },
+        { label: '退出', click: () => { forceQuit = true; app.quit(); } },
+      ]);
+      appTray.setContextMenu(trayMenu);
+    }
   });
 
   // 注册窗口状态变化事件，实时同步给渲染进程
@@ -1829,6 +1845,78 @@ async function createWindow() {
   // move/resize 使用防抖，避免高频发送
   mainWindow.on('move', () => scheduleWindowStateSend(mainWindow));
   mainWindow.on('resize', () => scheduleWindowStateSend(mainWindow));
+  // 点击关闭按钮时弹出自定义选择对话框
+  let forceQuit = false;
+  let closeDialogWindow = null;
+  app.on('before-quit', () => { forceQuit = true; });
+  // 读取记住的关闭选择
+  const CLOSE_PREF_KEY = 'bhandsmusic-close-preference';
+  function readClosePreference() {
+    try {
+      const prefPath = path.join(app.getPath('userData'), 'close-pref.json');
+      if (fs.existsSync(prefPath)) return JSON.parse(fs.readFileSync(prefPath, 'utf8'));
+    } catch (e) {}
+    return null;
+  }
+  function saveClosePreference(pref) {
+    try {
+      const prefPath = path.join(app.getPath('userData'), 'close-pref.json');
+      fs.writeFileSync(prefPath, JSON.stringify(pref), 'utf8');
+    } catch (e) {}
+  }
+  // IPC: 接收关闭对话框用户选择
+  ipcMain.on('close-dialog-action', (_event, data) => {
+    if (data.remember) saveClosePreference({ action: data.action });
+    if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
+      closeDialogWindow.destroy();
+      closeDialogWindow = null;
+    }
+    if (data.action === 'exit') {
+      forceQuit = true;
+      app.quit();
+    } else if (data.action === 'minimize') {
+      mainWindow.hide();
+    }
+  });
+  mainWindow.on('close', (e) => {
+    if (forceQuit) return;
+    e.preventDefault();
+    // 如果已经记住选择，直接执行
+    const saved = readClosePreference();
+    if (saved) {
+      if (saved.action === 'exit') {
+        forceQuit = true;
+        app.quit();
+      } else if (saved.action === 'minimize') {
+        mainWindow.hide();
+      }
+      return;
+    }
+    // 弹出自定义关闭对话框
+    if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
+      closeDialogWindow.focus();
+      return;
+    }
+    const { width: mw, height: mh, x: mx, y: my } = mainWindow.getBounds();
+    closeDialogWindow = new BrowserWindow({
+      width: mw, height: mh,
+      x: mx, y: my,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      skipTaskbar: true,
+      parent: mainWindow,
+      modal: true,
+      alwaysOnTop: true,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+      },
+    });
+    closeDialogWindow.setIgnoreMouseEvents(false);
+    closeDialogWindow.loadFile(path.join(__dirname, '..', 'public', 'close-dialog.html'));
+    closeDialogWindow.on('closed', () => { closeDialogWindow = null; });
+  });
   // 窗口关闭时清理所有资源
   mainWindow.on('closed', () => {
     if (mainWindowStateTimer) {
@@ -1906,6 +1994,7 @@ if (!gotSingleInstanceLock) {
   app.on('before-quit', () => {
     unregisterBhandsMusicGlobalHotkeys(); // 注销全局快捷键
     closeOverlayWindows();              // 关闭覆盖层窗口
+    if (appTray) { appTray.destroy(); appTray = null; } // 销毁托盘图标
     if (localServer && localServer.close) localServer.close(); // 关闭本地服务器
   });
 }
