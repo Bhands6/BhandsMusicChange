@@ -124,6 +124,7 @@ body.desktop-shell #desktop-titlebar #update-entry:hover{background:rgba(255,83,
 body.desktop-shell #search-area{top:-92px}
 body.desktop-shell #search-area.peek{top:34px}
 body.desktop-shell #search-area.stage-mode.peek{top:32px}
+body.desktop-shell #top-left-brand{top:50px;left:28px}
 body.desktop-shell #top-right{top:58px;right:24px}
 body.desktop-shell #trial-banner{top:112px}
 body.desktop-shell #ai-depth-chip{top:112px}
@@ -210,6 +211,7 @@ body.idle-guide-dragging #canvas-container{cursor:grabbing}
 body.splash-active:not(.splash-revealing) #hint,body.splash-active:not(.splash-revealing) #top-right,body.splash-active:not(.splash-revealing) #search-area{opacity:0;pointer-events:none}
 body.splash-active:not(.splash-revealing) #hint{transform:translate(-50%,-44%) scale(.985);filter:blur(12px)}
 body.splash-active.splash-revealing #hint:not(.hidden){opacity:1;transform:translate(-50%,-50%) scale(1);filter:blur(0);transition:opacity 1300ms 260ms cubic-bezier(.32,0,.1,1),transform 1300ms 260ms cubic-bezier(.32,0,.1,1),filter 1300ms 260ms cubic-bezier(.32,0,.1,1)}
+body.splash-active.splash-revealing #top-left-brand{opacity:1;transition:opacity 1100ms 520ms cubic-bezier(.32,0,.1,1)}
 body.splash-active.splash-revealing #top-right{opacity:1;transition:opacity 1100ms 520ms cubic-bezier(.32,0,.1,1)}
 
 /* ---------- 顶部搜索 (半隐藏) ---------- */
@@ -414,6 +416,12 @@ body.empty-home-active.controls-visible #empty-home{bottom:128px}
 @media (max-height:760px){.home-visual.generated{height:64px!important;max-width:260px!important}}
 
 /* ---------- 顶部右侧按钮 ---------- */
+#top-left-brand{position:fixed;z-index:10;top:16px;left:28px;pointer-events:none;user-select:none}
+.brand-text{font-size:22px;font-weight:800;letter-spacing:.02em}
+.brand-char{display:inline-block;background:linear-gradient(90deg,#ff6b6b,#ff9f43,#feca57,#48dbfb,#0abde3,#ff9ff3,#54a0ff,#5f27cd,#ff6b6b);background-size:900% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:brand-wave 2.4s ease-in-out infinite,brand-gradient 6s ease-in-out infinite}
+.brand-space{display:inline-block;width:.3em}
+@keyframes brand-wave{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes brand-gradient{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
 #top-right{position:fixed;z-index:10;top:24px;right:24px;display:flex;align-items:center;gap:10px}
 .icon-btn{width:44px;height:44px;border:1px solid rgba(255,255,255,0.08);border-radius:50%;background:rgba(255,255,255,0.035);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);color:rgba(255,255,255,0.55);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .3s;font-family:inherit;padding:0}
 .icon-btn:hover{background:rgba(255,255,255,0.09);border-color:rgba(255,255,255,0.18);color:#fff;transform:scale(1.04)}
@@ -2091,6 +2099,11 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
     </div>
   </div>
 </section>
+
+<!-- ==================== 顶部左侧品牌文字 ==================== -->
+<div id="top-left-brand" aria-hidden="true">
+  <span class="brand-text"><span class="brand-char" style="animation-delay:0s">B</span><span class="brand-char" style="animation-delay:.08s">h</span><span class="brand-char" style="animation-delay:.16s">a</span><span class="brand-char" style="animation-delay:.24s">n</span><span class="brand-char" style="animation-delay:.32s">d</span><span class="brand-char" style="animation-delay:.4s">s</span><span class="brand-space"> </span><span class="brand-char" style="animation-delay:.56s">M</span><span class="brand-char" style="animation-delay:.64s">u</span><span class="brand-char" style="animation-delay:.72s">s</span><span class="brand-char" style="animation-delay:.8s">i</span><span class="brand-char" style="animation-delay:.88s">c</span></span>
+</div>
 
 <!-- ==================== 顶部右侧按钮 ==================== -->
 <!-- Home 按钮 + 用户登录/账号胶囊 -->
@@ -16326,6 +16339,8 @@ function goHome() {
   }
   homeSuppressed = false;
   homeForcedOpen = true;
+  var brand = document.getElementById('top-left-brand');
+  if (brand) brand.style.display = '';
   setHomeControlsLocked(true);
   if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent()) safeShelfCloseContent('open-empty-home');
   if (typeof setShelfPinnedOpen === 'function') setShelfPinnedOpen(false, true);
@@ -16342,6 +16357,8 @@ function dismissHomePage(opts) {
   opts = opts || {};
   homeForcedOpen = false;
   homeSuppressed = true;
+  var brand = document.getElementById('top-left-brand');
+  if (brand) brand.style.display = 'none';
   setHomeControlsLocked(false);
   updateEmptyHomeVisibility({ forceLoad: false });
   setPeek(document.getElementById('search-area'), false, 'search');
