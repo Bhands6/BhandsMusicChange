@@ -10812,7 +10812,7 @@ function makeShelfManager() {
     openCardIdx = -1;
     setShelfPinnedOpen(false, true);
     if (typeof setFocusZone === 'function') setFocusZone(null, true);
-    loadPlaylistIntoQueueById(action.playlistId, true, action.title || (card.item && card.item.title) || '');
+    loadPlaylistIntoQueueById(action.playlistId, true, action.title || (card.item && card.item.title) || '', { forceQueue: true });
     return true;
   }
 
@@ -16945,7 +16945,7 @@ function playPlaylistPanelDetail() {
   var parts = st.key.split(':');
   var provider = parts[0] === 'qq' ? 'qq' : 'netease';
   var pid = parts.slice(1).join(':');
-  loadPlaylistIntoQueueById(playlistPanelProviderId(provider, pid), true, st.playlist && st.playlist.name || '');
+  loadPlaylistIntoQueueById(playlistPanelProviderId(provider, pid), true, st.playlist && st.playlist.name || '', { forceQueue: true });
 }
 function playPlaylistPanelDetailTrack(index) {
   var tracks = playlistPanelDetailState.tracks || [];
@@ -17210,11 +17210,10 @@ async function loadPodcastRadioIntoQueue(id, autoplay, title) {
     hideLoading();
   }
 }
-async function loadPlaylistIntoQueueById(id, autoplay, title) {
+async function loadPlaylistIntoQueueById(id, autoplay, title, opts) {
   if (!id) return;
   homeForcedOpen = false;
   homeSuppressed = false;
-  shelfForceQueue = false;
   updateEmptyHomeVisibility();
   showLoading();
   var qqPlaylistId = String(id || '').indexOf('qq:') === 0 ? String(id).slice(3) : '';
@@ -17233,8 +17232,10 @@ async function loadPlaylistIntoQueueById(id, autoplay, title) {
     if (r.error) { showToast('歌单加载失败: ' + r.error); return; }
     if (!r.tracks || !r.tracks.length) { showToast('歌单为空'); return; }
     playQueue = r.tracks.map(cloneSong);
-    if (!qqPlaylistId && isLikedPlaylistContext(id, title, r.playlist)) markSongsLiked(playQueue, true);
+    var isLikedCtx = !qqPlaylistId && isLikedPlaylistContext(id, title, r.playlist);
+    if (isLikedCtx) markSongsLiked(playQueue, true);
     if (!qqPlaylistId) syncLikeStatusForSongs(playQueue);
+    shelfForceQueue = !!(opts && opts.forceQueue) || isLikedCtx;
     currentIdx = 0;
     safeRenderQueuePanel('playlist-load');
     safeSwitchPlaylistTab('queue', 'playlist-load');
