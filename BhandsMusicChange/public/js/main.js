@@ -12910,7 +12910,9 @@ function renderHomeTiles() {
     var coverClass = 'home-tile-cover' + (cover ? ' has-cover' : '');
     // 榜单卡片：以队列形式展示歌曲列表
     if (item.kind === 'toplist') {
-      var tracks = item.playlistId === '3779629' ? newSongTracks : (item.playlistId === '2884035' ? originalTracks : (item.playlistId === '3778678' ? hotSongTracks : (item.playlistId === '991319590' ? rapTracks : toplistTracks)));
+      var allTracks = item.playlistId === '3779629' ? newSongTracks : (item.playlistId === '2884035' ? originalTracks : (item.playlistId === '3778678' ? hotSongTracks : (item.playlistId === '991319590' ? rapTracks : toplistTracks)));
+      var isFs = !!(desktopRuntimeState.fullscreen || desktopFullscreenActive || document.fullscreenElement || document.body.classList.contains('desktop-fullscreen'));
+      var tracks = allTracks.slice(0, isFs ? 12 : 8);
       if (!tracks.length) {
         // 未加载完成时显示普通卡片
         return '<button class="home-tile' + (homeDiscoverState.loading ? ' home-skeleton' : '') + '" data-home-tone="' + escHtml(tone) + '" type="button" onclick="handleHomeTileClick(' + i + ')">' +
@@ -13069,27 +13071,27 @@ async function preloadToplistTracks() {
     ]);
     var changed = false;
     if (results[0] && results[0].tracks && results[0].tracks.length) {
-      toplistTracks = results[0].tracks.slice(0, 8);
+      toplistTracks = results[0].tracks.slice(0, 12);
       toplistCover = (results[0].playlist && results[0].playlist.cover) || (results[0].tracks[0] && results[0].tracks[0].cover) || '';
       changed = true;
     }
     if (results[1] && results[1].tracks && results[1].tracks.length) {
-      newSongTracks = results[1].tracks.slice(0, 8);
+      newSongTracks = results[1].tracks.slice(0, 12);
       newSongCover = (results[1].playlist && results[1].playlist.cover) || (results[1].tracks[0] && results[1].tracks[0].cover) || '';
       changed = true;
     }
     if (results[2] && results[2].tracks && results[2].tracks.length) {
-      originalTracks = results[2].tracks.slice(0, 8);
+      originalTracks = results[2].tracks.slice(0, 12);
       originalCover = (results[2].playlist && results[2].playlist.cover) || (results[2].tracks[0] && results[2].tracks[0].cover) || '';
       changed = true;
     }
     if (results[3] && results[3].tracks && results[3].tracks.length) {
-      hotSongTracks = results[3].tracks.slice(0, 8);
+      hotSongTracks = results[3].tracks.slice(0, 12);
       hotSongCover = (results[3].playlist && results[3].playlist.cover) || (results[3].tracks[0] && results[3].tracks[0].cover) || '';
       changed = true;
     }
     if (results[4] && results[4].tracks && results[4].tracks.length) {
-      rapTracks = results[4].tracks.slice(0, 8);
+      rapTracks = results[4].tracks.slice(0, 12);
       rapCover = (results[4].playlist && results[4].playlist.cover) || (results[4].tracks[0] && results[4].tracks[0].cover) || '';
       changed = true;
     }
@@ -23945,6 +23947,7 @@ function toggleFullscreen() {
     if (isFullScreen) layoutFullscreenDiyZone();
     if (isFullScreen !== wasFullScreen) {
       scheduleMainRendererViewportRefresh('desktop-shell-state');
+      if (document.body.classList.contains('empty-home-active')) renderHomeTiles();
       if (!isFullScreen) {
         document.body.classList.remove('fullscreen-diy-peek');
         setTimeout(function(){ clearPlayerControlFocusState('desktop-fullscreen-exit'); }, 80);

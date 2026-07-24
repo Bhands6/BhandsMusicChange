@@ -437,7 +437,7 @@ body.desktop-shell .home-hero{min-height:390px}
 body.desktop-shell .home-card{min-height:148px}
 body.desktop-shell .home-tile{min-height:154px}
 body.desktop-shell .home-tile-cover{height:84px}
-body.desktop-shell.desktop-fullscreen #empty-home,html:fullscreen body.desktop-shell #empty-home{top:96px;bottom:52px;width:min(2200px,calc(100vw - 40px))}
+body.desktop-shell.desktop-fullscreen #empty-home,html:fullscreen body.desktop-shell #empty-home{top:120px;bottom:52px;width:min(2200px,calc(100vw - 40px))}
 body.desktop-shell.desktop-fullscreen .empty-home-shell,html:fullscreen body.desktop-shell .empty-home-shell{max-width:2200px;margin:0 auto;grid-template-columns:minmax(380px,1fr) minmax(560px,1fr)}
 body.desktop-shell.desktop-fullscreen .home-mosaic,html:fullscreen body.desktop-shell .home-mosaic{height:clamp(146px,16vh,208px)}
 body.desktop-shell.desktop-fullscreen .home-mosaic-cell.has-cover,html:fullscreen body.desktop-shell .home-mosaic-cell.has-cover{background-size:contain;background-repeat:no-repeat;background-color:rgba(8,10,14,.54)}
