@@ -92,6 +92,16 @@ var homeForcedOpen = false;
 var homeSuppressed = false;
 var homeDiscoverState = { loading: false, loaded: false, loggedIn: false, mode: 'starter', songs: [], playlists: [], podcasts: [], error: '', updatedAt: 0 };
 var homeDiscoverToken = 0;
+var toplistTracks = [];        // 飙升榜预加载歌曲
+var toplistCover = '';         // 飙升榜封面
+var newSongTracks = [];        // 新歌榜预加载歌曲
+var newSongCover = '';         // 新歌榜封面
+var originalTracks = [];       // 原创榜预加载歌曲
+var originalCover = '';        // 原创榜封面
+var hotSongTracks = [];        // 热歌榜预加载歌曲
+var hotSongCover = '';         // 热歌榜封面
+var rapTracks = [];            // 中文说唱榜预加载歌曲
+var rapCover = '';             // 中文说唱榜封面
 var homeVisualPresetActive = false;
 var homeVisualPrevPreset = 0;
 var HOME_LISTEN_STATS_KEY = 'bhandsmusic-listen-stats-v1';
@@ -12850,6 +12860,16 @@ function renderHomeTiles() {
   var note = document.getElementById('home-rail-note');
   if (!row) return;
   var tiles = [];
+  // 飙升榜（网易云音乐固定榜单）
+  tiles.push({ kind: 'toplist', playlistId: '19723756', title: '飙升榜', sub: '网易云音乐 · 实时更新', tone: 'playlist', cover: toplistCover });
+  // 新歌榜（网易云音乐固定榜单）
+  tiles.push({ kind: 'toplist', playlistId: '3779629', title: '新歌榜', sub: '网易云音乐 · 每日更新', tone: 'playlist', cover: newSongCover });
+  // 原创榜（网易云音乐固定榜单）
+  tiles.push({ kind: 'toplist', playlistId: '2884035', title: '原创榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: originalCover });
+  // 热歌榜（网易云音乐固定榜单）
+  tiles.push({ kind: 'toplist', playlistId: '3778678', title: '热歌榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: hotSongCover });
+  // 中文说唱榜（网易云音乐固定榜单）
+  tiles.push({ kind: 'toplist', playlistId: '991319590', title: '中文说唱榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: rapCover });
   var loggedOutHome = !homeDiscoverState.loggedIn && !hasAnyPlatformLogin();
   var weatherSongs = homeWeatherRadioState.radio && homeWeatherRadioState.radio.songs || [];
   var summary = homeListenSummary();
@@ -12888,6 +12908,26 @@ function renderHomeTiles() {
     var cover = homeTileCover(item);
     var tone = homeToneForItem(item, i);
     var coverClass = 'home-tile-cover' + (cover ? ' has-cover' : '');
+    // 榜单卡片：以队列形式展示歌曲列表
+    if (item.kind === 'toplist') {
+      var tracks = item.playlistId === '3779629' ? newSongTracks : (item.playlistId === '2884035' ? originalTracks : (item.playlistId === '3778678' ? hotSongTracks : (item.playlistId === '991319590' ? rapTracks : toplistTracks)));
+      if (!tracks.length) {
+        // 未加载完成时显示普通卡片
+        return '<button class="home-tile' + (homeDiscoverState.loading ? ' home-skeleton' : '') + '" data-home-tone="' + escHtml(tone) + '" type="button" onclick="handleHomeTileClick(' + i + ')">' +
+          '<div class="' + coverClass + '" style="' + (cover ? 'background-image:url(&quot;' + escHtml(cssImageUrl(cover)) + '&quot;)' : '') + '"></div>' +
+          '<div class="home-tile-title">' + escHtml(item.title || '') + '</div>' +
+          '<div class="home-tile-sub">' + escHtml(item.sub || '') + '</div>' +
+        '</button>';
+      }
+      var queueHtml = tracks.map(function(song, si){
+        return '<div class="home-tile-queue-item"><span class="home-tile-queue-num">' + (si + 1) + '</span><span class="home-tile-queue-name">' + escHtml(song.name || '') + '</span><span class="home-tile-queue-artist">' + escHtml(song.artist || '') + '</span></div>';
+      }).join('');
+      return '<button class="home-tile home-tile--queue' + (!cover && homeDiscoverState.loading ? ' home-skeleton' : '') + '" data-home-tone="' + escHtml(tone) + '" type="button" onclick="handleHomeTileClick(' + i + ')">' +
+        '<div class="' + coverClass + '" style="' + (cover ? 'background-image:url(&quot;' + escHtml(cssImageUrl(cover)) + '&quot;)' : '') + '"></div>' +
+        '<div class="home-tile-title">' + escHtml(item.title || '') + '</div>' +
+        '<div class="home-tile-queue">' + queueHtml + '</div>' +
+      '</button>';
+    }
     return '<button class="home-tile' + (!cover && homeDiscoverState.loading ? ' home-skeleton' : '') + '" data-home-tone="' + escHtml(tone) + '" type="button" onclick="handleHomeTileClick(' + i + ')">' +
       '<div class="' + coverClass + '" style="' + (cover ? 'background-image:url(&quot;' + escHtml(cssImageUrl(cover)) + '&quot;)' : '') + '"></div>' +
       '<div class="home-tile-title">' + escHtml(item.title || '') + '</div>' +
@@ -13013,6 +13053,49 @@ async function loadHomeDiscover(force) {
       homeDiscoverState.loading = false;
       renderHomeDiscover();
     }
+  }
+  // 异步预加载飙升榜歌曲（不阻塞首页渲染）
+  preloadToplistTracks();
+}
+async function preloadToplistTracks() {
+  if (toplistTracks.length && newSongTracks.length && originalTracks.length) return;
+  try {
+    var results = await Promise.all([
+      toplistTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=19723756'),
+      newSongTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=3779629'),
+      originalTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=2884035'),
+      hotSongTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=3778678'),
+      rapTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=991319590')
+    ]);
+    var changed = false;
+    if (results[0] && results[0].tracks && results[0].tracks.length) {
+      toplistTracks = results[0].tracks.slice(0, 8);
+      toplistCover = (results[0].playlist && results[0].playlist.cover) || (results[0].tracks[0] && results[0].tracks[0].cover) || '';
+      changed = true;
+    }
+    if (results[1] && results[1].tracks && results[1].tracks.length) {
+      newSongTracks = results[1].tracks.slice(0, 8);
+      newSongCover = (results[1].playlist && results[1].playlist.cover) || (results[1].tracks[0] && results[1].tracks[0].cover) || '';
+      changed = true;
+    }
+    if (results[2] && results[2].tracks && results[2].tracks.length) {
+      originalTracks = results[2].tracks.slice(0, 8);
+      originalCover = (results[2].playlist && results[2].playlist.cover) || (results[2].tracks[0] && results[2].tracks[0].cover) || '';
+      changed = true;
+    }
+    if (results[3] && results[3].tracks && results[3].tracks.length) {
+      hotSongTracks = results[3].tracks.slice(0, 8);
+      hotSongCover = (results[3].playlist && results[3].playlist.cover) || (results[3].tracks[0] && results[3].tracks[0].cover) || '';
+      changed = true;
+    }
+    if (results[4] && results[4].tracks && results[4].tracks.length) {
+      rapTracks = results[4].tracks.slice(0, 8);
+      rapCover = (results[4].playlist && results[4].playlist.cover) || (results[4].tracks[0] && results[4].tracks[0].cover) || '';
+      changed = true;
+    }
+    if (changed) renderHomeTiles();
+  } catch (e) {
+    console.warn('[ToplistPreload]', e);
   }
 }
 function homeWeatherRadioUrl(opts) {
@@ -13687,6 +13770,7 @@ function handleHomeTileClick(index) {
   var item = row && row._homeTiles && row._homeTiles[index];
   if (!item) return;
   if (item.kind === 'weatherSong') playWeatherSong(item.index);
+  else if (item.kind === 'toplist') loadPlaylistIntoQueueById(item.playlistId, true, item.title || '飙升榜', { forceQueue: true });
   else if (item.kind === 'recent') playHomeRecent(item.record);
   else if (item.kind === 'profile') openHomeInsight();
   else if (item.kind === 'song') playHomeSong(item.index);

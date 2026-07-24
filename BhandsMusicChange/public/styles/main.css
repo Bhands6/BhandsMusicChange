@@ -370,6 +370,15 @@ body.empty-home-active .home-visual{animation:home-visual-drift 8.8s ease-in-out
 .home-tile-cover:not(.has-cover)::after{content:'';position:absolute;right:12px;top:14px;width:46px;height:48px;border-radius:999px;background:repeating-linear-gradient(0deg,rgba(255,255,255,.72) 0 3px,transparent 3px 9px);opacity:.32}
 .home-tile-title{font-size:12px;font-weight:720;color:rgba(255,255,255,.90);line-height:1.28;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .home-tile-sub{display:none;font-size:10.5px;color:rgba(255,255,255,.42);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-tile--queue{display:flex;flex-direction:column;padding-bottom:10px}
+.home-tile--queue .home-tile-cover{height:64px;margin-bottom:6px;flex-shrink:0}
+.home-tile--queue .home-tile-title{flex-shrink:0;margin-bottom:4px;font-size:14px;text-align:center}
+.home-tile-queue{flex:1;display:flex;flex-direction:column;gap:0;overflow:hidden}
+.home-tile-queue-item{flex:1;display:flex;align-items:center;gap:5px;font-size:12px;line-height:1;color:rgba(255,255,255,.55);white-space:nowrap;overflow:hidden;border-bottom:1px solid rgba(255,255,255,.04);padding:4px 0}
+.home-tile-queue-item:last-child{border-bottom:none}
+.home-tile-queue-num{flex-shrink:0;width:16px;text-align:right;font-size:12px;font-weight:700;color:rgba(255,255,255,.28)}
+.home-tile-queue-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:rgba(255,255,255,.82);font-weight:600}
+.home-tile-queue-artist{flex-shrink:0;max-width:60px;overflow:hidden;text-overflow:ellipsis;font-size:12px;color:rgba(255,255,255,.32)}
 .home-skeleton{position:relative;overflow:hidden}
 .home-skeleton::before{content:'';position:absolute;inset:0;background:linear-gradient(110deg,transparent,rgba(255,255,255,.08),transparent);transform:translateX(-100%);animation:home-shimmer 1.5s ease-in-out infinite}
 @keyframes home-shimmer{100%{transform:translateX(100%)}}
