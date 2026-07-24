@@ -164,7 +164,7 @@ var updatePreviewState = {
   installerOpened: false,
   cached: false,
   currentVersion: '0.9.11',
-  version: '1.1.0',
+  version: '1.3.0',
   configured: false,
   preview: true,
   updateAvailable: false,
