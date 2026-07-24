@@ -437,10 +437,13 @@ body.desktop-shell .home-hero{min-height:390px}
 body.desktop-shell .home-card{min-height:148px}
 body.desktop-shell .home-tile{min-height:154px}
 body.desktop-shell .home-tile-cover{height:84px}
-body.desktop-shell.desktop-fullscreen #empty-home,html:fullscreen body.desktop-shell #empty-home{top:96px;bottom:52px;width:min(1480px,calc(100vw - 96px))}
-body.desktop-shell.desktop-fullscreen .empty-home-shell,html:fullscreen body.desktop-shell .empty-home-shell{max-width:1480px;margin:0 auto;grid-template-columns:minmax(380px,.92fr) minmax(560px,1.08fr)}
+body.desktop-shell.desktop-fullscreen #empty-home,html:fullscreen body.desktop-shell #empty-home{top:96px;bottom:52px;width:min(2200px,calc(100vw - 40px))}
+body.desktop-shell.desktop-fullscreen .empty-home-shell,html:fullscreen body.desktop-shell .empty-home-shell{max-width:2200px;margin:0 auto;grid-template-columns:minmax(380px,1fr) minmax(560px,1fr)}
 body.desktop-shell.desktop-fullscreen .home-mosaic,html:fullscreen body.desktop-shell .home-mosaic{height:clamp(146px,16vh,208px)}
 body.desktop-shell.desktop-fullscreen .home-mosaic-cell.has-cover,html:fullscreen body.desktop-shell .home-mosaic-cell.has-cover{background-size:contain;background-repeat:no-repeat;background-color:rgba(8,10,14,.54)}
+body.desktop-shell.desktop-fullscreen .home-hero-cover-full,html:fullscreen body.desktop-shell .home-hero-cover-full{background-size:100% 100%!important;background-position:left top!important;background-repeat:no-repeat!important}
+body.desktop-shell.desktop-fullscreen .home-grid,html:fullscreen body.desktop-shell .home-grid{gap:14px}
+body.desktop-shell.desktop-fullscreen .home-tile-row,html:fullscreen body.desktop-shell .home-tile-row{gap:12px}
 @media (max-height:760px){
   body.desktop-shell #empty-home{top:118px;bottom:34px}
   body.desktop-shell .home-hero{min-height:330px;padding:0}
