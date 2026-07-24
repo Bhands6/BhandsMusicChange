@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.2.0
+
+- 全屏首页布局优化：容器加宽至 2200px，左右两列等宽，封面撑满 hero 卡片。
+- 全屏窗口控制按钮：右上角显示最小化、退出全屏、关闭按钮，图标与标题栏同步。
+- 全屏榜单动态歌曲数：全屏时每个榜单卡片展示 12 首歌曲，缩小回 8 首，切换时自动刷新。
+- 全屏容器上方留白增大至 120px，主页按钮行下移。
+- 全屏窗口控制按钮图标加大至 36px，间距 10px。
+
 ## v1.1.1
 
 - P0 installer safety fix: installation now defaults to the first available non-C drive from `D:\BhandsMusic` through `Z:\BhandsMusic`; it falls back to `C:\BhandsMusic` only when no D-Z drive exists.
