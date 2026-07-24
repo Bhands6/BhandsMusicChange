@@ -32,7 +32,11 @@
       "!public/index.*.html",
       "public/index.html"
     ],
-    "asar": false,
+    "asar": true,
+    "asarUnpack": [
+      "server.js",
+      "dj-analyzer.js"
+    ],
     "win": {
       "executableName": "BhandsMusic",
       "icon": "build/icon.ico",
