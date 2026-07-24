@@ -347,7 +347,11 @@ function publicDownloadUrls(candidates) {
     .filter(Boolean);
 }
 function normalizeVersion(value) {
-  return String(value || '').trim().replace(/^v/i, '').replace(/[+].*$/, '').replace(/-.+$/, '');
+  var raw = String(value || '').trim();
+  // 优先提取 x.y.z 格式的版本号（兼容 BhandsMusic-V1.2.0 等带前缀的 tag）
+  var m = raw.match(/(\d+\.\d+\.\d+)/);
+  if (m) return m[1];
+  return raw.replace(/^v/i, '').replace(/[+].*$/, '').replace(/-.+$/, '');
 }
 function compareVersions(a, b) {
   const aa = normalizeVersion(a).split('.').map(n => parseInt(n, 10) || 0);
