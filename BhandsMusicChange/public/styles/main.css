@@ -105,10 +105,16 @@ body.visual-guide-active #fullscreen-diy-zone{opacity:0;pointer-events:none!impo
 body.visual-guide-active #fullscreen-diy-btn{opacity:0!important;pointer-events:none!important;transform:translateY(-18px) scale(.96)!important}
 body.desktop-shell.desktop-fullscreen #desktop-titlebar,html:fullscreen body.desktop-shell #desktop-titlebar{display:none!important}
 body.desktop-shell.desktop-fullscreen #fullscreen-diy-zone,html:fullscreen body.desktop-shell #fullscreen-diy-zone{display:flex}
+#fullscreen-window-controls{display:none;position:fixed;z-index:520;top:12px;right:16px;align-items:center;gap:10px;pointer-events:auto;-webkit-app-region:no-drag}
+body.desktop-shell.desktop-fullscreen #fullscreen-window-controls,html:fullscreen body.desktop-shell #fullscreen-window-controls{display:flex}
+.fullscreen-window-controls .desktop-window-btn{width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,border-color .15s;padding:0}
+.fullscreen-window-controls .desktop-window-btn:hover{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.2)}
+.fullscreen-window-controls .desktop-window-btn.close:hover{background:rgba(255,59,48,.85);border-color:rgba(255,59,48,.6);color:#fff}
+.fullscreen-window-controls .desktop-window-btn svg{width:17px;height:17px}
 body.fullscreen-diy-peek #fullscreen-diy-zone,#fullscreen-diy-zone:hover{pointer-events:auto}
 body.fullscreen-diy-peek #fullscreen-diy-btn,#fullscreen-diy-zone:hover #fullscreen-diy-btn{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
 body.desktop-shell.desktop-fullscreen #search-area.peek{top:24px}
-body.desktop-shell.desktop-fullscreen #top-right{top:24px}
+body.desktop-shell.desktop-fullscreen #top-right{top:50px}
 @media (max-width:720px){body.desktop-shell #top-right{right:12px;top:58px}body.desktop-shell #search-area.peek{top:58px}}
 @media (max-width:720px){#fullscreen-diy-zone{height:48px}#fullscreen-diy-btn{min-width:96px;height:32px}}
 

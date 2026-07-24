@@ -23960,6 +23960,14 @@ function toggleFullscreen() {
     }
     if (maxIcon) maxIcon.style.display = isFullScreen ? 'none' : '';
     if (restoreIcon) restoreIcon.style.display = isFullScreen ? '' : 'none';
+    // 同步全屏窗口控制按钮的图标
+    var fsMaxBtn = document.querySelector('#fullscreen-window-controls [data-window-action="maximize"]');
+    if (fsMaxBtn) {
+      var fsMaxIcon = fsMaxBtn.querySelector('.icon-maximize');
+      var fsRestoreIcon = fsMaxBtn.querySelector('.icon-restore');
+      if (fsMaxIcon) fsMaxIcon.style.display = isFullScreen ? 'none' : '';
+      if (fsRestoreIcon) fsRestoreIcon.style.display = isFullScreen ? '' : 'none';
+    }
   }
 
   document.querySelectorAll('[data-window-action]').forEach(function(btn){
