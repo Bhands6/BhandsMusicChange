@@ -2024,6 +2024,12 @@ if (!gotSingleInstanceLock) {
     }
   });
 
+  // 忽略 SSL 证书错误（兼容国内音乐平台）
+  app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
+    event.preventDefault();
+    callback(true);
+  });
+
   // 应用就绪后初始化
   app.whenReady().then(async () => {
     // 监听显示器变化事件，重新定位覆盖层窗口

@@ -12860,16 +12860,17 @@ function renderHomeTiles() {
   var note = document.getElementById('home-rail-note');
   if (!row) return;
   var tiles = [];
-  // 飙升榜（网易云音乐固定榜单）
-  tiles.push({ kind: 'toplist', playlistId: '19723756', title: '飙升榜', sub: '网易云音乐 · 实时更新', tone: 'playlist', cover: toplistCover });
-  // 新歌榜（网易云音乐固定榜单）
-  tiles.push({ kind: 'toplist', playlistId: '3779629', title: '新歌榜', sub: '网易云音乐 · 每日更新', tone: 'playlist', cover: newSongCover });
-  // 原创榜（网易云音乐固定榜单）
-  tiles.push({ kind: 'toplist', playlistId: '2884035', title: '原创榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: originalCover });
-  // 热歌榜（网易云音乐固定榜单）
-  tiles.push({ kind: 'toplist', playlistId: '3778678', title: '热歌榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: hotSongCover });
-  // 中文说唱榜（网易云音乐固定榜单）
-  tiles.push({ kind: 'toplist', playlistId: '991319590', title: '中文说唱榜', sub: '网易云音乐 · 每周更新', tone: 'playlist', cover: rapCover });
+  // 飙升榜（QQ 登录时取 QQ 榜单，否则取网易云）
+  var isQQToplist = !!qqLoginStatus.loggedIn;
+  tiles.push({ kind: 'toplist', playlistId: isQQToplist ? 'qq_62' : '19723756', title: '飙升榜', sub: isQQToplist ? 'QQ 音乐 · 实时更新' : '网易云音乐 · 实时更新', tone: 'playlist', cover: toplistCover });
+  // 热歌榜（QQ 登录时取 QQ 榜单，否则取网易云）
+  tiles.push({ kind: 'toplist', playlistId: isQQToplist ? 'qq_26' : '3778678', title: '热歌榜', sub: isQQToplist ? 'QQ 音乐 · 每周更新' : '网易云音乐 · 每周更新', tone: 'playlist', cover: hotSongCover });
+  // 新歌榜（QQ 登录时取 QQ 榜单，否则取网易云）
+  tiles.push({ kind: 'toplist', playlistId: isQQToplist ? 'qq_27' : '3779629', title: '新歌榜', sub: isQQToplist ? 'QQ 音乐 · 每日更新' : '网易云音乐 · 每日更新', tone: 'playlist', cover: newSongCover });
+  // 第四榜（QQ 登录时取流行指数榜，否则取网易云原创榜）
+  tiles.push({ kind: 'toplist', playlistId: isQQToplist ? 'qq_4' : '2884035', title: isQQToplist ? '流行指数榜' : '原创榜', sub: isQQToplist ? 'QQ 音乐 · 实时更新' : '网易云音乐 · 每周更新', tone: 'playlist', cover: originalCover });
+  // 第五榜（QQ 登录时取听歌识曲榜，否则取网易云中文说唱榜）
+  tiles.push({ kind: 'toplist', playlistId: isQQToplist ? 'qq_67' : '991319590', title: isQQToplist ? '听歌识曲榜' : '中文说唱榜', sub: isQQToplist ? 'QQ 音乐 · 每周更新' : '网易云音乐 · 每周更新', tone: 'playlist', cover: rapCover });
   var loggedOutHome = !homeDiscoverState.loggedIn && !hasAnyPlatformLogin();
   var weatherSongs = homeWeatherRadioState.radio && homeWeatherRadioState.radio.songs || [];
   var summary = homeListenSummary();
@@ -12910,7 +12911,7 @@ function renderHomeTiles() {
     var coverClass = 'home-tile-cover' + (cover ? ' has-cover' : '');
     // 榜单卡片：以队列形式展示歌曲列表
     if (item.kind === 'toplist') {
-      var allTracks = item.playlistId === '3779629' ? newSongTracks : (item.playlistId === '2884035' ? originalTracks : (item.playlistId === '3778678' ? hotSongTracks : (item.playlistId === '991319590' ? rapTracks : toplistTracks)));
+      var allTracks = (item.playlistId === '3779629' || item.playlistId === 'qq_27') ? newSongTracks : ((item.playlistId === '2884035' || item.playlistId === 'qq_4') ? originalTracks : ((item.playlistId === '3778678' || item.playlistId === 'qq_26') ? hotSongTracks : ((item.playlistId === '991319590' || item.playlistId === 'qq_67') ? rapTracks : toplistTracks)));
       var isFs = !!(desktopRuntimeState.fullscreen || desktopFullscreenActive || document.fullscreenElement || document.body.classList.contains('desktop-fullscreen'));
       var tracks = allTracks.slice(0, isFs ? 12 : 8);
       if (!tracks.length) {
@@ -13054,45 +13055,45 @@ async function loadHomeDiscover(force) {
     if (token === homeDiscoverToken) {
       homeDiscoverState.loading = false;
       renderHomeDiscover();
+      preloadToplistTracks();
     }
   }
-  // 异步预加载飙升榜歌曲（不阻塞首页渲染）
-  preloadToplistTracks();
 }
-async function preloadToplistTracks() {
-  if (toplistTracks.length && newSongTracks.length && originalTracks.length) return;
+async function preloadToplistTracks(force) {
+  if (!force && toplistTracks.length && newSongTracks.length && originalTracks.length) return;
+  var useQQ = !!qqLoginStatus.loggedIn;
   try {
     var results = await Promise.all([
-      toplistTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=19723756'),
-      newSongTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=3779629'),
-      originalTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=2884035'),
-      hotSongTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=3778678'),
-      rapTracks.length ? Promise.resolve(null) : apiJson('/api/playlist/tracks?id=991319590')
+      toplistTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=62') : apiJson('/api/playlist/tracks?id=19723756')),
+      newSongTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=27') : apiJson('/api/playlist/tracks?id=3779629')),
+      originalTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=4') : apiJson('/api/playlist/tracks?id=2884035')),
+      hotSongTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=26') : apiJson('/api/playlist/tracks?id=3778678')),
+      rapTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=67') : apiJson('/api/playlist/tracks?id=991319590'))
     ]);
     var changed = false;
     if (results[0] && results[0].tracks && results[0].tracks.length) {
       toplistTracks = results[0].tracks.slice(0, 12);
-      toplistCover = (results[0].playlist && results[0].playlist.cover) || (results[0].tracks[0] && results[0].tracks[0].cover) || '';
+      toplistCover = results[0].cover || (results[0].playlist && results[0].playlist.cover) || (results[0].tracks[0] && results[0].tracks[0].cover) || '';
       changed = true;
     }
     if (results[1] && results[1].tracks && results[1].tracks.length) {
       newSongTracks = results[1].tracks.slice(0, 12);
-      newSongCover = (results[1].playlist && results[1].playlist.cover) || (results[1].tracks[0] && results[1].tracks[0].cover) || '';
+      newSongCover = results[1].cover || (results[1].playlist && results[1].playlist.cover) || (results[1].tracks[0] && results[1].tracks[0].cover) || '';
       changed = true;
     }
     if (results[2] && results[2].tracks && results[2].tracks.length) {
       originalTracks = results[2].tracks.slice(0, 12);
-      originalCover = (results[2].playlist && results[2].playlist.cover) || (results[2].tracks[0] && results[2].tracks[0].cover) || '';
+      originalCover = results[2].cover || (results[2].playlist && results[2].playlist.cover) || (results[2].tracks[0] && results[2].tracks[0].cover) || '';
       changed = true;
     }
     if (results[3] && results[3].tracks && results[3].tracks.length) {
       hotSongTracks = results[3].tracks.slice(0, 12);
-      hotSongCover = (results[3].playlist && results[3].playlist.cover) || (results[3].tracks[0] && results[3].tracks[0].cover) || '';
+      hotSongCover = results[3].cover || (results[3].playlist && results[3].playlist.cover) || (results[3].tracks[0] && results[3].tracks[0].cover) || '';
       changed = true;
     }
     if (results[4] && results[4].tracks && results[4].tracks.length) {
       rapTracks = results[4].tracks.slice(0, 12);
-      rapCover = (results[4].playlist && results[4].playlist.cover) || (results[4].tracks[0] && results[4].tracks[0].cover) || '';
+      rapCover = results[4].cover || (results[4].playlist && results[4].playlist.cover) || (results[4].tracks[0] && results[4].tracks[0].cover) || '';
       changed = true;
     }
     if (changed) renderHomeTiles();
@@ -13771,7 +13772,81 @@ function handleHomeTileClick(index) {
   var row = document.getElementById('home-tile-row');
   var item = row && row._homeTiles && row._homeTiles[index];
   if (!item) return;
+  if (item.kind === 'toplist' && !hasAnyPlatformLogin()) {
+    showLoginModal({ source: 'home-tile' });
+    return;
+  }
   if (item.kind === 'weatherSong') playWeatherSong(item.index);
+  else if (item.kind === 'toplist' && item.playlistId === 'qq_62') {
+    // QQ 飙升榜：直接用已加载的 toplistTracks 播放
+    if (toplistTracks.length) {
+      playQueue = toplistTracks.map(cloneSong);
+      currentIdx = 0;
+      shelfForceQueue = true;
+      safeRenderQueuePanel('qq-toplist');
+      safeSwitchPlaylistTab('queue', 'qq-toplist');
+      safeShelfRebuild('qq-toplist', true);
+      playQueueAt(0);
+      hideLoading();
+      showToast('载入: ' + (item.title || '飙升榜'));
+    }
+  }
+  else if (item.kind === 'toplist' && item.playlistId === 'qq_26') {
+    // QQ 热歌榜：直接用已加载的 hotSongTracks 播放
+    if (hotSongTracks.length) {
+      playQueue = hotSongTracks.map(cloneSong);
+      currentIdx = 0;
+      shelfForceQueue = true;
+      safeRenderQueuePanel('qq-hot');
+      safeSwitchPlaylistTab('queue', 'qq-hot');
+      safeShelfRebuild('qq-hot', true);
+      playQueueAt(0);
+      hideLoading();
+      showToast('载入: ' + (item.title || '热歌榜'));
+    }
+  }
+  else if (item.kind === 'toplist' && item.playlistId === 'qq_27') {
+    // QQ 新歌榜：直接用已加载的 newSongTracks 播放
+    if (newSongTracks.length) {
+      playQueue = newSongTracks.map(cloneSong);
+      currentIdx = 0;
+      shelfForceQueue = true;
+      safeRenderQueuePanel('qq-new');
+      safeSwitchPlaylistTab('queue', 'qq-new');
+      safeShelfRebuild('qq-new', true);
+      playQueueAt(0);
+      hideLoading();
+      showToast('载入: ' + (item.title || '新歌榜'));
+    }
+  }
+  else if (item.kind === 'toplist' && item.playlistId === 'qq_4') {
+    // QQ 流行指数榜：直接用已加载的 originalTracks 播放
+    if (originalTracks.length) {
+      playQueue = originalTracks.map(cloneSong);
+      currentIdx = 0;
+      shelfForceQueue = true;
+      safeRenderQueuePanel('qq-pop');
+      safeSwitchPlaylistTab('queue', 'qq-pop');
+      safeShelfRebuild('qq-pop', true);
+      playQueueAt(0);
+      hideLoading();
+      showToast('载入: ' + (item.title || '流行指数榜'));
+    }
+  }
+  else if (item.kind === 'toplist' && item.playlistId === 'qq_67') {
+    // QQ 听歌识曲榜：直接用已加载的 rapTracks 播放
+    if (rapTracks.length) {
+      playQueue = rapTracks.map(cloneSong);
+      currentIdx = 0;
+      shelfForceQueue = true;
+      safeRenderQueuePanel('qq-shazam');
+      safeSwitchPlaylistTab('queue', 'qq-shazam');
+      safeShelfRebuild('qq-shazam', true);
+      playQueueAt(0);
+      hideLoading();
+      showToast('载入: ' + (item.title || '听歌识曲榜'));
+    }
+  }
   else if (item.kind === 'toplist') loadPlaylistIntoQueueById(item.playlistId, true, item.title || '飙升榜', { forceQueue: true });
   else if (item.kind === 'recent') playHomeRecent(item.record);
   else if (item.kind === 'profile') openHomeInsight();
@@ -20884,9 +20959,12 @@ async function refreshQQLoginStatus() {
       homeDiscoverState.loaded = false;
     } else if (!userPlaylists.some(function(pl){ return pl && pl.provider === 'qq'; })) {
       homeDiscoverState.loaded = false;
+      homeDiscoverState.loading = false;
       homeDiscoverState.loggedIn = true;
-      loadHomeDiscover(true);
       refreshUserPlaylists(true);
+      loadHomeDiscover(true);
+      // 强制重新加载 QQ 榜单（覆盖已有的网易云数据）
+      preloadToplistTracks(true);
     } else if (qqLoginStatus.stale) {
       showToast('QQ 音乐登录状态可能已失效');
     }
@@ -21131,6 +21209,10 @@ async function openQQWebLogin() {
     qqManualCookieOpen = false;
     renderUserBtn();
     refreshUserPlaylists(true);
+    homeDiscoverState.loaded = false;
+    homeDiscoverState.loggedIn = true;
+    loadHomeDiscover(true);
+    preloadToplistTracks(true);
     var qqPlaybackReady = !!info.playbackKeyReady && !result.partial;
     if (statusEl) { statusEl.textContent = qqPlaybackReady ? 'QQ 音乐会话已保存' : 'QQ 账号已同步，播放授权不完整，部分歌曲会自动换源'; statusEl.className = 'scan'; }
     setTimeout(function(){
@@ -21173,6 +21255,10 @@ async function submitQQCookieLogin() {
     if (input) input.value = '';
     renderUserBtn();
     refreshUserPlaylists(true);
+    homeDiscoverState.loaded = false;
+    homeDiscoverState.loggedIn = true;
+    loadHomeDiscover(true);
+    preloadToplistTracks(true);
     var manualQQPlaybackReady = !!info.playbackKeyReady;
     if (statusEl) { statusEl.textContent = manualQQPlaybackReady ? 'QQ 音乐会话已保存' : 'QQ 账号已同步，播放授权不完整，部分歌曲会自动换源'; statusEl.className = 'scan'; }
     setTimeout(function(){
@@ -21313,28 +21399,36 @@ async function logoutActiveAccount() {
     qqPlaylists = [];
     userPlaylists = userPlaylists.filter(function(pl){ return pl.provider !== 'qq'; });
     dualAccountMode = false;
+    homeDiscoverState.loaded = false;
+    homeDiscoverState.loggedIn = false;
+    homeDiscoverState.songs = [];
+    homeDiscoverState.playlists = [];
+    homeDiscoverState.podcasts = [];
+    listenStatsState.history = [];
+    listenStatsState.topArtist = null;
+    listenStatsState.topSong = null;
+    myPodcastCollections = [];
+    myPodcastItems = {};
+    likedSongMap = {};
     toplistTracks = []; toplistCover = '';
     newSongTracks = []; newSongCover = '';
     originalTracks = []; originalCover = '';
     hotSongTracks = []; hotSongCover = '';
     rapTracks = []; rapCover = '';
-    if (!hasAnyPlatformLogin()) {
-      homeDiscoverState.loaded = false;
-      homeDiscoverState.loggedIn = false;
-      homeDiscoverState.songs = [];
-      homeDiscoverState.playlists = [];
-      homeDiscoverState.podcasts = [];
-      listenStatsState.history = [];
-      listenStatsState.topArtist = null;
-      listenStatsState.topSong = null;
-    }
+    playQueue = []; currentIdx = -1; shelfForceQueue = false;
+    try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
     setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);
     renderHomeDiscover();
     renderHomeTiles();
+    safeShelfRebuild('logout');
+    safeRenderQueuePanel('logout', { deferWhenHidden: false });
     activeAccountProvider = firstLoggedProvider();
     renderUserBtn();
     if (hasAnyPlatformLogin()) updateUserModalUi();
     else closeUserModal();
+    try { localStorage.removeItem(HOME_LISTEN_STATS_KEY); } catch (e) {}
+    try { localStorage.removeItem(SEARCH_HISTORY_STORE_KEY); } catch (e) {}
+    playlistCoverCache = {};
     showToast('已退出 QQ 音乐');
     return;
   }
@@ -21354,11 +21448,6 @@ async function doLogout() {
   myPodcastCollections = [];
   myPodcastItems = {};
   likedSongMap = {};
-  toplistTracks = []; toplistCover = '';
-  newSongTracks = []; newSongCover = '';
-  originalTracks = []; originalCover = '';
-  hotSongTracks = []; hotSongCover = '';
-  rapTracks = []; rapCover = '';
   homeDiscoverState.loaded = false;
   homeDiscoverState.loggedIn = false;
   homeDiscoverState.songs = [];
@@ -21367,14 +21456,24 @@ async function doLogout() {
   listenStatsState.history = [];
   listenStatsState.topArtist = null;
   listenStatsState.topSong = null;
+  toplistTracks = []; toplistCover = '';
+  newSongTracks = []; newSongCover = '';
+  originalTracks = []; originalCover = '';
+  hotSongTracks = []; hotSongCover = '';
+  rapTracks = []; rapCover = '';
+  playQueue = []; currentIdx = -1; shelfForceQueue = false;
+  try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
   setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);
   renderHomeDiscover();
   renderHomeTiles();
   closeCollectModal();
-  safeRenderQueuePanel('logout', { scrollCurrent: miniQueueOpen });
+  safeRenderQueuePanel('logout', { scrollCurrent: miniQueueOpen, deferWhenHidden: false });
   renderUserBtn();
   safeShelfRebuild('logout');
   closeUserModal();
+  try { localStorage.removeItem(HOME_LISTEN_STATS_KEY); } catch (e) {}
+  try { localStorage.removeItem(SEARCH_HISTORY_STORE_KEY); } catch (e) {}
+  playlistCoverCache = {};
   showToast('已退出登录');
 }
 var startupLoginGuideShown = false;

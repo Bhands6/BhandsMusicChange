@@ -1767,10 +1767,12 @@ function requestText(targetUrl, opts, body) {
   return new Promise((resolve, reject) => {
     const u = new URL(targetUrl);
     const lib = u.protocol === 'https:' ? https : http;
-    const req = lib.request(u, {
+    const reqOpts = {
       method: opts.method || 'GET',
       headers: opts.headers || {},
-    }, response => {
+    };
+    if (u.protocol === 'https:') reqOpts.rejectUnauthorized = false;
+    const req = lib.request(u, reqOpts, response => {
       const chunks = [];
       response.on('data', chunk => chunks.push(chunk));
       response.on('end', () => {
@@ -3542,6 +3544,43 @@ const server = http.createServer(async (req, res) => {
   if (pn === '/api/qq/logout') {
     saveQQCookie('');
     sendJSON(res, { provider: 'qq', ok: true, loggedIn: false });
+    return;
+  }
+
+  // ---------- QQ 音乐榜单 ----------
+  if (pn === '/api/qq/toplist') {
+    try {
+      const topid = url.searchParams.get('topid') || '62';
+      const data = await qqGetJSON('https://u.y.qq.com/cgi-bin/musicu.fcg', {
+        data: JSON.stringify({
+          toplist: {
+            module: 'musicToplist.ToplistInfoServer',
+            method: 'GetDetail',
+            param: { topid: Number(topid), num: 20 }
+          }
+        })
+      }, { headers: { Referer: 'https://y.qq.com/n/ryqq_v2/toplist/' + topid } });
+      var toplistData = (data && data.toplist) || {};
+      var songList = (toplistData.data && toplistData.data.songInfoList) || (toplistData.data && toplistData.data.songList) || [];
+      var tracks = songList.map(function(item) {
+        var s = item && item.singer ? item : (item && item.songinfo) || {};
+        var singer = s.singer || (item && item.singer) || [];
+        return {
+          id: 'qq_' + (s.mid || s.songmid || ''),
+          name: s.name || s.songname || '',
+          artist: (Array.isArray(singer) ? singer.map(function(a) { return a.name; }).join('/') : (singer.name || '')),
+          album: (s.album && s.album.name) || s.albumname || '',
+          cover: (s.album && s.album.mid) ? ('https://y.gtimg.cn/music/photo_new/T002R300x300M000' + s.album.mid + '.jpg') : (s.albummid ? ('https://y.gtimg.cn/music/photo_new/T002R300x300M000' + s.albummid + '.jpg') : ''),
+          duration: s.interval || 0,
+          provider: 'qq',
+        };
+      }).filter(function(t) { return t.id && t.name; });
+      var topDetail = toplistData.data && toplistData.data.data || {};
+      sendJSON(res, { tracks: tracks, name: topDetail.title || topDetail.topId || '', cover: topDetail.headPicUrl || '' });
+    } catch (err) {
+      console.error('[QQToplist]', err);
+      sendJSON(res, { error: err.message, tracks: [] }, 500);
+    }
     return;
   }
 
