@@ -9,7 +9,7 @@
 ## Current Source Boundary
 
 - Active source repository: `E:\桌面\播放器软件\BhandsMusic\resources\app`
-- Current code version: `1.3.0`
+- Current code version: `1.2.0`
 - Any generated `dist/` output must come from this current source tree and be scanned before upload.
 - `.playwright-cli/`, `output/`, and `tmp/` are ignored and must not be pushed.
 - Git-tracked executable/script residue check returned 0 tracked `.exe/.dll/.scr/.bat/.cmd/.ps1/.vbs/.jse/.wsf/.hta/.xlsm` files.

@@ -5,7 +5,7 @@
 ## 当前权威入口（2026-06-24）
 
 - 当前真实代码/Git 仓库仍是 `E:\桌面\播放器软件\BhandsMusic\resources\app`。
-- 当前版本是 `v1.3.0`；上一个发布版本是 `v1.2.0`。
+- 当前版本是 `v1.2.0`；上一个发布版本是 `v1.1.0`。
 - GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
 - `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
 - GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
