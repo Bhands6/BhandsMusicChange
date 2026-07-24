@@ -102,6 +102,7 @@ var hotSongTracks = [];        // 热歌榜预加载歌曲
 var hotSongCover = '';         // 热歌榜封面
 var rapTracks = [];            // 中文说唱榜预加载歌曲
 var rapCover = '';             // 中文说唱榜封面
+var qqDailyFirstSong = null;   // QQ每日推荐第一首歌信息
 var homeVisualPresetActive = false;
 var homeVisualPrevPreset = 0;
 var HOME_LISTEN_STATS_KEY = 'bhandsmusic-listen-stats-v1';
@@ -13013,17 +13014,18 @@ function renderHomeDiscover() {
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || summary.recent && summary.recent.cover, 280);
     setHomeArt('home-library-art', '', 280);
   } else {
-    if (dailyTitle) dailyTitle.textContent = daily ? daily.name : '每日推荐';
-    if (dailySub) dailySub.textContent = daily ? ((daily.artist || songSourceLabel(daily) || '今日歌曲') + ' · 点击播放今日队列') : '同步你的今日歌曲';
-    if (heroDailyTitle) heroDailyTitle.textContent = daily ? daily.name : '每日推荐';
-    if (heroDailySub) heroDailySub.textContent = daily ? ((daily.artist || songSourceLabel(daily) || '今日歌曲') + ' · 点击播放今日队列') : '同步你的今日歌曲';
+    var dailyDisplay = qqDailyFirstSong || daily;
+    if (dailyTitle) dailyTitle.textContent = dailyDisplay ? dailyDisplay.name : '每日推荐';
+    if (dailySub) dailySub.textContent = dailyDisplay ? ((dailyDisplay.artist || songSourceLabel(dailyDisplay) || '今日歌曲') + ' · 点击播放今日队列') : '同步你的今日歌曲';
+    if (heroDailyTitle) heroDailyTitle.textContent = dailyDisplay ? dailyDisplay.name : '每日推荐';
+    if (heroDailySub) heroDailySub.textContent = dailyDisplay ? ((dailyDisplay.artist || songSourceLabel(dailyDisplay) || '今日歌曲') + ' · 点击播放今日队列') : '同步你的今日歌曲';
     if (privateTitle) privateTitle.textContent = cardSongB ? cardSongB.name : '私人雷达';
     if (privateSub) privateSub.textContent = cardSongB ? (cardSongB.artist || songSourceLabel(cardSongB) || '推荐歌曲') : (homeDiscoverState.songs.length + ' 首 · 根据今日推荐与常听偏好');
     if (libTitle) libTitle.textContent = cardSongC ? cardSongC.name : (summary.topArtist ? summary.topArtist.name : '更多歌曲');
     if (libSub) libSub.textContent = cardSongC ? (cardSongC.artist || songSourceLabel(cardSongC) || '推荐歌曲') : (summary.topArtist ? ('歌手偏好 · ' + summary.topArtist.plays + ' 次') : '播放几首后生成你的偏好');
-    setHomeArt('home-weather-art', (userPlaylists[0] && userPlaylists[0].cover) || (playlistItem && playlistItem.cover) || daily && daily.cover, 280);
-    setHomeArt('home-daily-art', daily && daily.cover, 280);
-    setHomeArt('hero-daily-art', daily && daily.cover, 800);
+    setHomeArt('home-weather-art', (userPlaylists[0] && userPlaylists[0].cover) || (playlistItem && playlistItem.cover) || dailyDisplay && dailyDisplay.cover, 280);
+    setHomeArt('home-daily-art', dailyDisplay && dailyDisplay.cover, 280);
+    setHomeArt('hero-daily-art', dailyDisplay && dailyDisplay.cover, 800);
     setHomeArt('home-private-art', cardSongB && cardSongB.cover || daily && daily.cover || summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-continue-art', summary.recent && summary.recent.cover || playlistItem && playlistItem.cover, 280);
     setHomeArt('home-profile-art', summary.topSong && summary.topSong.cover || podcastItem && podcastItem.cover, 280);
@@ -13068,7 +13070,8 @@ async function preloadToplistTracks(force) {
       newSongTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=27') : apiJson('/api/playlist/tracks?id=3779629')),
       originalTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=4') : apiJson('/api/playlist/tracks?id=2884035')),
       hotSongTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=26') : apiJson('/api/playlist/tracks?id=3778678')),
-      rapTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=67') : apiJson('/api/playlist/tracks?id=991319590'))
+      rapTracks.length ? Promise.resolve(null) : (useQQ ? apiJson('/api/qq/toplist?topid=67') : apiJson('/api/playlist/tracks?id=991319590')),
+      (useQQ && !qqDailyFirstSong) ? apiJson('/api/qq/playlist/tracks?id=8422899973') : Promise.resolve(null)
     ]);
     var changed = false;
     if (results[0] && results[0].tracks && results[0].tracks.length) {
@@ -13096,7 +13099,19 @@ async function preloadToplistTracks(force) {
       rapCover = results[4].cover || (results[4].playlist && results[4].playlist.cover) || (results[4].tracks[0] && results[4].tracks[0].cover) || '';
       changed = true;
     }
-    if (changed) renderHomeTiles();
+    if (results[5] && results[5].tracks && results[5].tracks.length) {
+      var first = results[5].tracks[0];
+      qqDailyFirstSong = {
+        name: first.name || '每日推荐',
+        artist: first.artist || '',
+        cover: first.cover || results[5].cover || (results[5].playlist && results[5].playlist.cover) || ''
+      };
+      changed = true;
+    }
+    if (changed) {
+      renderHomeTiles();
+      if (qqDailyFirstSong) renderHomeDiscover();
+    }
   } catch (e) {
     console.warn('[ToplistPreload]', e);
   }
@@ -13479,6 +13494,13 @@ async function waitForHomeDiscoverIdle(timeout) {
   var started = Date.now();
   while (homeDiscoverState.loading && Date.now() - started < (timeout || 2200)) {
     await new Promise(function(resolve){ setTimeout(resolve, 80); });
+  }
+}
+function playHomeDailyCard() {
+  if (qqLoginStatus.loggedIn) {
+    loadPlaylistIntoQueueById('qq:8422899973', true, '每日推荐', { forceQueue: true });
+  } else {
+    playHomeSong(0);
   }
 }
 async function playHomeDaily() {
@@ -16021,16 +16043,17 @@ async function playQueueAt(idx, opts) {
       showSourceFallbackNotice('音质已切换', '实际播放: ' + resolvedQualityText + '。');
     }
     if (data.trial) {
+      var loggedIn = data.loggedIn != null ? data.loggedIn : (isQQPlayback ? qqLoginStatus.loggedIn : loginStatus.loggedIn);
       var txt;
-      if (data.loggedIn && data.vipLevel === 'svip') txt = '此歌曲需要单曲、专辑购买或更高权限';
-      else if (data.loggedIn && data.vipLevel === 'vip') txt = '此歌曲需要 SVIP 或购买 · 当前仅播放试听片段';
-      else if (data.loggedIn) txt = '此歌曲需 VIP · 当前仅播放试听片段';
+      if (loggedIn && data.vipLevel === 'svip') txt = '此歌曲需要单曲、专辑购买或更高权限';
+      else if (loggedIn && data.vipLevel === 'vip') txt = '此歌曲需要 SVIP 或购买 · 当前仅播放试听片段';
+      else if (loggedIn) txt = '此歌曲需 VIP · 当前仅播放试听片段';
       else txt = '当前未登录 · 仅播放试听片段';
       document.getElementById('trial-text').textContent = txt;
       var trialLoginBtn = document.getElementById('trial-login-btn');
       if (trialLoginBtn) {
-        trialLoginBtn.style.display = data.loggedIn ? 'none' : '';
-        trialLoginBtn.onclick = function(){ openProviderLogin('netease'); };
+        trialLoginBtn.style.display = loggedIn ? 'none' : '';
+        trialLoginBtn.onclick = function(){ openProviderLogin(isQQPlayback ? 'qq' : 'netease'); };
       }
       document.getElementById('trial-banner').classList.add('show');
     }
@@ -21415,6 +21438,7 @@ async function logoutActiveAccount() {
     originalTracks = []; originalCover = '';
     hotSongTracks = []; hotSongCover = '';
     rapTracks = []; rapCover = '';
+    qqDailyFirstSong = null;
     playQueue = []; currentIdx = -1; shelfForceQueue = false;
     try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
     setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);
@@ -21461,6 +21485,7 @@ async function doLogout() {
   originalTracks = []; originalCover = '';
   hotSongTracks = []; hotSongCover = '';
   rapTracks = []; rapCover = '';
+  qqDailyFirstSong = null;
   playQueue = []; currentIdx = -1; shelfForceQueue = false;
   try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
   setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);

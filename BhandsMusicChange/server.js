@@ -2724,6 +2724,7 @@ async function handleQQSongUrl(mid, mediaMid, qualityPreference) {
       url: sip + purl,
       trial: false,
       playable: true,
+      loggedIn: !!(uin && musicKey),
       level: fileMeta.level || info.filename || '',
       quality: fileMeta.label || info.filename || '',
       filename: info.filename || '',

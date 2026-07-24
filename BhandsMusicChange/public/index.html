@@ -148,7 +148,7 @@ try {
 <!-- 未播放时显示的首页，包含快捷卡片（歌单库、每日推荐、继续听、听歌画像）和推荐横栏 -->
 <section id="empty-home" aria-label="BhandsMusic home">
   <div class="empty-home-shell">
-    <div class="home-hero" id="hero-daily-bg" onclick="playHomeSong(0)" style="cursor:pointer">
+    <div class="home-hero" id="hero-daily-bg" onclick="playHomeDailyCard()" style="cursor:pointer">
       <div class="home-hero-cover-full" id="hero-daily-art"></div>
       <div class="home-hero-cover-overlay"></div>
       <div class="home-hero-bottom">
@@ -156,7 +156,7 @@ try {
         <div class="home-card-title" id="hero-daily-title">每日推荐</div>
         <div class="home-card-sub" id="hero-daily-sub">登录后同步你的今日歌曲</div>
         <div class="home-hero-actions">
-          <button class="home-play-btn" type="button" onclick="event.stopPropagation();playHomeSong(0)" title="播放每日推荐">
+          <button class="home-play-btn" type="button" onclick="event.stopPropagation();playHomeDailyCard()" title="播放每日推荐">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             <span>立即播放</span>
           </button>
@@ -172,7 +172,7 @@ try {
         <div class="home-card-sub" id="home-weather-card-sub">打开左侧歌单库</div>
         <div class="home-card-art" id="home-weather-art"></div>
       </button>
-      <button class="home-card" data-home-tone="mix" type="button" onclick="playHomeSong(0)">
+      <button class="home-card" data-home-tone="mix" type="button" onclick="playHomeDailyCard()">
         <div class="home-card-label">Daily</div>
         <div class="home-card-title" id="home-daily-title">每日推荐</div>
         <div class="home-card-sub" id="home-daily-sub">登录后同步你的今日歌曲</div>
