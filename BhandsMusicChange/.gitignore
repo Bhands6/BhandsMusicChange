@@ -8,6 +8,7 @@ out/
 release/
 releases/
 win-unpacked/
+Read.md/
 *.exe
 *.msi
 *.blockmap
