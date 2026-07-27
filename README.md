@@ -98,4 +98,4 @@ Copyright (C) 2026 XxHuberrr.
 
 本项目采用 GPL-3.0 授权。详见 [LICENSE](./LICENSE)。
 
-MR Logo、BhandsMusic 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
+BM Logo、BhandsMusic 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
