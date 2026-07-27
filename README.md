@@ -18,7 +18,7 @@ BhandsMusic 是一款 Windows 桌面端沉浸式音乐播放器，支持多音�
 
 | 下载入口 | 推荐人群 | 链接 |
 | --- | --- | --- |
-| GitHub Release  | 能稳定访问 GitHub 的用户 | [v1.4.0 Release](https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.4.0) |
+| GitHub Release  | 能稳定访问 GitHub 的用户 | [点击下载 v1.4.0](https://github.com/Bhands6/BhandsMusicChange/releases/tag/BhandsMusic-v1.4.0) |
 
 安装时只需要下载并运行 `BhandsMusic-1.4.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
 
@@ -91,7 +91,6 @@ BhandsMusic 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官�
 
 登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只应保存在本机用户数据目录或浏览器本地存储中，不应提交到仓库。
 
-更多说明见 [PRIVACY.md](./PRIVACY.md)。
 
 ## 版权与授权
 
