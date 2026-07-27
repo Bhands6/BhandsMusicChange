@@ -17,7 +17,7 @@
 - 真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
 - GitHub 仓库：`https://github.com/Bhands6/BhandsMusicChange.git`
 - 统一备份目录：`E:\桌面\播放器软件\工作区备份`
-- 当前源码检查点：`v1.2.0`
+- 当前源码检查点：`v1.4.0`
 - 最近正式安装包 Release 基线：`v1.1.0` 纯净安装版；`v1.0.10` 及更早安装包需隔离，不再建议安装或传播。
 - 发布入口：GitHub Releases，更新检查依赖 `latest.yml` 和可选轻量补丁 JSON。
 - 更新包命名规则：从 `v1.0.10` 起，快速补丁本地文件名和 GitHub Release label 使用 `BhandsMusic-旧版本→新版本.patch.json` 这种右箭头格式；GitHub 资产底层 `name` 可能会把 `→` 净化成点号，但更新解析仍可识别 from/to 版本。
@@ -175,6 +175,13 @@
 ```
 
 ## Memory Entries
+
+### 2026-07-27 - 多音源解析系统 v1.4.0
+
+- 用户认可/要求保留：多音源解析系统（GD音乐台、UnblockNeteaseMusic、LX Music、自定义 API）已集成到项目中。
+- 涉及文件：`server/music-sources/gdmusic.js`、`server/music-sources/unblockMusic.js`、`server/music-sources/lxMusicRunner.js`、`server/music-sources/customApi.js`、`server/music-sources/musicParser.js`、`server.js`、`public/js/main.js`、`public/index.html`、`package.json`。
+- 关键参数/实现：策略模式编排（优先级 0-4），成功缓存 30 分钟，失败缓存 1 分钟；LX Music 使用 vm 沙盒执行脚本；GD音乐台使用歌名+歌手匹配防止"货不对版"；VIP/SVIP 用户优先走官方音源，非 VIP 用户优先走第三方音源；音质从高到低自动降级（flac → 320k → 128k）；「超清母带」对所有用户开放，无 SVIP 锁定。
+- 禁止回退或改坏的点：不要破坏缓存机制和策略优先级；不要给 LX Music 脚本暴露 Node.js 原生模块；不要恢复音质选择的 SVIP 锁定；VIP 用户必须优先走官方音源。
 
 ### 2026-07-21 - 品牌重命名 Mineradio → BhandsMusic
 

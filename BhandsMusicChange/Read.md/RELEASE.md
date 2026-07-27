@@ -1,5 +1,14 @@
 # 发布流程
 
+## v1.4.0 发布边界
+
+- `v1.4.0` 新增多音源解析系统：GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API。
+- 新增依赖：`axios`、`@unblockneteasemusic/server`。
+- 新增目录：`server/music-sources/`（5 个模块文件）。
+- 新增 API 端点：`/api/parse/*`（音源解析、配置管理、脚本管理）。
+- 音质选择移除 SVIP 限制，「超清母带」对所有用户开放。
+- 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
+
 ## v1.1.0 发布边界
 
 - `v1.1.0` 是纯净安装发布版，从当前 `resources/app` 可信源码重新构建。

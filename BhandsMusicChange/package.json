@@ -1,7 +1,7 @@
 {
   "name": "bhandsmusic",
   "productName": "BhandsMusic",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "沉浸式音乐播放器，融合天气电台、歌词舞台、粒子视觉和 3D 歌单架。",
   "author": "BhandsMusic",
   "main": "desktop/main.js",
@@ -26,16 +26,15 @@
       "desktop/**/*",
       "public/**/*",
       "build/**/*",
-      "server.js",
-      "dj-analyzer.js",
+      "server/**/*",
       "package.json",
       "!public/index.*.html",
       "public/index.html"
     ],
     "asar": true,
     "asarUnpack": [
-      "server.js",
-      "dj-analyzer.js"
+      "public/js/server.js",
+      "public/js/dj-analyzer.js"
     ],
     "win": {
       "executableName": "BhandsMusic",
@@ -88,6 +87,8 @@
     }
   },
   "dependencies": {
+    "@unblockneteasemusic/server": "^0.28.0",
+    "axios": "^1.18.1",
     "gsap": "^3.15.0",
     "mpg123-decoder": "^1.0.3",
     "NeteaseCloudMusicApi": "^4.32.0"

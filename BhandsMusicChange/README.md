@@ -1,7 +1,7 @@
 <h1 align="center">
   <span style="background: linear-gradient(90deg, #00f5d4, #00bbf9, #9b5de5, #f15bb5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 3em;">✦ BhandsMusic ✦</span>
   <br>
-  <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架</sub>
+  <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架 · 多音源解析</sub>
 </h1>
 
 <p align="center">
@@ -10,19 +10,21 @@
 
 <p align="center">
 BhandsMusic 是一款 Windows 桌面沉浸式音乐播放器，把天气电台、搜索播放、歌词舞台、粒子视觉和 3D 歌单架组合成一个更接近现场感的私人音乐空间。
+
+本项目基于开源项目 [Mineradio](https://github.com/XxHuberrr/Mineradio) 二次开发。
 </p>
 
 ## 立即下载 Windows 安装包
 
 | 下载入口 | 推荐人群 | 链接 |
 | --- | --- | --- |
-| GitHub Release  | 能稳定访问 GitHub 的用户 | [v1.1.1 Release](https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.1) |
+| GitHub Release  | 能稳定访问 GitHub 的用户 | [v1.4.0 Release](https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.4.0) |
 
-安装时只需要下载并运行 `BhandsMusic-1.1.1-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
+安装时只需要下载并运行 `BhandsMusic-1.4.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
 
 ## 下载或安装被拦截怎么办
 
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的蓝奏云或 GitHub Release 官方入口，文件名是 `BhandsMusic-1.1.1-Setup.exe`。
+小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名是 `BhandsMusic-1.4.0-Setup.exe`。
 
 1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
 2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
@@ -32,17 +34,18 @@ BhandsMusic 是一款 Windows 桌面沉浸式音乐播放器，把天气电台�
 
 如果 BhandsMusic 陪你多听了一首歌，也欢迎请作者一杯咖啡。
 
-1.0 的核心目标是把 BhandsMusic 重新整理成一份可公开下载的纯净安装版：默认视觉参数来自内置「默认测试」用户存档，首次启动就进入统一的视觉手感；3D 歌单架、歌词层级、用户存档和后台性能策略都在同一轮里收口。
-
 ## 当前版本
 
-当前版本：`1.0`
+当前版本：`v1.4.0`
 
-状态：1.0 纯净安装发布版。
-
+状态：多音源解析 + 智能音质降级。
 
 ## 核心特性
 
+- **多音源解析**：支持 GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API 四种第三方音源
+- **智能音源选择**：VIP/SVIP 用户优先走官方高质量音源，非 VIP 用户优先走第三方免费音源
+- **音质自动降级**：第三方音源尽量使用最高质量（flac），不可用时自动降级到 320k、128k
+- **LX Music 脚本支持**：通过沙盒执行用户上传的 LX Music 音源脚本
 - Open-Meteo 天气电台，根据当前位置、城市和天气 mood 生成更合适的播放队列
 - 首页包含天气电台、每日推荐、私人电台、继续听、听歌画像和我的歌单入口
 - Wallpaper 银河首页背景，未播放状态保持干净的星河氛围
@@ -61,9 +64,9 @@ BhandsMusic 是一款 Windows 桌面沉浸式音乐播放器，把天气电台�
 
 Windows 用户可以在 GitHub Releases 中下载安装包。
 
-正式分发以 `BhandsMusic-1.0-Setup.exe` 为准，。安装包会创建桌面快捷方式；直接运行打包版 `BhandsMusic.exe` 时，应用也会在首次启动时补创建桌面快捷方式。
+正式分发以 `BhandsMusic-1.4.0-Setup.exe` 为准。安装包会创建桌面快捷方式；直接运行打包版 `BhandsMusic.exe` 时，应用也会在首次启动时补创建桌面快捷方式。
 
-已经安装过旧版本的用户，建议卸载旧版本、隔离旧安装包后，再使用 `v1.0` 安装包纯净安装。
+已经安装过旧版本的用户，建议卸载旧版本后，再使用新版安装包纯净安装。
 
 ## 开发运行
 
@@ -85,15 +88,13 @@ BhandsMusic 会请求 GitHub Releases latest 检测新版本。远端版本高�
 
 BhandsMusic 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官方客户端，也不隶属于任何音乐平台。
 
-项目中的第三方平台接入仅用于个人学习、本地客户端体验和用户自有账号的播放辅助。请遵守对应平台的用户协议、版权规则和会员权益规则。项目不会提供绕过付费、绕过会员、破解音质或重新分发音乐内容的能力。
+项目中的第三方平台接入仅用于个人学习、本地客户端体验和用户自有账号的播放辅助。请遵守对应平台的用户协议、版权规则和会员权益规则。
 
 ## 用户数据与隐私
 
 登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只应保存在本机用户数据目录或浏览器本地存储中，不应提交到仓库。
 
 更多说明见 [PRIVACY.md](./PRIVACY.md)。
-
-
 
 ## 版权与授权
 

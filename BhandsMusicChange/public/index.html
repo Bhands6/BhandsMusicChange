@@ -510,6 +510,41 @@ try {
     </div>
   </div>
 
+  <!-- 第三方音源设置 -->
+  <div class="fx-advanced" id="fx-music-sources">
+    <div class="fx-advanced-head" onclick="document.getElementById('fx-music-sources').classList.toggle('open')">
+      <span>第三方音源</span><span class="arrow">▶</span>
+    </div>
+    <div class="fx-advanced-body">
+      <div class="fx-section-label">音源开关</div>
+      <div class="fx-toggle-grid">
+        <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 joox/tidal/netease 搜索匹配"><span>GD音乐台</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-unblockMusic" onclick="toggleMusicSource('unblockMusic')" title="UnblockNeteaseMusic - 通过咪咕/酷我/酷狗等平台匹配"><span>UnblockMusic</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-lxMusic" onclick="toggleMusicSource('lxMusic')" title="LX Music 脚本 - 需要上传音源脚本"><span>LX Music</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-custom" onclick="toggleMusicSource('custom')" title="自定义 API - 填写第三方解析接口地址"><span>自定义 API</span><span class="dot"></span></div>
+      </div>
+      <div class="fx-section-label">LX Music 脚本</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <button class="fx-mini-btn" onclick="uploadLxMusicScript()">上传脚本</button>
+        <span id="lx-script-status" style="font-size:11px;color:var(--c-text-dim,#888);">未加载</span>
+      </div>
+      <input type="file" id="lx-script-file-input" accept=".js,.txt" style="display:none" onchange="handleLxScriptUpload(event)">
+      <div id="lx-scripts-list" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;"></div>
+      <div class="fx-section-label">自定义 API 地址</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+        <input type="text" id="custom-api-url" placeholder="https://example.com/api/music" style="flex:1;height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);padding:0 8px;font-size:12px;outline:none;" onchange="saveCustomApiUrl()">
+        <select id="custom-api-method" style="height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);font-size:12px;padding:0 4px;" onchange="saveCustomApiUrl()">
+          <option value="GET">GET</option>
+          <option value="POST">POST</option>
+        </select>
+      </div>
+      <div class="fx-section-label">其他</div>
+      <div style="display:flex;gap:8px;">
+        <button class="fx-mini-btn" onclick="clearParseCache()">清除解析缓存</button>
+      </div>
+    </div>
+  </div>
+
   <div class="fx-actions">
     <button class="fx-mini-btn" onclick="resetFx()">恢复默认</button>
   </div>
@@ -680,7 +715,7 @@ try {
       <div id="quality-control" class="quality-control">
         <button id="quality-btn" class="ctrl-btn quality-pill" onclick="toggleQualityPanel(event)" title="音质"><span id="quality-btn-label">臻音</span></button>
         <div class="quality-popover" onclick="event.stopPropagation()">
-          <button class="quality-option svip-only" data-quality="jymaster" data-svip="1" onclick="setPlaybackQuality('jymaster')"><span>超清母带</span><small>SVIP / 最高规格</small></button>
+          <button class="quality-option" data-quality="jymaster" onclick="setPlaybackQuality('jymaster')"><span>超清母带</span><small>最高规格</small></button>
           <button class="quality-option" data-quality="hires" onclick="setPlaybackQuality('hires')"><span>高清臻音</span><small>默认 / 细节优先</small></button>
           <button class="quality-option" data-quality="lossless" onclick="setPlaybackQuality('lossless')"><span>无损 SQ</span><small>FLAC 优先</small></button>
           <button class="quality-option" data-quality="exhigh" onclick="setPlaybackQuality('exhigh')"><span>极高 HQ</span><small>320kbps</small></button>

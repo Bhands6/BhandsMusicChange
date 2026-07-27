@@ -2,15 +2,11 @@
 
 这个文件是给后续接管本工作区的 AI 看的。每次完成一个任务后，都要更新本文件的「工作日志」和「未完成事项」，让下一位接手者能快速知道用户偏好、当前状态和最近做过什么。
 
-## 当前权威入口（2026-06-24）
+## 当前权威入口（2026-07-27）
 
-- 当前真实代码/Git 仓库仍是 `E:\桌面\播放器软件\BhandsMusic\resources\app`。
-- 当前版本是 `v1.2.0`；上一个发布版本是 `v1.1.0`。
+- 当前版本是 `v1.4.0`；上一个发布版本是 `v1.3.0`。
 - GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
-- `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
-- GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
-- `v1.0.10` 及更早旧安装包不再信任，需要在 GitHub Release/README/SECURITY 中标记隔离。
-- `v1.1.0` 不提供从 `v1.0.10` 的软件内本地更新，不上传 `latest.yml`，不生成 `v1.0.10 -> v1.1.0` 快速补丁。
+- v1.4.0 新增多音源解析系统：GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API。
 - 新对话优先读 `AGENTS.md`、`docs/PROJECT_MEMORY.md`、`docs/HANDOFF_NEXT_CHAT.md`；涉及安全重建或发布时再读 `docs/SECURITY_REBUILD_2026-06-24.md`。本文件下面包含较早历史记录，不能覆盖上述文件的当前结论。
 
 ## 用户偏好
@@ -24,7 +20,7 @@
 - 安装器默认安装目录优先使用 `D:\BhandsMusic`，并创建桌面快捷方式。
 - 更新逻辑优先轻量快速补丁；完整安装包作为兜底。
 - 搜索结果要尽量优先原唱/官方版本，不希望翻唱排在原唱前面。
-- 感谢名单曾确认：`emily、小天才e宝、应春日、锋将军、軌跡、林中、骊、风痕、花椰菜🥦`。
+
 
 ## 工作区地图
 
@@ -37,7 +33,6 @@
 - `backups/`：人工归档/历史实验备份，已被 git 忽略。不要和 `updates/` 混用。
 - `node_modules/`：依赖目录，通常不要手动整理。
 
-## 本地分区约定
 
 ### dist 发布区
 
@@ -74,6 +69,17 @@
 这个目录是人工归档区，不参与软件更新流程。
 
 ## 已完成工作日志
+
+### 2026-07-27
+
+- 多音源解析系统集成：新增 `server/music-sources/` 目录，包含 5 个模块（musicParser、gdmusic、unblockMusic、lxMusicRunner、customApi）。
+- 服务端 API 端点：`/api/parse/music`（统一解析）、`/api/parse/config`（配置管理）、`/api/parse/lx/*`（脚本管理）、`/api/parse/cache/*`（缓存管理）。
+- 前端集成：`playQueueAt()` 中新增 `tryThirdPartyParse()` 调用，VIP 用户官方优先，非 VIP 用户第三方优先。
+- 音质策略：LX Music 从高到低降级（flac → 320k → 128k），GD音乐台使用 `br=999` 最高质量。
+- 设置 UI：`index.html` 新增「第三方音源」设置面板，支持音源开关、脚本上传/激活/删除、自定义 API 配置、缓存清除。
+- 移除 SVIP 限制：「超清母带」对所有用户开放，移除 `svip-only` 类和 `data-svip` 属性。
+- 版本升级至 v1.4.0，更新 `CHANGELOG.md`、`README.md`、`RELEASE.md`、`AGENTS.md`、`docs/PROJECT_MEMORY.md`、`AI_HANDOFF.md`。
+- 新增依赖：`axios`、`@unblockneteasemusic/server`。
 
 ### 2026-07-21
 

@@ -12516,16 +12516,12 @@ function savePlaybackQualityPreference() {
 function updatePlaybackQualityUi() {
   var label = document.getElementById('quality-btn-label');
   var btn = document.getElementById('quality-btn');
-  var canUseSvip = hasProviderSvip('netease', loginStatus);
-  var displayQuality = playbackQuality === 'jymaster' && !canUseSvip ? 'hires' : playbackQuality;
-  if (label) label.textContent = playbackQualityShortLabel(displayQuality);
-  if (btn) btn.title = playbackQuality === 'jymaster' && !canUseSvip
-    ? '音质: ' + playbackQualityLabel(displayQuality) + ' · 超清母带需网易云 SVIP'
-    : '音质: ' + playbackQualityLabel(displayQuality);
+  if (label) label.textContent = playbackQualityShortLabel(playbackQuality);
+  if (btn) btn.title = '音质: ' + playbackQualityLabel(playbackQuality);
   document.querySelectorAll('.quality-option').forEach(function(option){
     var q = normalizePlaybackQuality(option.dataset.quality);
-    var locked = option.dataset.svip === '1' && !canUseSvip;
-    option.classList.toggle('active', q === displayQuality);
+    var locked = option.dataset.svip === '1' && !hasProviderSvip('netease', loginStatus);
+    option.classList.toggle('active', q === playbackQuality);
     option.classList.toggle('locked', locked);
     option.disabled = locked;
     option.title = locked ? '需要网易云 SVIP 账号' : playbackQualityLabel(q);
@@ -12533,11 +12529,6 @@ function updatePlaybackQualityUi() {
 }
 function setPlaybackQuality(value) {
   var next = normalizePlaybackQuality(value);
-  if (next === 'jymaster' && !hasProviderSvip('netease', loginStatus)) {
-    showToast(hasPlatformLogin('netease') ? '超清母带需要网易云 SVIP' : '登录网易云 SVIP 后可用超清母带');
-    if (!hasPlatformLogin('netease')) openProviderLogin('netease');
-    return;
-  }
   playbackQuality = next;
   savePlaybackQualityPreference();
   updatePlaybackQualityUi();
@@ -15833,6 +15824,52 @@ function skipFailedQueueItem(idx, token, message) {
   currentIdx = nextIdx;
   playQueueAt(nextIdx, { fallbackDepth: 0 });
 }
+/**
+ * 尝试使用第三方音源解析音乐 URL
+ * @param {Object} song - 歌曲对象
+ * @param {string} quality - 请求的音质
+ * @returns {Promise<string|null>} 解析到的 URL，失败返回 null
+ */
+async function tryThirdPartyParse(song, quality) {
+  try {
+    var artists = [];
+    if (song.ar && Array.isArray(song.ar)) {
+      artists = song.ar.map(function (a) { return a.name; }).filter(Boolean);
+    } else if (song.artists && Array.isArray(song.artists)) {
+      artists = song.artists.map(function (a) { return a.name; }).filter(Boolean);
+    }
+    var albumName = '';
+    if (song.al && song.al.name) albumName = song.al.name;
+    else if (song.album && song.album.name) albumName = song.album.name;
+
+    showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
+
+    var response = await fetch('/api/parse/music', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: song.id,
+        name: song.name,
+        artists: artists,
+        album: albumName,
+        duration: song.dt || song.duration || 0,
+        quality: quality || 'higher'
+      })
+    });
+
+    if (!response.ok) return null;
+
+    var result = await response.json();
+    if (result && result.url) {
+      console.log('[ThirdPartyParse] 解析成功, 来源:', result.source);
+      showSourceFallbackNotice('第三方音源可用', '已通过 ' + (result.source || '第三方') + ' 获取到音频。');
+      return result.url;
+    }
+  } catch (e) {
+    console.warn('[ThirdPartyParse] 解析失败:', e);
+  }
+  return null;
+}
 async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
   opts = opts || {};
   if (opts.fallbackDepth > 0) {
@@ -16021,15 +16058,50 @@ async function playQueueAt(idx, opts) {
     markPlayPhase('source-url');
     var isQQPlayback = songProviderKey(song) === 'qq';
     var requestedQuality = normalizePlaybackQuality(opts.qualityOverride || playbackQuality);
-    if (!isQQPlayback && requestedQuality === 'jymaster' && !hasProviderSvip('netease', loginStatus)) requestedQuality = 'hires';
     if (isQQPlayback && qqPlaybackQualityCeiling && (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless')) {
       requestedQuality = qqPlaybackQualityCeiling;
     }
-    var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
-    var data = isQQPlayback
-      ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-      : await apiJson('/api/song/url?id=' + song.id + qualityParam);
-    if (token !== trackSwitchToken) return;
+
+    // 判断当前平台是否有 VIP（VIP/SVIP 优先走官方音源）
+    var currentProvider = isQQPlayback ? 'qq' : 'netease';
+    var currentStatus = isQQPlayback ? qqLoginStatus : loginStatus;
+    var hasVip = hasProviderVip(currentProvider, currentStatus);
+
+    var data = null;
+
+    if (hasVip) {
+      // VIP 用户：① 官方 API 优先 → ② 第三方 → ③ 跨平台换源
+      var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
+      data = isQQPlayback
+        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+      if (token !== trackSwitchToken) return;
+
+      if (!data.url) {
+        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
+        if (token !== trackSwitchToken) return;
+        if (thirdPartyUrl) {
+          data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+        }
+      }
+    } else {
+      // 非 VIP：① 第三方优先 → ② 官方 API → ③ 跨平台换源
+      var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
+      if (token !== trackSwitchToken) return;
+      if (thirdPartyUrl) {
+        data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+      }
+
+      if (!data || !data.url) {
+        var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
+        data = isQQPlayback
+          ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+          : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+        if (token !== trackSwitchToken) return;
+      }
+    }
+
+    // ③ 官方 + 第三方都失败 → 尝试跨平台换源
     if (!data.url) {
       if (isQQPlayback && await retryQQPlaybackWithCompatibleQuality(song, idx, token, opts, data, requestedQuality)) return;
       if (await tryAutoPlaybackFallback(song, data, idx, token, opts)) return;
@@ -17875,6 +17947,7 @@ function applyFxArchiveSnapshot(snapshot) {
   setCamMode(fx.cam);
   updateFxInputs();
   applySystemSettingsUI();
+  loadMusicSourcesConfig();
   if (typeof window.desktopWindow !== 'undefined') {
     // 对话框选择后同步
     if (window.desktopWindow.onSystemSettingsChanged) {
@@ -20033,6 +20106,192 @@ function syncSystemSettingsUI() {
   var rememberToggle = document.getElementById('t-rememberClose');
   if (rememberToggle) rememberToggle.classList.toggle('on', systemSettings.remember);
 }
+/* ============================================================
+ *  第三方音源设置
+ * ============================================================ */
+var _musicSourcesConfig = null;
+var _musicSourcesLoaded = false;
+
+/**
+ * 加载音源配置
+ */
+async function loadMusicSourcesConfig() {
+  try {
+    var resp = await fetch('/api/parse/config');
+    if (resp.ok) {
+      _musicSourcesConfig = await resp.json();
+      _musicSourcesLoaded = true;
+      syncMusicSourcesUI();
+    }
+  } catch (e) {
+    console.warn('[MusicSources] 加载配置失败:', e);
+  }
+}
+
+/**
+ * 保存音源配置到服务端
+ */
+async function saveMusicSourcesConfigToServer() {
+  if (!_musicSourcesConfig) return;
+  try {
+    await fetch('/api/parse/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(_musicSourcesConfig)
+    });
+  } catch (e) {
+    console.warn('[MusicSources] 保存配置失败:', e);
+  }
+}
+
+/**
+ * 同步音源设置 UI
+ */
+function syncMusicSourcesUI() {
+  if (!_musicSourcesConfig) return;
+  var enabled = _musicSourcesConfig.enabledSources || [];
+  ['gdmusic', 'unblockMusic', 'lxMusic', 'custom'].forEach(function (src) {
+    var el = document.getElementById('t-src-' + src);
+    if (el) el.classList.toggle('on', enabled.includes(src));
+  });
+  // LX Music 脚本状态
+  var scripts = _musicSourcesConfig.lxMusicScripts || [];
+  var activeId = _musicSourcesConfig.activeLxMusicApiId;
+  var statusEl = document.getElementById('lx-script-status');
+  if (statusEl) {
+    if (scripts.length > 0) {
+      var active = scripts.find(function (s) { return s.id === activeId; });
+      statusEl.textContent = active ? '已加载: ' + active.name : scripts.length + ' 个脚本';
+    } else {
+      statusEl.textContent = '未加载';
+    }
+  }
+  var listEl = document.getElementById('lx-scripts-list');
+  if (listEl) {
+    if (scripts.length > 0) {
+      listEl.innerHTML = scripts.map(function (s) {
+        var isActive = s.id === activeId;
+        return '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+          '<span style="flex:1;' + (isActive ? 'color:var(--c-accent,#7cf);' : '') + '">' +
+          (isActive ? '● ' : '') + escHtml(s.name) + '</span>' +
+          '<button class="fx-mini-btn" style="font-size:10px;padding:2px 6px;" onclick="activateLxScript(\'' + s.id + '\')">激活</button>' +
+          '<button class="fx-mini-btn" style="font-size:10px;padding:2px 6px;color:#f66;" onclick="deleteLxScript(\'' + s.id + '\')">删除</button>' +
+          '</div>';
+      }).join('');
+    } else {
+      listEl.innerHTML = '<span>暂无脚本</span>';
+    }
+  }
+  // 自定义 API
+  var urlInput = document.getElementById('custom-api-url');
+  if (urlInput) urlInput.value = _musicSourcesConfig.customApiUrl || '';
+  var methodSelect = document.getElementById('custom-api-method');
+  if (methodSelect) methodSelect.value = _musicSourcesConfig.customApiMethod || 'GET';
+}
+
+/**
+ * 切换音源启用状态
+ */
+function toggleMusicSource(source) {
+  if (!_musicSourcesConfig) return;
+  var enabled = _musicSourcesConfig.enabledSources || [];
+  var idx = enabled.indexOf(source);
+  if (idx >= 0) {
+    enabled.splice(idx, 1);
+  } else {
+    enabled.push(source);
+  }
+  _musicSourcesConfig.enabledSources = enabled;
+  syncMusicSourcesUI();
+  saveMusicSourcesConfigToServer();
+}
+
+/**
+ * 上传 LX Music 脚本
+ */
+function uploadLxMusicScript() {
+  var input = document.getElementById('lx-script-file-input');
+  if (input) input.click();
+}
+
+/**
+ * 处理 LX Music 脚本文件上传
+ */
+async function handleLxScriptUpload(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  try {
+    var text = await file.text();
+    var resp = await fetch('/api/parse/lx/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: file.name.replace(/\.(js|txt)$/, ''), script: text })
+    });
+    var result = await resp.json();
+    if (result.success) {
+      showToast('脚本上传成功: ' + (result.sources || []).join(', '));
+      await loadMusicSourcesConfig();
+    } else {
+      showToast('脚本上传失败: ' + (result.error || '未知错误'));
+    }
+  } catch (e) {
+    showToast('脚本上传失败: ' + e.message);
+  }
+  event.target.value = '';
+}
+
+/**
+ * 激活 LX Music 脚本
+ */
+async function activateLxScript(scriptId) {
+  if (!_musicSourcesConfig) return;
+  _musicSourcesConfig.activeLxMusicApiId = scriptId;
+  syncMusicSourcesUI();
+  await saveMusicSourcesConfigToServer();
+  showToast('已切换脚本');
+}
+
+/**
+ * 删除 LX Music 脚本
+ */
+async function deleteLxScript(scriptId) {
+  try {
+    await fetch('/api/parse/lx/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: scriptId })
+    });
+    await loadMusicSourcesConfig();
+    showToast('脚本已删除');
+  } catch (e) {
+    showToast('删除失败: ' + e.message);
+  }
+}
+
+/**
+ * 保存自定义 API 地址
+ */
+function saveCustomApiUrl() {
+  if (!_musicSourcesConfig) return;
+  var urlInput = document.getElementById('custom-api-url');
+  var methodSelect = document.getElementById('custom-api-method');
+  _musicSourcesConfig.customApiUrl = urlInput ? urlInput.value.trim() : '';
+  _musicSourcesConfig.customApiMethod = methodSelect ? methodSelect.value : 'GET';
+  saveMusicSourcesConfigToServer();
+}
+
+/**
+ * 清除解析缓存
+ */
+async function clearParseCache() {
+  try {
+    await fetch('/api/parse/cache/clear', { method: 'POST' });
+    showToast('解析缓存已清除');
+  } catch (e) {
+    showToast('清除缓存失败');
+  }
+}
+
 function toggleFxPanel(force) {
   var el = document.getElementById('fx-panel');
   if (!el) return;

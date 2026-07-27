@@ -1764,7 +1764,7 @@ async function createWindow() {
   }
 
   // 启动本地 HTTP 服务器（提供前端页面和 API）
-  localServer = require(path.join(__dirname, '..', 'server.js'));
+  localServer = require(path.join(__dirname, '..', 'public', 'js', 'server.js'));
   await waitForServer(localServer);
 
   // 计算初始窗口尺寸

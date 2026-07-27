@@ -10,6 +10,8 @@ BhandsMusic 使用了以下第三方项目或服务。各项目版权归其原�
 - music-tempo
 - NeteaseCloudMusicApi
 - mpg123-decoder
+- axios
+- @unblockneteasemusic/server
 
 ## Third-party Services
 

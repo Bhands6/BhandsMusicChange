@@ -62,19 +62,91 @@ const tls = require('tls');         // TLS 证书管理
 const { once } = require('events'); // 事件转 Promise
 const { fileURLToPath } = require('url');  // URL 转文件路径
 const { analyzePodcastDjStream, analyzePodcastDjIntro } = require('./dj-analyzer');  // DJ 节拍分析器
+const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('../../server/music-sources/musicParser');  // 多音源解析器
+const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('../../server/music-sources/lxMusicRunner');  // LX Music 脚本执行器
 
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
 const HOST = process.env.HOST || '0.0.0.0';     // 监听地址
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';  // 默认 User-Agent
 
+/* ==================== 路径基准 ==================== */
+// server.js 现在位于 public/js/，项目根目录需要向上两级
+const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+
 /* ==================== 文件路径配置 ==================== */
-const COOKIE_FILE = process.env.COOKIE_FILE || path.join(__dirname, '.cookie');           // 网易云 Cookie 文件
-const QQ_COOKIE_FILE = process.env.QQ_COOKIE_FILE || path.join(__dirname, '.qq-cookie');  // QQ音乐 Cookie 文件
-const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(__dirname, 'updates');         // 更新工作目录
+const COOKIE_FILE = process.env.COOKIE_FILE || path.join(PROJECT_ROOT, '.cookie');           // 网易云 Cookie 文件
+const QQ_COOKIE_FILE = process.env.QQ_COOKIE_FILE || path.join(PROJECT_ROOT, '.qq-cookie');  // QQ音乐 Cookie 文件
+const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
 const BEATMAP_CACHE_DIR = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';  // 节拍映射缓存目录
+const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json');  // 音源配置文件
+
+/* ==================== 音源配置管理 ==================== */
+
+/**
+ * 默认音源配置
+ */
+const DEFAULT_MUSIC_SOURCES_CONFIG = {
+  enabledSources: ['gdmusic', 'unblockMusic'],
+  quality: 'higher',
+  lxMusicScripts: [],
+  activeLxMusicApiId: null,
+  customApiUrl: '',
+  customApiMethod: 'GET',
+  unblockPlatforms: ['migu', 'kugou', 'kuwo', 'pyncmd']
+};
+
+/**
+ * 读取音源配置
+ * @returns {Object}
+ */
+function readMusicSourcesConfig() {
+  try {
+    if (fs.existsSync(MUSIC_SOURCES_CONFIG_FILE)) {
+      const raw = fs.readFileSync(MUSIC_SOURCES_CONFIG_FILE, 'utf8');
+      const config = JSON.parse(raw);
+      return { ...DEFAULT_MUSIC_SOURCES_CONFIG, ...config };
+    }
+  } catch (e) {
+    console.warn('[MusicSources] 读取配置失败:', e.message);
+  }
+  return { ...DEFAULT_MUSIC_SOURCES_CONFIG };
+}
+
+/**
+ * 保存音源配置
+ * @param {Object} config
+ */
+function saveMusicSourcesConfig(config) {
+  try {
+    fs.writeFileSync(MUSIC_SOURCES_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+    console.log('[MusicSources] 配置已保存');
+  } catch (e) {
+    console.error('[MusicSources] 保存配置失败:', e.message);
+  }
+}
+
+// 启动时加载已注册的 LX Music 脚本
+(function initLxMusicScripts() {
+  const config = readMusicSourcesConfig();
+  if (config.lxMusicScripts && config.lxMusicScripts.length > 0) {
+    for (const script of config.lxMusicScripts) {
+      if (script.script) {
+        initRunner(script.id, script.script, script.name, script.id === config.activeLxMusicApiId)
+          .then(function (runner) {
+            if (runner) {
+              console.log('[MusicSources] LX Music 脚本已加载:', script.name);
+            }
+          })
+          .catch(function (err) {
+            console.warn('[MusicSources] LX Music 脚本加载失败:', script.name, err.message);
+          });
+      }
+    }
+  }
+})();
 
 /* ==================== 应用信息 ==================== */
 const APP_PACKAGE = readPackageInfo();
@@ -84,7 +156,7 @@ const UPDATE_CONFIG = readUpdateConfig(APP_PACKAGE);  // 更新配置
 /* ==================== 补丁系统配置 ==================== */
 const PATCH_MAX_BYTES = 12 * 1024 * 1024;  // 补丁文件最大 12MB
 const PATCH_ALLOWED_ROOTS = new Set(['public', 'desktop', 'build']);  // 允许补丁的目录
-const PATCH_ALLOWED_FILES = new Set(['server.js', 'dj-analyzer.js', 'package.json', 'package-lock.json']);  // 允许补丁的根文件
+const PATCH_ALLOWED_FILES = new Set(['public/js/server.js', 'public/js/dj-analyzer.js', 'package.json', 'package-lock.json']);  // 允许补丁的根文件
 
 /* ==================== 更新系统常量 ==================== */
 const UPDATE_FALLBACK_NOTES = [
@@ -227,7 +299,7 @@ function sendJSON(res, data, status) {
 }
 function readPackageInfo() {
   try {
-    const raw = fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8');
+    const raw = fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8');
     return JSON.parse(raw);
   } catch (e) {
     return {};
@@ -1170,8 +1242,8 @@ function safePatchRelativePath(value) {
 function patchTargetPath(rel) {
   const safeRel = safePatchRelativePath(rel);
   if (!safeRel) return null;
-  const target = path.resolve(__dirname, safeRel);
-  const root = path.resolve(__dirname);
+  const target = path.resolve(PROJECT_ROOT, safeRel);
+  const root = path.resolve(PROJECT_ROOT);
   if (target !== root && !target.startsWith(root + path.sep)) return null;
   return target;
 }
@@ -4268,14 +4340,223 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  /* ==================== 多音源解析 API ==================== */
+
+  // POST /api/parse/music - 统一音源解析
+  if (pn === '/api/parse/music' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const { id, name, artists, album, duration, quality } = body;
+
+      if (!id) {
+        sendJSON(res, { error: 'Missing song id' }, 400);
+        return;
+      }
+
+      const config = readMusicSourcesConfig();
+
+      const result = await parseMusic({
+        id: parseInt(String(id), 10),
+        name: name || '',
+        artists: Array.isArray(artists) ? artists : [],
+        album: album || '',
+        duration: duration || 0,
+        quality: quality || config.quality || 'higher',
+        enabledSources: config.enabledSources || ['gdmusic', 'unblockMusic'],
+        customApiUrl: config.customApiUrl || '',
+        customApiMethod: config.customApiMethod || 'GET',
+        unblockPlatforms: config.unblockPlatforms || ['migu', 'kugou', 'kuwo', 'pyncmd']
+      });
+
+      if (result && result.url) {
+        sendJSON(res, {
+          url: result.url,
+          source: result.source,
+          quality: result.quality,
+          br: result.br
+        });
+      } else {
+        sendJSON(res, { url: null, message: '所有音源均解析失败' }, 404);
+      }
+    } catch (err) {
+      console.error('[ParseMusic]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/parse/config - 获取音源配置
+  if (pn === '/api/parse/config' && req.method === 'GET') {
+    try {
+      const config = readMusicSourcesConfig();
+      // 不返回脚本内容（太大），只返回元信息
+      const safeConfig = {
+        ...config,
+        lxMusicScripts: (config.lxMusicScripts || []).map(function (s) {
+          return { id: s.id, name: s.name, hasScript: !!s.script };
+        })
+      };
+      sendJSON(res, safeConfig);
+    } catch (err) {
+      console.error('[ParseConfig]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/parse/config - 更新音源配置
+  if (pn === '/api/parse/config' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const currentConfig = readMusicSourcesConfig();
+
+      // 合并配置（保留脚本数据）
+      const newConfig = { ...currentConfig };
+      if (body.enabledSources !== undefined) newConfig.enabledSources = body.enabledSources;
+      if (body.quality !== undefined) newConfig.quality = body.quality;
+      if (body.customApiUrl !== undefined) newConfig.customApiUrl = body.customApiUrl;
+      if (body.customApiMethod !== undefined) newConfig.customApiMethod = body.customApiMethod;
+      if (body.unblockPlatforms !== undefined) newConfig.unblockPlatforms = body.unblockPlatforms;
+      if (body.activeLxMusicApiId !== undefined) {
+        newConfig.activeLxMusicApiId = body.activeLxMusicApiId;
+        setActiveRunner(body.activeLxMusicApiId);
+      }
+
+      saveMusicSourcesConfig(newConfig);
+      sendJSON(res, { success: true, config: newConfig });
+    } catch (err) {
+      console.error('[ParseConfig]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/parse/lx/upload - 上传 LX Music 脚本
+  if (pn === '/api/parse/lx/upload' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const { name, script } = body;
+
+      if (!script) {
+        sendJSON(res, { error: 'Missing script content' }, 400);
+        return;
+      }
+
+      const scriptId = 'lx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      const scriptName = name || 'LX Music 脚本 ' + scriptId;
+
+      // 初始化执行器
+      const runner = await initRunner(scriptId, script, scriptName, true);
+
+      if (runner) {
+        // 保存到配置
+        const config = readMusicSourcesConfig();
+        config.lxMusicScripts = config.lxMusicScripts || [];
+        config.lxMusicScripts.push({
+          id: scriptId,
+          name: scriptName,
+          script: script
+        });
+        config.activeLxMusicApiId = scriptId;
+        saveMusicSourcesConfig(config);
+
+        sendJSON(res, {
+          success: true,
+          id: scriptId,
+          name: scriptName,
+          sources: runner.getAvailableSourceKeys()
+        });
+      } else {
+        sendJSON(res, { error: '脚本执行失败，未导出有效音源' }, 400);
+      }
+    } catch (err) {
+      console.error('[LxUpload]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/parse/lx/list - 获取 LX Music 脚本列表
+  if (pn === '/api/parse/lx/list' && req.method === 'GET') {
+    try {
+      const config = readMusicSourcesConfig();
+      const scripts = (config.lxMusicScripts || []).map(function (s) {
+        return { id: s.id, name: s.name, active: s.id === config.activeLxMusicApiId };
+      });
+      const runners = listLxRunners();
+      sendJSON(res, { scripts: scripts, runners: runners });
+    } catch (err) {
+      console.error('[LxList]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/parse/lx/delete - 删除 LX Music 脚本
+  if (pn === '/api/parse/lx/delete' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const { id } = body;
+
+      if (!id) {
+        sendJSON(res, { error: 'Missing script id' }, 400);
+        return;
+      }
+
+      removeRunner(id);
+
+      const config = readMusicSourcesConfig();
+      config.lxMusicScripts = (config.lxMusicScripts || []).filter(function (s) {
+        return s.id !== id;
+      });
+      if (config.activeLxMusicApiId === id) {
+        config.activeLxMusicApiId = config.lxMusicScripts.length > 0
+          ? config.lxMusicScripts[0].id
+          : null;
+        if (config.activeLxMusicApiId) {
+          setActiveRunner(config.activeLxMusicApiId);
+        }
+      }
+      saveMusicSourcesConfig(config);
+
+      sendJSON(res, { success: true });
+    } catch (err) {
+      console.error('[LxDelete]', err);
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/parse/cache/clear - 清除解析缓存
+  if (pn === '/api/parse/cache/clear' && req.method === 'POST') {
+    try {
+      clearAllCache();
+      sendJSON(res, { success: true, message: '缓存已清除' });
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/parse/cache/stats - 获取缓存统计
+  if (pn === '/api/parse/cache/stats' && req.method === 'GET') {
+    try {
+      const stats = getCacheStats();
+      sendJSON(res, stats);
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
   // ---------- 静态资源 ----------
   if (pn === '/favicon.ico') {
-    serveStatic(res, path.join(__dirname, 'build', 'icon.ico'));
+    serveStatic(res, path.join(PROJECT_ROOT, 'build', 'icon.ico'));
     return;
   }
 
   let filePath = pn === '/' ? '/index.html' : pn;
-  filePath = path.join(__dirname, 'public', filePath);
+  filePath = path.join(PROJECT_ROOT, 'public', filePath);
   serveStatic(res, filePath);
 });
 

@@ -1,6 +1,6 @@
 # BhandsMusic Next Chat Handoff
 
-更新时间：2026-07-21
+更新时间：2026-07-27
 
 ## 新对话先执行
 
@@ -13,9 +13,10 @@ Get-Content docs\PROJECT_MEMORY.md
 Get-Content docs\HANDOFF_NEXT_CHAT.md
 ```
 
-如涉及 3D 歌单架、安全重建、发布、安装包或旧备份取用，再读：
+如涉及音源解析、3D 歌单架、安全重建、发布、安装包或旧备份取用，再读：
 
 ```powershell
+Get-Content server\music-sources\musicParser.js
 Get-Content docs\3D_PLAYLIST_SHELF_MEMORY.md
 Get-Content docs\SECURITY_REBUILD_2026-06-24.md
 Get-Content CHANGELOG.md -TotalCount 80
@@ -25,15 +26,26 @@ Get-Content RELEASE.md
 ## 当前状态
 
 - 当前真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
-- 当前版本：`v1.2.0`
+- 当前版本：`v1.4.0`
 - 当前发布策略：纯净安装版，从当前可信源码重新构建；`v1.0.10` 及更早旧安装包需要隔离，不再建议安装或传播。
-- 本次发布不做 `v1.0.10 -> v1.1.0` 软件内本地更新，不上传 `latest.yml`，不生成快速补丁。
 - 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
 - GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
 - `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
 - GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
+- v1.4.0 新增多音源解析系统，详见 `AGENTS.md` 的 Multi-Source Music Parsing 章节。
 
-## 本轮重点（2026-07-21）
+## 本轮重点（2026-07-27）
+
+- 多音源解析系统集成：新增 `server/music-sources/` 目录，5 个模块（musicParser、gdmusic、unblockMusic、lxMusicRunner、customApi）。
+- 服务端 API：`/api/parse/music`、`/api/parse/config`、`/api/parse/lx/*`、`/api/parse/cache/*`。
+- 前端集成：`tryThirdPartyParse()` 调用，VIP 优先官方，非 VIP 优先第三方。
+- 音质降级：LX Music flac → 320k → 128k，GD音乐台 br=999 最高质量。
+- 设置 UI：「第三方音源」面板（音源开关、脚本管理、API 配置、缓存清除）。
+- 移除 SVIP 限制：「超清母带」对所有用户开放。
+- 版本升级至 v1.4.0，所有文档已同步更新。
+- 新增依赖：`axios`、`@unblockneteasemusic/server`。
+
+## 上轮重点（2026-07-21）
 
 - 品牌重命名 Mineradio → BhandsMusic，全项目 25+ 文件已替换。
 - GitHub 仓库改为 `Bhands6/BhandsMusicChange`，`package.json` 和所有文档已同步。

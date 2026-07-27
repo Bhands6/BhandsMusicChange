@@ -4,6 +4,17 @@
 
 当前只维护最新公开版本。
 
+## LX Music Script Security
+
+LX Music 脚本在 Node.js `vm` 模块沙盒中执行，无法访问以下内容：
+
+- Node.js 原生模块（`fs`、`child_process`、`net` 等）
+- Electron 主进程 API
+- 用户文件系统
+- 系统命令执行
+
+沙盒仅提供基础 JavaScript 全局对象和 HTTP 请求能力（通过 `fetch` 代理）。用户应只上传来源可信的 LX Music 脚本。
+
 ## Installer Safety Notice
 
 `v1.0.10` 及更早旧安装包不再建议继续安装或传播。请将旧 `.exe` 安装包视为不可信历史产物并隔离保留；需要安装 BhandsMusic 时，请使用 `v1.1.0` 或更新版本的 GitHub Release 安装包。
