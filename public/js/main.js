@@ -16101,12 +16101,30 @@ async function playQueueAt(idx, opts) {
       }
     }
 
-    // ③ 官方 + 第三方都失败 → 尝试跨平台换源
+    // ③ 官方 + 第三方都失败 → 尝试跨平台换源 → 最后兜底试听片段
     if (!data.url) {
       if (isQQPlayback && await retryQQPlaybackWithCompatibleQuality(song, idx, token, opts, data, requestedQuality)) return;
       if (await tryAutoPlaybackFallback(song, data, idx, token, opts)) return;
-      handlePlaybackUnavailable(song, data);
-      return;
+
+      // 兜底: 尝试获取官方试听片段（30秒）
+      if (!isQQPlayback && song.type !== 'local' && song.type !== 'podcast') {
+        try {
+          showSourceFallbackNotice('正在获取试听片段', '完整版不可用，尝试获取官方试听...');
+          var trialData = await apiJson('/api/song/url?id=' + song.id + '&quality=standard');
+          if (token !== trackSwitchToken) return;
+          if (trialData && trialData.url) {
+            data = trialData;
+            showSourceFallbackNotice('试听片段可用', '完整版不可用，当前播放官方 30 秒试听。');
+          }
+        } catch (e) {
+          console.warn('[TrialFallback] 获取试听失败:', e);
+        }
+      }
+
+      if (!data.url) {
+        handlePlaybackUnavailable(song, data);
+        return;
+      }
     }
     var resolvedQualityText = playbackResolvedQualityText(data);
     if (!isQQPlayback && playbackQualityWasDowngraded(requestedQuality, data.level)) {

@@ -95,7 +95,7 @@ const DEFAULT_MUSIC_SOURCES_CONFIG = {
   activeLxMusicApiId: null,
   customApiUrl: '',
   customApiMethod: 'GET',
-  unblockPlatforms: ['migu', 'kugou', 'kuwo', 'pyncmd']
+  unblockPlatforms: ['migu', 'kugou', 'pyncmd']
 };
 
 /**
