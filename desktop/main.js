@@ -9,7 +9,12 @@ const net = require('net');
 const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
+const crypto = require('crypto');
 const systemMemory = require('./system-memory'); // 内存管家：应用工作集压缩 + 系统级内存释放（移植自上游 Mineradio 2.2.0）
+const {
+  LocalMusicLibrary,
+  registerLocalMusicScheme,
+} = require('./local-music-library'); // 本地音乐库：批量导入/元数据提取/持久化索引/自定义协议流播（移植自上游 Mineradio 2.2.0）
 
 // ==================== 全局状态变量 ====================
 let mainWindow = null;                    // 主窗口实例
@@ -1958,6 +1963,88 @@ ipcMain.handle('bhandsmusic-memory-purge-system', async (_event, payload = {}) =
   }
 });
 
+// ==================== 本地音乐库 IPC（移植自上游 Mineradio 2.2.0） ====================
+
+/** 列出本地音乐库全部曲目 */
+ipcMain.handle('bhandsmusic-local-library-list', async () => {
+  try {
+    return await localMusicLibrary.listTracks();
+  } catch (error) {
+    return { ok: false, count: 0, tracks: [], error: error.message || 'LOCAL_LIBRARY_READ_FAILED' };
+  }
+});
+
+/** 读取本地曲目歌词（.lrc sidecar 或内嵌歌词） */
+ipcMain.handle('bhandsmusic-local-library-lyric', (_event, localFileId) => {
+  try {
+    return localMusicLibrary.lyricForTrack(localFileId);
+  } catch (error) {
+    return { ok: false, lyric: '', lyricSource: '', error: error.message || 'LOCAL_LYRIC_READ_FAILED' };
+  }
+});
+
+/** 授权导入：校验渲染层传来的文件路径（拒绝 UNC/相对路径），签发 3 分钟有效的导入 token */
+function pruneLocalMusicImportCapabilities() {
+  const now = Date.now();
+  for (const [token, capability] of localMusicImportCapabilities) {
+    if (!capability || capability.expiresAt <= now) localMusicImportCapabilities.delete(token);
+  }
+  while (localMusicImportCapabilities.size > 8) {
+    const oldest = localMusicImportCapabilities.keys().next().value;
+    if (!oldest) break;
+    localMusicImportCapabilities.delete(oldest);
+  }
+}
+
+ipcMain.handle('bhandsmusic-local-library-authorize', (event, payload = {}) => {
+  const files = [];
+  const seen = new Set();
+  for (const item of (Array.isArray(payload && payload.files) ? payload.files : []).slice(0, 50000)) {
+    const requestedPath = String(item && item.path || '').trim();
+    if (!requestedPath || /^[\\/]{2}/.test(requestedPath) || !path.isAbsolute(requestedPath)) continue;
+    if (!/\.(mp3|flac|wav|ogg|m4a|aac|opus)$/i.test(requestedPath)) continue;
+    let filePath = '';
+    try {
+      filePath = fs.realpathSync.native ? fs.realpathSync.native(requestedPath) : fs.realpathSync(requestedPath);
+      if (/^[\\/]{2}/.test(filePath) || !fs.statSync(filePath).isFile()) continue;
+    } catch (_) {
+      continue;
+    }
+    const identity = process.platform === 'win32' ? filePath.toLowerCase() : filePath;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    files.push({
+      path: filePath,
+      relativePath: String(item && item.relativePath || path.basename(filePath)).replace(/\0/g, '').slice(0, 2000),
+    });
+  }
+  if (!files.length) return { ok: false, count: 0, error: 'NO_AUTHORIZED_LOCAL_AUDIO' };
+  pruneLocalMusicImportCapabilities();
+  const token = crypto.randomBytes(24).toString('hex');
+  localMusicImportCapabilities.set(token, {
+    senderId: event.sender.id,
+    files,
+    expiresAt: Date.now() + 3 * 60 * 1000,
+  });
+  return { ok: true, count: files.length, token };
+});
+
+/** 执行导入：凭 token 换取已授权文件清单，解析元数据并写入持久化索引 */
+ipcMain.handle('bhandsmusic-local-library-import', async (event, payload = {}) => {
+  pruneLocalMusicImportCapabilities();
+  const token = String(payload && payload.token || '').trim().toLowerCase();
+  const capability = /^[a-f0-9]{48}$/.test(token) ? localMusicImportCapabilities.get(token) : null;
+  if (!capability || capability.senderId !== event.sender.id || capability.expiresAt <= Date.now()) {
+    return { ok: false, count: 0, tracks: [], error: 'LOCAL_IMPORT_CAPABILITY_INVALID' };
+  }
+  localMusicImportCapabilities.delete(token);
+  try {
+    return await localMusicLibrary.importFiles(capability.files, { replace: false });
+  } catch (error) {
+    return { ok: false, count: 0, tracks: [], error: error.code || error.message || 'LOCAL_LIBRARY_IMPORT_FAILED' };
+  }
+});
+
 // ==================== 主窗口创建与应用生命周期 ====================
 
 /**
@@ -2247,6 +2334,12 @@ async function createWindow() {
 app.setName(APP_NAME);
 if (process.platform === 'win32') app.setAppUserModelId(APP_USER_MODEL_ID);
 
+// ==================== 本地音乐库（移植自上游 Mineradio 2.2.0） ====================
+// registerSchemesAsPrivileged 必须在 app ready 之前调用
+registerLocalMusicScheme(require('electron').protocol);
+const localMusicLibrary = new LocalMusicLibrary({ userDataPath: app.getPath('userData') });
+const localMusicImportCapabilities = new Map(); // 导入授权 token -> { senderId, files, expiresAt }
+
 if (!gotSingleInstanceLock) {
   // 未获取到单实例锁，说明已有实例在运行，退出当前实例
   app.quit();
@@ -2266,6 +2359,12 @@ if (!gotSingleInstanceLock) {
 
   // 应用就绪后初始化
   app.whenReady().then(async () => {
+    // 本地音乐库：注册 bhandsmusic-local:// 流式播放协议
+    try {
+      await localMusicLibrary.installProtocol(require('electron').protocol);
+    } catch (e) {
+      console.error('local music protocol install failed:', e.message);
+    }
     // 内存管家：PowerShell 临时脚本目录放在应用 userData 下，不污染系统临时目录
     try {
       systemMemory.setNativeTempPath(path.join(app.getPath('userData'), 'native-helper-temp'));

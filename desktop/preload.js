@@ -123,6 +123,31 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   /** 手动系统级内存释放（autoElevate=true 时可请求管理员权限） */
   purgeSystemMemory: (payload) => ipcRenderer.invoke('bhandsmusic-memory-purge-system', payload || {}),
 
+  // ==================== 本地音乐库（移植自上游 Mineradio 2.2.0） ====================
+  /** 列出本地音乐库全部曲目（含 bhandsmusic-local:// 流播地址） */
+  listLocalMusicLibrary: () => ipcRenderer.invoke('bhandsmusic-local-library-list'),
+  /** 读取本地曲目歌词（localFileId 或 local:xxx 格式） */
+  readLocalMusicLyric: (localFileId) => ipcRenderer.invoke('bhandsmusic-local-library-lyric', String(localFileId || '')),
+  /**
+   * 导入本地音频文件（authorize + import 两步封装）
+   * @param {File[]} files - 渲染层 File 对象数组（Electron 环境下带 .path 绝对路径）
+   */
+  importLocalMusicFiles: async (files) => {
+    const entries = [];
+    const list = Array.prototype.slice.call(files || []);
+    for (const file of list) {
+      const filePath = file && file.path;
+      if (!filePath) continue;
+      entries.push({ path: filePath, relativePath: file.webkitRelativePath || file.name || '' });
+    }
+    if (!entries.length) return { ok: false, count: 0, tracks: [], error: 'NO_AUTHORIZED_LOCAL_AUDIO' };
+    const authorization = await ipcRenderer.invoke('bhandsmusic-local-library-authorize', { files: entries });
+    if (!authorization || authorization.ok !== true) {
+      return { ok: false, count: 0, tracks: [], error: (authorization && authorization.error) || 'LOCAL_IMPORT_AUTHORIZE_FAILED' };
+    }
+    return ipcRenderer.invoke('bhandsmusic-local-library-import', { token: authorization.token });
+  },
+
   // ==================== 窗口状态监听 ====================
   /**
    * 监听窗口状态变化（最大化、全屏、焦点、显示器信息等）
