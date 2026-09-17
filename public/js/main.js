@@ -586,6 +586,7 @@ var fxDefaults = {
   lyricGlowParticles: false,
   lyricCameraLock: false,
   particleLyrics: true,    // v7.2: 粒子歌词
+  particleLyricLines: 1,   // 控制栏"词"按钮三态：1=单行 2=多行（当前行+上一行停驻）
   backCover: false,        // 旧的封面背面粒子层关闭；浮空粒子层会跟随封面翻转
   shelf: 'side',
   shelfCameraMode: 'static',
@@ -680,6 +681,7 @@ var PACKAGED_DEFAULT_FX_SNAPSHOT = Object.freeze({
   performanceQuality: 'high',
   liveBackgroundKeep: false,
   particleLyrics: true,
+  particleLyricLines: 1,
   backCover: false,
   shelf: 'side',
   shelfCameraMode: 'static',
@@ -6312,6 +6314,34 @@ function updateLyricMeshProgress(mesh, progress) {
   mesh.userData.lastLyricProgress = progress;
 }
 
+// 多行模式停驻（park）行管理：停驻行保留在 outgoing 队列里，靠 userData.parked 标志走常驻动画
+function expireParkedLyricLines() {
+  var keep = Math.max(0, (fx.particleLyricLines === 2 ? 2 : 1) - 1);
+  var parked = 0;
+  var i, m;
+  for (i = 0; i < stageLyrics.outgoing.length; i++) {
+    m = stageLyrics.outgoing[i];
+    if (m && m.userData && m.userData.parked) parked++;
+  }
+  for (i = 0; i < stageLyrics.outgoing.length && parked > keep; i++) {
+    m = stageLyrics.outgoing[i];
+    if (m && m.userData && m.userData.parked) {
+      m.userData.parked = false;   // 转普通退场淡出
+      m.userData.age = 0;
+      parked--;
+    }
+  }
+}
+function unparkAllLyricLines() {
+  if (!stageLyrics.outgoing || !stageLyrics.outgoing.length) return;
+  for (var i = 0; i < stageLyrics.outgoing.length; i++) {
+    var m = stageLyrics.outgoing[i];
+    if (m && m.userData && m.userData.parked) {
+      m.userData.parked = false;
+      m.userData.age = 0;
+    }
+  }
+}
 function showStageLine(text, redrawOnly) {
   createLyricsParticles();
   if (!stageLyrics.group) return;
@@ -6321,8 +6351,16 @@ function showStageLine(text, redrawOnly) {
     stageLyrics.current = null;
   } else if (stageLyrics.current) {
     stageLyrics.current.userData.state = 'out';
-    stageLyrics.current.userData.age = 0;
-    stageLyrics.outgoing.push(stageLyrics.current);
+    if (fx.particleLyricLines === 2) {
+      // 多行模式：旧行不立刻淡出，缩小上移停驻到当前行上方
+      stageLyrics.current.userData.parked = true;
+      stageLyrics.current.userData.age = 0;
+      stageLyrics.outgoing.push(stageLyrics.current);
+      expireParkedLyricLines();
+    } else {
+      stageLyrics.current.userData.age = 0;
+      stageLyrics.outgoing.push(stageLyrics.current);
+    }
   }
   stageLyrics.currentText = text;
   var mesh = buildLyricMesh(text);
@@ -6612,6 +6650,22 @@ function updateStageLyrics3D(dt) {
       }
       return true;
     }
+    if (mesh.userData.parked) {
+      // 多行模式停驻行：缩小上移到当前行上方，半透明常驻，不进退场动画
+      var pa = Math.min(1, mesh.userData.age / 0.42);
+      pa = pa * pa * (3 - 2 * pa);
+      if (data.textMat) data.textMat.uniforms.uOpacity.value = 0.34 * pa * shelfDetailLyricProfile.outgoing;
+      if (data.readabilityMat) data.readabilityMat.opacity = 0.26 * pa * (shelfDetailOpen ? shelfDetailLyricProfile.readability : 0.62);
+      if (data.textMat && data.textMat.uniforms.uSolar) data.textMat.uniforms.uSolar.value *= 0.80;
+      if (data.glowMat) data.glowMat.opacity = 0;
+      if (data.sparkMat) setLyricSparkOpacity(data, 0);
+      if (data.sunMat) data.sunMat.opacity = 0;
+      if (data.sparks) data.sparks.visible = false;
+      mesh.position.y += ((0.18 + 0.62) - mesh.position.y) * 0.10;
+      mesh.position.z += (0.92 - mesh.position.z) * 0.08;
+      mesh.scale.setScalar(mesh.scale.x + (0.74 - mesh.scale.x) * 0.12);
+      return true;
+    }
     opacity = (1 - a) * 0.72 * shelfDetailLyricProfile.outgoing;
     if (data.textMat) data.textMat.uniforms.uOpacity.value = opacity;
     if (data.readabilityMat) data.readabilityMat.opacity = opacity * (shelfDetailOpen ? shelfDetailLyricProfile.readability : 0.58);
@@ -6667,6 +6721,7 @@ function tickLyricsParticles() {
     return;
   }
   if (!playing || !audio || !lyricsLines.length) {
+    unparkAllLyricLines();   // 暂停/无歌词时停驻行跟随现状一起退场
     if (stageLyrics.current) {
       stageLyrics.current.userData.state = 'out';
       stageLyrics.current.userData.age = 0;
@@ -16842,17 +16897,46 @@ function renderLyrics() {
   clearStageLyrics();
 }
 function toggleLyricsPanel(force) {
-  if (force === false) fx.particleLyrics = false;
-  else if (force === true) fx.particleLyrics = true;
-  else fx.particleLyrics = !fx.particleLyrics;
+  // 控制栏"词"按钮三态循环：隐藏 → 单行 → 多行 → 隐藏
+  // （force 参数兼容旧语义：true=确保开启单行，false=隐藏）
+  var announce = '';
+  if (force === false) {
+    fx.particleLyrics = false;
+    fx.particleLyricLines = 1;
+  } else if (force === true) {
+    if (!fx.particleLyrics) { fx.particleLyrics = true; fx.particleLyricLines = 1; }
+  } else if (!fx.particleLyrics) {
+    fx.particleLyrics = true;
+    fx.particleLyricLines = 1;
+    announce = '歌词：单行';
+  } else if (fx.particleLyricLines === 2) {
+    fx.particleLyrics = false;
+    fx.particleLyricLines = 1;
+    announce = '歌词已隐藏';
+  } else {
+    fx.particleLyricLines = 2;
+    announce = '歌词：多行（当前 + 上一行）';
+  }
   if (fx.particleLyrics) {
     createLyricsParticles();
-    showToast('歌词已开启');
+    if (fx.particleLyricLines === 1) unparkAllLyricLines();   // 切回单行时停驻行立即淡出退场
+    if (announce) showToast(announce);
   } else {
     clearStageLyrics();
-    showToast('歌词已关闭');
+    if (announce) showToast(announce);
   }
   lyricsVisible = fx.particleLyrics;
+  updateLyricsToggleButton();
+}
+function updateLyricsToggleButton() {
+  var btn = document.getElementById('lyrics-toggle-btn');
+  if (!btn) return;
+  var on = !!fx.particleLyrics;
+  var multi = on && fx.particleLyricLines === 2;
+  btn.classList.toggle('active', on);
+  btn.classList.toggle('multi', multi);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.title = !on ? '歌词：隐藏（点击开启单行）' : (multi ? '歌词：多行（点击隐藏）' : '歌词：单行（点击切换多行）');
 }
 function updateLyricsHighlight() { /* v8: 由 tickLyricsParticles 接管 */ }
 
@@ -17928,6 +18012,7 @@ function normalizeFxArchiveSnapshot(raw) {
     performanceQuality: normalizePerformanceQuality(raw.performanceQuality),
     liveBackgroundKeep: normalizePerformanceBackgroundMode(raw.performanceBackground, raw.liveBackgroundKeep === true) === 'keep',
     particleLyrics: raw.particleLyrics !== false,
+    particleLyricLines: raw.particleLyricLines === 2 ? 2 : 1,
     backCover: !!raw.backCover,
     shelf: archiveMode(raw, 'shelf', /^(off|side|stage)$/, fxDefaults.shelf),
     shelfCameraMode: archiveMode(raw, 'shelfCameraMode', /^(dynamic|static)$/, fxDefaults.shelfCameraMode),
@@ -20781,6 +20866,7 @@ function setParticleLyricsSilently(on) {
   if (fx.particleLyrics) createLyricsParticles();
   else clearStageLyrics();
   lyricsVisible = fx.particleLyrics;
+  updateLyricsToggleButton();
 }
 
 function updateImmersiveButton() {
@@ -25007,6 +25093,7 @@ applyStartupStarfieldPreset();
 applyPlaylistPanelPinState(false);
 if (fx.floatLayer) createFloatLayer();
 if (fx.particleLyrics) createLyricsParticles();
+updateLyricsToggleButton();
 if (fx.backCover) createBackCoverLayer();
 initIdleGuideCanvas();
 var startupLoginStatusPromise = Promise.all([refreshLoginStatus(), refreshQQLoginStatus()]);

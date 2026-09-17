@@ -637,6 +637,10 @@ body.home-controls-locked #bottom-bar{opacity:0!important;pointer-events:none!im
 .ctrl-btn:hover{color:#fff;background:rgba(255,255,255,.045);transform:translateY(-1px);text-shadow:0 0 10px rgba(0,245,212,.12);box-shadow:inset 0 1px 0 rgba(255,255,255,.045)}
 .ctrl-btn:active{transform:translateY(0) scale(.96)}
 .ctrl-btn.active{color:rgba(210,244,241,.90);text-shadow:0 0 12px rgba(0,245,212,.16)}
+/* 控制栏"词"按钮三态：单行=active 亮起；多行=active + 右上角小圆点；隐藏=无 active */
+#lyrics-toggle-btn .lyrics-word-icon{position:relative}
+#lyrics-toggle-btn.multi .lyrics-word-icon::after{content:'';position:absolute;top:-3px;right:-7px;width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9;box-shadow:0 0 8px rgba(0,245,212,.5)}
+#lyrics-toggle-btn:not(.active){opacity:.62}
 .ctrl-btn.liked{color:#ff7a90;text-shadow:0 0 18px rgba(255,122,144,.36)}
 .ctrl-btn.busy{opacity:.55;pointer-events:none}
 #play-mode-btn[data-mode="loop"]{color:rgba(255,255,255,.70)}
