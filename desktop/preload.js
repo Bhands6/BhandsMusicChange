@@ -113,6 +113,16 @@ contextBridge.exposeInMainWorld('desktopWindow', {
     return () => ipcRenderer.removeListener('system-settings-changed', listener);
   },
 
+  // ==================== 内存管家（移植自上游 Mineradio 2.2.0） ====================
+  /** 获取内存快照（系统 + 播放器进程 + 自动释放状态） */
+  getMemorySnapshot: () => ipcRenderer.invoke('bhandsmusic-memory-get-snapshot'),
+  /** 配置自动内存释放策略（appTrim / 系统级定时释放 / 阈值 / 间隔） */
+  configureMemoryReduct: (payload) => ipcRenderer.invoke('bhandsmusic-memory-configure-auto', payload || {}),
+  /** 手动压缩播放器进程工作集（前台可见时主进程会跳过） */
+  trimAppMemory: (payload) => ipcRenderer.invoke('bhandsmusic-memory-trim-app', payload || {}),
+  /** 手动系统级内存释放（autoElevate=true 时可请求管理员权限） */
+  purgeSystemMemory: (payload) => ipcRenderer.invoke('bhandsmusic-memory-purge-system', payload || {}),
+
   // ==================== 窗口状态监听 ====================
   /**
    * 监听窗口状态变化（最大化、全屏、焦点、显示器信息等）

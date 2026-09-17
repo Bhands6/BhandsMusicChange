@@ -9,6 +9,7 @@ const net = require('net');
 const path = require('path');
 const fs = require('fs');
 const { execFile, spawn } = require('child_process');
+const systemMemory = require('./system-memory'); // 内存管家：应用工作集压缩 + 系统级内存释放（移植自上游 Mineradio 2.2.0）
 
 // ==================== 全局状态变量 ====================
 let mainWindow = null;                    // 主窗口实例
@@ -31,6 +32,26 @@ let htmlFullscreenActive = false;         // HTML5 全屏是否激活（如视�
 let windowFullscreenActive = false;       // 窗口原生全屏是否激活
 let mainWindowStateTimer = null;          // 主窗口状态发送防抖定时器
 const registeredGlobalHotkeys = new Map(); // 已注册的全局快捷键映射（accelerator -> action）
+
+// ==================== 内存管家状态（移植自上游 Mineradio 2.2.0） ====================
+let appMemoryTrimTimer = null;            // 应用工作集压缩防抖定时器
+let appMemoryTrimInFlight = false;        // 是否正在执行压缩（防重入）
+let lastAppMemoryTrimAt = 0;              // 上次压缩时间戳（节流：2 分钟内不重复）
+let lastAppMemoryTrimReason = '';         // 上次压缩触发原因
+let memoryAutoTimer = null;               // 系统级定时释放定时器
+let memoryAutoState = {
+  appTrimEnabled: true,                   // 自动压缩播放器进程工作集
+  backgroundTrimEnabled: true,            // 仅在后台/最小化时触发压缩
+  enabled: false,                         // 系统级定时释放（默认关闭）
+  mask: systemMemory.MEMORY_MASK_DEFAULT, // 系统释放范围（工作集/修改页/待机页）
+  intervalMin: 30,                        // 定时间隔（分钟，5-180）
+  thresholdPercent: 78,                   // 内存占用阈值（超过才释放）
+  autoElevate: false,                     // 需要时请求管理员权限
+  lastRunAt: 0,
+  lastReason: '',
+  lastResult: null,
+  lastError: '',
+};
 
 // ==================== 窗口尺寸常量 ====================
 const WINDOWED_ASPECT = 16 / 9;       // 窗口宽高比（16:9）
@@ -1724,6 +1745,219 @@ ipcMain.handle('bhandsmusic-wallpaper-update', async (_event, payload) => {
   }
 });
 
+// ==================== 内存管家：应用工作集压缩 + 系统级释放 ====================
+
+/** 收集本应用所有进程 PID（主进程 + 各窗口渲染进程 + GPU/Utility），用于工作集压缩 */
+function collectAppTrimPids() {
+  const pids = new Set([process.pid]);
+  function addWindowProcess(win) {
+    if (!win || win.isDestroyed()) return;
+    try {
+      const pid = win.webContents && win.webContents.getOSProcessId && win.webContents.getOSProcessId();
+      if (pid) pids.add(pid);
+    } catch (e) {}
+  }
+  addWindowProcess(mainWindow);
+  addWindowProcess(desktopLyricsWindow);
+  addWindowProcess(wallpaperWindow);
+  try {
+    app.getAppMetrics().forEach((row) => {
+      if (row && Number.isFinite(Number(row.pid))) pids.add(Math.round(Number(row.pid)));
+    });
+  } catch (e) {}
+  return Array.from(pids);
+}
+
+/** 主窗口是否前台可见（前台可见时跳过压缩/释放，避免操作卡顿） */
+function isMainWindowForegroundVisible() {
+  try {
+    return !!(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized());
+  } catch (e) {
+    return false;
+  }
+}
+
+/** 立即压缩应用各进程工作集（前台可见时跳过，manual-force 除外） */
+async function trimAppMemoryNow(reason) {
+  if (appMemoryTrimInFlight) {
+    return { ok: false, skipped: true, reason: 'in-flight' };
+  }
+  const trimReason = String(reason || 'manual');
+  if (isMainWindowForegroundVisible() && trimReason !== 'manual-force') {
+    return { ok: false, skipped: true, reason: 'foreground-visible' };
+  }
+  appMemoryTrimInFlight = true;
+  lastAppMemoryTrimAt = Date.now();
+  lastAppMemoryTrimReason = trimReason;
+  try {
+    const before = systemMemory.getMemorySnapshot();
+    const trim = await systemMemory.trimAppWorkingSets(collectAppTrimPids());
+    const after = systemMemory.getMemorySnapshot();
+    return { ok: true, reason: lastAppMemoryTrimReason, before, trim, after };
+  } catch (e) {
+    return { ok: false, reason: lastAppMemoryTrimReason, error: e.message || 'APP_MEMORY_TRIM_FAILED', snapshot: systemMemory.getMemorySnapshot() };
+  } finally {
+    appMemoryTrimInFlight = false;
+  }
+}
+
+/** 延迟调度后台压缩：窗口最小化/隐藏后触发，2 分钟节流 */
+function scheduleAppMemoryTrim(reason, delay = 9000) {
+  if (process.platform !== 'win32') return;
+  if (memoryAutoState.appTrimEnabled === false || memoryAutoState.backgroundTrimEnabled === false) return;
+  if (Date.now() - lastAppMemoryTrimAt < 120000) return;
+  if (appMemoryTrimTimer) clearTimeout(appMemoryTrimTimer);
+  appMemoryTrimTimer = setTimeout(() => {
+    appMemoryTrimTimer = null;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isMinimized() && mainWindow.isVisible()) return;
+    trimAppMemoryNow(reason).catch(() => {});
+  }, Math.max(4000, delay));
+}
+
+/** 规范化自动释放配置（阈值/间隔/掩码边界收敛） */
+function normalizeMemoryAutoState(payload = {}) {
+  const systemEnabled = systemMemory.SYSTEM_PURGE_AVAILABLE === true && systemMemory.SYSTEM_PURGE_ENABLED === true;
+  return {
+    appTrimEnabled: payload.appTrimEnabled !== false,
+    backgroundTrimEnabled: payload.backgroundTrimEnabled !== false,
+    enabled: systemEnabled && payload.enabled === true,
+    mask: systemMemory.normalizeMask(payload.mask != null ? payload.mask : memoryAutoState.mask),
+    intervalMin: Math.max(5, Math.min(180, Math.round(Number(payload.intervalMin != null ? payload.intervalMin : memoryAutoState.intervalMin) || 30))),
+    thresholdPercent: Math.max(0, Math.min(100, Math.round(Number(payload.thresholdPercent != null ? payload.thresholdPercent : memoryAutoState.thresholdPercent) || 0))),
+    autoElevate: payload.autoElevate === true,
+    lastRunAt: memoryAutoState.lastRunAt || 0,
+    lastReason: memoryAutoState.lastReason || '',
+    lastResult: memoryAutoState.lastResult || null,
+    lastError: '',
+  };
+}
+
+function stopMemoryAutoTimer() {
+  if (memoryAutoTimer) {
+    clearInterval(memoryAutoTimer);
+    memoryAutoTimer = null;
+  }
+}
+
+/** 按配置同步系统级定时释放定时器 */
+function syncMemoryAutoTimer() {
+  stopMemoryAutoTimer();
+  if (!memoryAutoState.enabled) return;
+  memoryAutoTimer = setInterval(() => {
+    runMemoryAutoTick('timer').catch(() => {});
+  }, Math.max(5, memoryAutoState.intervalMin) * 60000);
+}
+
+/** 自动释放一次：前台可见跳过；低于阈值跳过；否则按掩码执行系统级释放 */
+async function runMemoryAutoTick(reason = 'auto') {
+  if (!memoryAutoState.enabled) return { ok: false, skipped: true, reason: 'disabled', state: memoryAutoState };
+  if (isMainWindowForegroundVisible()) {
+    memoryAutoState.lastRunAt = Date.now();
+    memoryAutoState.lastReason = reason + ':foreground-visible';
+    memoryAutoState.lastResult = { ok: true, skipped: true, reason: 'foreground-visible' };
+    return { ok: true, skipped: true, reason: 'foreground-visible', state: memoryAutoState };
+  }
+  const snapshot = await systemMemory.getMemorySnapshotExtended();
+  const threshold = Number(memoryAutoState.thresholdPercent) || 0;
+  if (threshold > 0 && snapshot && snapshot.usedPercent < threshold) {
+    memoryAutoState.lastRunAt = Date.now();
+    memoryAutoState.lastReason = reason + ':below-threshold';
+    memoryAutoState.lastResult = { ok: true, skipped: true, usedPercent: snapshot.usedPercent, thresholdPercent: threshold };
+    return { ok: true, skipped: true, snapshot, state: memoryAutoState };
+  }
+  memoryAutoState.lastRunAt = Date.now();
+  memoryAutoState.lastReason = reason;
+  try {
+    const result = await systemMemory.purgeSystemMemorySmart(memoryAutoState.mask, {
+      autoElevate: memoryAutoState.autoElevate === true,
+    });
+    memoryAutoState.lastResult = result;
+    memoryAutoState.lastError = '';
+    return { ok: true, result, snapshot: await systemMemory.getMemorySnapshotExtended(), state: memoryAutoState };
+  } catch (e) {
+    memoryAutoState.lastError = e.message || 'MEMORY_AUTO_FAILED';
+    memoryAutoState.lastResult = { ok: false, error: memoryAutoState.lastError };
+    return { ok: false, error: memoryAutoState.lastError, snapshot: systemMemory.getMemorySnapshot(), state: memoryAutoState };
+  }
+}
+
+/** 获取内存快照（渲染层状态芯片数据源） */
+ipcMain.handle('bhandsmusic-memory-get-snapshot', async () => {
+  try {
+    return {
+      ok: true,
+      snapshot: await systemMemory.getMemorySnapshotExtended(),
+      elevated: false,
+      systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
+      systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
+      appMetrics: systemMemory.getMemorySnapshot().process,
+      auto: memoryAutoState,
+      lastTrimAt: lastAppMemoryTrimAt,
+      lastTrimReason: lastAppMemoryTrimReason,
+    };
+  } catch (e) {
+    return { ok: false, error: e.message || 'MEMORY_SNAPSHOT_FAILED', snapshot: systemMemory.getMemorySnapshot(), auto: memoryAutoState };
+  }
+});
+
+/** 配置自动释放策略（渲染层设置面板同步入口） */
+ipcMain.handle('bhandsmusic-memory-configure-auto', async (_event, payload = {}) => {
+  memoryAutoState = normalizeMemoryAutoState(payload);
+  syncMemoryAutoTimer();
+  if (memoryAutoState.enabled && payload.runNow === true && !isMainWindowForegroundVisible()) {
+    await runMemoryAutoTick('configure');
+  }
+  return {
+    ok: true,
+    state: memoryAutoState,
+    systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
+    systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
+  };
+});
+
+/** 手动压缩播放器进程工作集 */
+ipcMain.handle('bhandsmusic-memory-trim-app', async (_event, payload = {}) => {
+  return trimAppMemoryNow(payload.reason || 'renderer');
+});
+
+/** 手动系统级内存释放（前台可见时跳过；autoElevate 时可请求 UAC 提权） */
+ipcMain.handle('bhandsmusic-memory-purge-system', async (_event, payload = {}) => {
+  const mask = systemMemory.normalizeMask(payload && payload.mask);
+  const autoElevate = payload && payload.autoElevate === true;
+  try {
+    if (isMainWindowForegroundVisible()) {
+      return {
+        ok: true,
+        result: { ok: false, skipped: true, reason: 'foreground-visible', message: 'System memory purge is skipped while BhandsMusic is visible.' },
+        snapshot: systemMemory.getMemorySnapshot(),
+        elevated: false,
+        systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
+        systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
+      };
+    }
+    const elevatedBefore = await systemMemory.isProcessElevated();
+    const result = await systemMemory.purgeSystemMemorySmart(mask, { autoElevate, manual: true });
+    return {
+      ok: true,
+      result,
+      snapshot: await systemMemory.getMemorySnapshotExtended(),
+      elevated: elevatedBefore || await systemMemory.isProcessElevated(),
+      systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
+      systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e.message || 'SYSTEM_MEMORY_PURGE_FAILED',
+      snapshot: systemMemory.getMemorySnapshot(),
+      elevated: false,
+      systemPurgeAvailable: systemMemory.SYSTEM_PURGE_AVAILABLE === true,
+      systemPurgeEnabled: systemMemory.SYSTEM_PURGE_ENABLED === true,
+    };
+  }
+});
+
 // ==================== 主窗口创建与应用生命周期 ====================
 
 /**
@@ -1847,10 +2081,10 @@ async function createWindow() {
   // 注册窗口状态变化事件，实时同步给渲染进程
   mainWindow.on('maximize', () => sendWindowState(mainWindow));
   mainWindow.on('unmaximize', () => sendWindowState(mainWindow));
-  mainWindow.on('minimize', () => sendWindowState(mainWindow));
+  mainWindow.on('minimize', () => { sendWindowState(mainWindow); scheduleAppMemoryTrim('minimize', 1600); });
   mainWindow.on('restore', () => sendWindowState(mainWindow));
   mainWindow.on('show', () => sendWindowState(mainWindow));
-  mainWindow.on('hide', () => sendWindowState(mainWindow));
+  mainWindow.on('hide', () => { sendWindowState(mainWindow); scheduleAppMemoryTrim('hide', 2200); });
   mainWindow.on('focus', () => sendWindowState(mainWindow));
   mainWindow.on('blur', () => sendWindowState(mainWindow));
   // move/resize 使用防抖，避免高频发送
@@ -2032,6 +2266,12 @@ if (!gotSingleInstanceLock) {
 
   // 应用就绪后初始化
   app.whenReady().then(async () => {
+    // 内存管家：PowerShell 临时脚本目录放在应用 userData 下，不污染系统临时目录
+    try {
+      systemMemory.setNativeTempPath(path.join(app.getPath('userData'), 'native-helper-temp'));
+    } catch (e) {
+      console.warn('native temp path init failed:', e.message);
+    }
     // 监听显示器变化事件，重新定位覆盖层窗口
     screen.on('display-metrics-changed', () => {
       positionDesktopLyricsWindow();
@@ -2057,6 +2297,7 @@ if (!gotSingleInstanceLock) {
   // 退出前清理资源
   app.on('before-quit', () => {
     unregisterBhandsMusicGlobalHotkeys(); // 注销全局快捷键
+    stopMemoryAutoTimer();              // 停止内存管家定时器
     closeOverlayWindows();              // 关闭覆盖层窗口
     if (appTray) { appTray.destroy(); appTray = null; } // 销毁托盘图标
     if (localServer && localServer.close) localServer.close(); // 关闭本地服务器

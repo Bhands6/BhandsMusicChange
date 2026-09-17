@@ -604,6 +604,14 @@ var fxDefaults = {
   performanceBackground: 'auto',
   performanceQuality: 'high',
   liveBackgroundKeep: false,
+  // 内存管家 / Mem Reduct（移植自上游 Mineradio 2.2.0）
+  memoryAutoTrimApp: true,            // 自动压缩播放器进程工作集
+  memoryAutoTrimOnBackground: true,   // 仅后台/最小化时触发压缩
+  memoryAutoSystemTrim: false,        // 系统级定时释放（默认关）
+  memorySystemAutoElevate: false,     // 需要时请求管理员权限
+  memorySystemIntervalMin: 30,        // 定时间隔（分钟）
+  memorySystemThresholdPercent: 78,   // 内存占用阈值（%）
+  memorySystemMask: 29,               // 释放范围：工作集|修改页|待机页|低优先待机
   cam: 'off',
 };
 var PACKAGED_DEFAULT_USER_FX_ARCHIVE_NAME = '默认测试';
@@ -4972,6 +4980,13 @@ function readSavedLyricLayout() {
       shelfOpacity: clampRange(raw.shelfOpacity == null ? fxDefaults.shelfOpacity : Number(raw.shelfOpacity), 0.25, 1),
       shelfBgOpacity: clampRange(raw.shelfBgOpacity == null ? fxDefaults.shelfBgOpacity : Number(raw.shelfBgOpacity), 0.25, 0.98),
       shelfAccentColor: normalizeHexColor(raw.shelfAccentColor || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor),
+      memoryAutoTrimApp: raw.memoryAutoTrimApp !== false,
+      memoryAutoTrimOnBackground: raw.memoryAutoTrimOnBackground !== false,
+      memoryAutoSystemTrim: raw.memoryAutoSystemTrim === true,
+      memorySystemAutoElevate: raw.memorySystemAutoElevate === true,
+      memorySystemIntervalMin: clampRange(raw.memorySystemIntervalMin == null ? fxDefaults.memorySystemIntervalMin : Number(raw.memorySystemIntervalMin), 5, 180),
+      memorySystemThresholdPercent: clampRange(raw.memorySystemThresholdPercent == null ? fxDefaults.memorySystemThresholdPercent : Number(raw.memorySystemThresholdPercent), 50, 98),
+      memorySystemMask: normalizeMemorySystemMask(raw.memorySystemMask == null ? fxDefaults.memorySystemMask : raw.memorySystemMask),
       cam: /^(off|gesture)$/.test(String(raw.cam || '')) ? raw.cam : fxDefaults.cam
     };
   } catch (e) {
@@ -5062,6 +5077,13 @@ function saveLyricLayout() {
       shelfOpacity: clampRange(fx.shelfOpacity == null ? fxDefaults.shelfOpacity : Number(fx.shelfOpacity), 0.25, 1),
       shelfBgOpacity: clampRange(fx.shelfBgOpacity == null ? fxDefaults.shelfBgOpacity : Number(fx.shelfBgOpacity), 0.25, 0.98),
       shelfAccentColor: normalizeHexColor(fx.shelfAccentColor || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor),
+      memoryAutoTrimApp: fx.memoryAutoTrimApp !== false,
+      memoryAutoTrimOnBackground: fx.memoryAutoTrimOnBackground !== false,
+      memoryAutoSystemTrim: fx.memoryAutoSystemTrim === true,
+      memorySystemAutoElevate: fx.memorySystemAutoElevate === true,
+      memorySystemIntervalMin: clampRange(fx.memorySystemIntervalMin == null ? fxDefaults.memorySystemIntervalMin : Number(fx.memorySystemIntervalMin), 5, 180),
+      memorySystemThresholdPercent: clampRange(fx.memorySystemThresholdPercent == null ? fxDefaults.memorySystemThresholdPercent : Number(fx.memorySystemThresholdPercent), 50, 98),
+      memorySystemMask: normalizeMemorySystemMask(fx.memorySystemMask == null ? fxDefaults.memorySystemMask : fx.memorySystemMask),
       cam: /^(off|gesture)$/.test(String(fx.cam || '')) ? fx.cam : fxDefaults.cam
     }));
   } catch (e) {}
@@ -17873,6 +17895,13 @@ function normalizeFxArchiveSnapshot(raw) {
     shelfOpacity: archiveNumber(raw, 'shelfOpacity', fxDefaults.shelfOpacity, 0.25, 1),
     shelfBgOpacity: archiveNumber(raw, 'shelfBgOpacity', fxDefaults.shelfBgOpacity, 0.25, 0.98),
     shelfAccentColor: normalizeHexColor(raw.shelfAccentColor || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor),
+    memoryAutoTrimApp: raw.memoryAutoTrimApp !== false,
+    memoryAutoTrimOnBackground: raw.memoryAutoTrimOnBackground !== false,
+    memoryAutoSystemTrim: raw.memoryAutoSystemTrim === true,
+    memorySystemAutoElevate: raw.memorySystemAutoElevate === true,
+    memorySystemIntervalMin: archiveNumber(raw, 'memorySystemIntervalMin', fxDefaults.memorySystemIntervalMin, 5, 180),
+    memorySystemThresholdPercent: archiveNumber(raw, 'memorySystemThresholdPercent', fxDefaults.memorySystemThresholdPercent, 50, 98),
+    memorySystemMask: normalizeMemorySystemMask(raw.memorySystemMask == null ? fxDefaults.memorySystemMask : raw.memorySystemMask),
     cam: archiveMode(raw, 'cam', /^(off|gesture)$/, fxDefaults.cam)
   };
 }
@@ -17984,6 +18013,8 @@ function applyFxArchiveSnapshot(snapshot) {
   applyWallpaperModeState(true);
   updateRenderPowerClasses();
   applyRendererPowerMode();
+  updateMemoryControls();
+  configureMemoryReductFromFx('fx-archive', false);
   saveLyricLayout();
   return true;
 }
@@ -19101,6 +19132,249 @@ function setPerformanceQualityMode(mode, silent) {
     showToast('画质档位: ' + label);
   }
 }
+// ============================================================
+// 内存管家 / Mem Reduct（移植自上游 Mineradio 2.2.0 的 11-system-memory-controls.js）
+// 依赖主进程 bhandsmusic-memory-* IPC（desktop/system-memory.js）
+// ============================================================
+var MEMORY_REDUCT_MASK_BITS = { workingSet: 1, modifiedList: 4, standbyList: 8, standbyLow: 16 };
+var MEMORY_REDUCT_MASK_DEFAULT = 29;
+var memorySnapshotTimer = 0;
+var memoryLastSnapshotAt = 0;
+var memoryLastStatusPayload = null;
+
+function normalizeMemorySystemMask(mask) {
+  var value = Math.round(Number(mask) || MEMORY_REDUCT_MASK_DEFAULT) & MEMORY_REDUCT_MASK_DEFAULT;
+  return value > 0 ? value : MEMORY_REDUCT_MASK_DEFAULT;
+}
+
+function ensureMemoryFxDefaults() {
+  if (!fx) return;
+  if (fx.memoryAutoTrimApp !== false) fx.memoryAutoTrimApp = true;
+  if (fx.memoryAutoTrimOnBackground !== false) fx.memoryAutoTrimOnBackground = true;
+  fx.memoryAutoSystemTrim = fx.memoryAutoSystemTrim === true;
+  fx.memorySystemAutoElevate = fx.memorySystemAutoElevate === true;
+  fx.memorySystemIntervalMin = clampRange(Math.round(fx.memorySystemIntervalMin == null ? fxDefaults.memorySystemIntervalMin : Number(fx.memorySystemIntervalMin)), 5, 180);
+  fx.memorySystemThresholdPercent = clampRange(Math.round(fx.memorySystemThresholdPercent == null ? fxDefaults.memorySystemThresholdPercent : Number(fx.memorySystemThresholdPercent)), 50, 98);
+  fx.memorySystemMask = normalizeMemorySystemMask(fx.memorySystemMask == null ? fxDefaults.memorySystemMask : fx.memorySystemMask);
+}
+
+function memoryAutoConfigPayload(runNow) {
+  ensureMemoryFxDefaults();
+  return {
+    appTrimEnabled: !(fx && fx.memoryAutoTrimApp === false),
+    backgroundTrimEnabled: !(fx && fx.memoryAutoTrimOnBackground === false),
+    enabled: !!(fx && fx.memoryAutoSystemTrim && fx.memoryAutoTrimOnBackground !== false),
+    mask: normalizeMemorySystemMask(fx && fx.memorySystemMask),
+    intervalMin: Math.max(5, Math.round(Number(fx && fx.memorySystemIntervalMin) || 30)),
+    thresholdPercent: Math.max(50, Math.min(98, Math.round(Number(fx && fx.memorySystemThresholdPercent) || 78))),
+    autoElevate: !!(fx && fx.memorySystemAutoElevate),
+    runNow: runNow === true
+  };
+}
+
+function rememberMemoryStatusPayload(payload) {
+  if (!payload) return;
+  if (payload.snapshot || Object.prototype.hasOwnProperty.call(payload, 'systemPurgeAvailable')) {
+    memoryLastStatusPayload = Object.assign({}, memoryLastStatusPayload || {}, payload);
+    return;
+  }
+  if (memoryLastStatusPayload) {
+    memoryLastStatusPayload.auto = payload.state || payload.auto || memoryLastStatusPayload.auto;
+  }
+}
+
+/** 把 fx 里的内存设置同步给主进程（非桌面版静默跳过） */
+function configureMemoryReductFromFx(reason, runNow) {
+  if (!window.desktopWindow || typeof window.desktopWindow.configureMemoryReduct !== 'function') return Promise.resolve(null);
+  return window.desktopWindow.configureMemoryReduct(memoryAutoConfigPayload(runNow)).then(function (payload) {
+    rememberMemoryStatusPayload(payload);
+    updateMemoryControls();
+    return payload;
+  }).catch(function (error) {
+    updateMemoryStatusText('内存管家配置失败: ' + String(error && error.message || error || ''));
+    return null;
+  });
+}
+
+function memoryFormatSnapshot(snapshot) {
+  if (!snapshot) return '系统内存读取中...';
+  var total = Math.round(Number(snapshot.totalMB) || 0);
+  var used = Math.round(Number(snapshot.usedMB) || 0);
+  var free = Math.round(Number(snapshot.freeMB) || 0);
+  var percent = Math.round(Number(snapshot.usedPercent) || 0);
+  var proc = snapshot.process || {};
+  var rss = Math.round(Number(proc.rssMB) || 0);
+  return '系统 ' + used + '/' + total + ' MB (' + percent + '%), 可用 ' + free + ' MB, 播放器 ' + rss + ' MB';
+}
+
+function updateMemoryStatusText(text) {
+  var chip = document.getElementById('memory-status-chip');
+  if (chip) chip.textContent = text || '系统内存读取中...';
+}
+
+function refreshMemorySnapshot(force) {
+  if (!window.desktopWindow || typeof window.desktopWindow.getMemorySnapshot !== 'function') {
+    updateMemoryStatusText('当前不是桌面版，系统内存优化不可用');
+    return Promise.resolve(null);
+  }
+  var now = performance.now();
+  if (!force && now - memoryLastSnapshotAt < 5000 && memoryLastStatusPayload) {
+    return Promise.resolve(memoryLastStatusPayload);
+  }
+  memoryLastSnapshotAt = now;
+  return window.desktopWindow.getMemorySnapshot().then(function (payload) {
+    if (payload) rememberMemoryStatusPayload(payload);
+    else memoryLastStatusPayload = null;
+    var status = payload && payload.ok ? memoryFormatSnapshot(payload.snapshot) : '系统内存读取失败';
+    if (payload && payload.elevated) status += ' | 管理员';
+    updateMemoryStatusText(status);
+    updateMemoryControls();
+    return payload;
+  }).catch(function (error) {
+    updateMemoryStatusText('系统内存读取失败: ' + String(error && error.message || error || ''));
+    return null;
+  });
+}
+
+function updateMemoryControls() {
+  ensureMemoryFxDefaults();
+  [
+    ['memoryAutoTrimApp', 't-memoryAutoTrimApp'],
+    ['memoryAutoTrimOnBackground', 't-memoryAutoTrimOnBackground'],
+    ['memoryAutoSystemTrim', 't-memoryAutoSystemTrim'],
+    ['memorySystemAutoElevate', 't-memorySystemAutoElevate']
+  ].forEach(function (pair) {
+    var el = document.getElementById(pair[1]);
+    if (el) el.classList.toggle('on', !!fx[pair[0]]);
+  });
+  var systemAvailable = !memoryLastStatusPayload || memoryLastStatusPayload.systemPurgeAvailable !== false;
+  ['t-memoryAutoSystemTrim', 't-memorySystemAutoElevate'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('dev-locked');
+    el.setAttribute('aria-disabled', 'false');
+    el.title = systemAvailable
+      ? '系统级释放只在 BhandsMusic 隐藏/最小化且阈值、间隔允许时执行。'
+      : '系统级释放尚未获得桌面进程确认；播放器进程压缩仍然生效。';
+  });
+  document.querySelectorAll('#memory-mask-seg [data-memory-mask]').forEach(function (btn) {
+    var bit = MEMORY_REDUCT_MASK_BITS[btn.getAttribute('data-memory-mask')] || 0;
+    btn.classList.toggle('active', !!(normalizeMemorySystemMask(fx.memorySystemMask) & bit));
+  });
+  var maskSeg = document.getElementById('memory-mask-seg');
+  if (maskSeg) maskSeg.classList.remove('dev-locked');
+  document.querySelectorAll('.memory-action-row button').forEach(function (btn, index) {
+    if (index === 1) {
+      btn.disabled = !systemAvailable;
+      btn.classList.toggle('dev-locked', !systemAvailable);
+      btn.title = systemAvailable
+        ? '手动系统内存释放；BhandsMusic 前台可见时会自动跳过，避免卡顿。'
+        : '系统级释放不可用；后台播放器压缩仍然生效。';
+    } else if (index > 1) {
+      btn.disabled = !systemAvailable;
+      btn.classList.toggle('dev-locked', !systemAvailable);
+      btn.title = systemAvailable
+        ? '提权释放；请先最小化或隐藏 BhandsMusic，前台可见时会跳过。'
+        : '系统级释放不可用；后台播放器压缩仍然生效。';
+    }
+  });
+  setRange('fx-memory-interval', fx.memorySystemIntervalMin);
+  setRange('fx-memory-threshold', fx.memorySystemThresholdPercent);
+  if (!memoryLastStatusPayload && !memorySnapshotTimer) {
+    memorySnapshotTimer = setTimeout(function () {
+      memorySnapshotTimer = 0;
+      refreshMemorySnapshot(false);
+    }, 300);
+  }
+}
+
+function toggleMemoryMaskPart(part) {
+  ensureMemoryFxDefaults();
+  var bit = MEMORY_REDUCT_MASK_BITS[part] || 0;
+  if (!bit) return;
+  var next = normalizeMemorySystemMask(fx.memorySystemMask) ^ bit;
+  fx.memorySystemMask = normalizeMemorySystemMask(next);
+  saveLyricLayout();
+  updateMemoryControls();
+  configureMemoryReductFromFx('mask', false);
+}
+
+/** 手动压缩播放器进程工作集（面板按钮） */
+function runAppMemoryTrim(reason) {
+  if (!window.desktopWindow || typeof window.desktopWindow.trimAppMemory !== 'function') {
+    showToast('桌面版才支持进程内存压缩');
+    return;
+  }
+  updateMemoryStatusText('正在压缩播放器工作集...');
+  window.desktopWindow.trimAppMemory({ reason: reason || 'manual' }).then(function (payload) {
+    if (payload && payload.ok && payload.after) updateMemoryStatusText('播放器已压缩: ' + memoryFormatSnapshot(payload.after));
+    else if (payload && payload.skipped && payload.reason === 'foreground-visible') updateMemoryStatusText('前台可见时不压缩，避免操作卡顿；最小化/隐藏后自动处理');
+    else updateMemoryStatusText('播放器压缩未完成');
+    refreshMemorySnapshot(true);
+  }).catch(function (error) {
+    updateMemoryStatusText('播放器压缩失败: ' + String(error && error.message || error || ''));
+  });
+}
+
+/** 手动系统级内存释放（面板按钮；autoElevate 时可请求 UAC） */
+function runSystemMemoryPurge(autoElevate) {
+  ensureMemoryFxDefaults();
+  if (!window.desktopWindow || typeof window.desktopWindow.purgeSystemMemory !== 'function') {
+    showToast('桌面版才支持系统级释放');
+    return;
+  }
+  updateMemoryStatusText(autoElevate ? '正在请求提权系统释放（前台可见时会跳过）...' : '正在尝试系统级手动释放（前台可见时会跳过）...');
+  window.desktopWindow.purgeSystemMemory({
+    mask: normalizeMemorySystemMask(fx && fx.memorySystemMask),
+    autoElevate: !!autoElevate,
+    manual: true
+  }).then(function (payload) {
+    rememberMemoryStatusPayload(payload);
+    var result = payload && payload.result;
+    if (result && result.skipped && result.reason === 'foreground-visible') {
+      updateMemoryStatusText('前台可见时不执行系统释放；先最小化/隐藏再用，避免操作卡顿');
+      showToast('前台已跳过系统释放，最小化后再用');
+    } else if (result && result.ok) {
+      updateMemoryStatusText('系统释放完成，约释放 ' + (result.freedMB || 0) + ' MB' + (result.partial ? '（部分权限）' : ''));
+      showToast('系统释放完成');
+    } else if (result && result.needAdmin) {
+      updateMemoryStatusText(autoElevate ? '提权释放未完成：可能取消了管理员权限或被系统拦截' : '当前权限只能完成部分释放；需要时可最小化后点提权释放');
+      showToast(autoElevate ? '提权释放未完成' : '需要管理员权限的部分已跳过');
+    } else {
+      updateMemoryStatusText('系统释放未完成: ' + String(result && result.message || payload && payload.error || ''));
+    }
+    refreshMemorySnapshot(true);
+  }).catch(function (error) {
+    updateMemoryStatusText('系统释放失败: ' + String(error && error.message || error || ''));
+  });
+}
+
+/** 绑定内存管家面板事件（幂等；由设置面板绑定流程调用） */
+function bindSystemMemoryControls() {
+  document.querySelectorAll('#memory-mask-seg [data-memory-mask]').forEach(function (btn) {
+    if (btn._bhandsmusicMemoryBound) return;
+    btn._bhandsmusicMemoryBound = true;
+    btn.addEventListener('click', function () {
+      toggleMemoryMaskPart(btn.getAttribute('data-memory-mask'));
+    });
+  });
+  [
+    ['fx-memory-interval', 'memorySystemIntervalMin', 5, 180],
+    ['fx-memory-threshold', 'memorySystemThresholdPercent', 50, 98]
+  ].forEach(function (item) {
+    var input = document.getElementById(item[0]);
+    if (!input || input._bhandsmusicMemoryBound) return;
+    input._bhandsmusicMemoryBound = true;
+    input.addEventListener('input', function () {
+      fx[item[1]] = clampRange(Math.round(Number(input.value) || fxDefaults[item[1]]), item[2], item[3]);
+      setRange(item[0], fx[item[1]]);
+      saveLyricLayout();
+      configureMemoryReductFromFx('slider', false);
+    });
+  });
+  refreshMemorySnapshot(false);
+  configureMemoryReductFromFx('bind', false);
+}
 function updateFxInputs() {
   normalizeDevelopmentLockedFxState();
   applyShelfCameraDefaultAngle(false);
@@ -19172,6 +19446,7 @@ function updateFxInputs() {
   var liveBackgroundKeepToggle = document.getElementById('t-liveBackgroundKeep');
   if (liveBackgroundKeepToggle) liveBackgroundKeepToggle.classList.toggle('on', fx.liveBackgroundKeep === true);
   updatePerformanceControls();
+  updateMemoryControls();
   updateDevelopmentFxControls();
   var aiDepthToggle = document.getElementById('t-aidepth');
   if (aiDepthToggle) aiDepthToggle.classList.toggle('on', fx.aiDepth);
@@ -20019,6 +20294,7 @@ function bindFxPanel() {
       setPerformanceQualityMode(btn.getAttribute('data-performance-quality'));
     });
   });
+  bindSystemMemoryControls();
   updateFxInputs();
 }
 function toggleFx(key) {
@@ -20036,7 +20312,7 @@ function toggleFx(key) {
   var toggle = document.getElementById(toggleId);
   if (toggle) toggle.classList.toggle('on', fx[key]);
   syncFxUniforms();
-  if (key === 'lyricCameraLock' || key === 'lyricGlow' || key === 'lyricGlowBeat' || key === 'lyricGlowParticles' || key === 'bloom' || key === 'edge' || key === 'cinema' || key === 'desktopLyrics' || key === 'desktopLyricsClickThrough' || key === 'desktopLyricsCinema' || key === 'desktopLyricsHighlight' || key === 'wallpaperMode' || key === 'shelfShowPodcasts' || key === 'shelfMergeCollections' || key === 'liveBackgroundKeep') saveLyricLayout();
+  if (key === 'lyricCameraLock' || key === 'lyricGlow' || key === 'lyricGlowBeat' || key === 'lyricGlowParticles' || key === 'bloom' || key === 'edge' || key === 'cinema' || key === 'desktopLyrics' || key === 'desktopLyricsClickThrough' || key === 'desktopLyricsCinema' || key === 'desktopLyricsHighlight' || key === 'wallpaperMode' || key === 'shelfShowPodcasts' || key === 'shelfMergeCollections' || key === 'liveBackgroundKeep' || key === 'memoryAutoTrimApp' || key === 'memoryAutoTrimOnBackground' || key === 'memoryAutoSystemTrim' || key === 'memorySystemAutoElevate') saveLyricLayout();
   if (key === 'floatLayer') { if (fx.floatLayer) createFloatLayer(); else destroyFloatLayer(); }
   if (key === 'desktopLyrics') applyDesktopLyricsState(true);
   if (key === 'desktopLyricsClickThrough' || key === 'desktopLyricsCinema' || key === 'desktopLyricsHighlight') pushDesktopLyricsState(true);
@@ -20057,6 +20333,18 @@ function toggleFx(key) {
     updateRenderPowerClasses();
     applyRendererPowerMode();
     if (fx.liveBackgroundKeep) recoverVisualsAfterBackground('live-background-keep');
+  }
+  if (key === 'memoryAutoTrimApp') showToast(fx.memoryAutoTrimApp !== false ? '自动压缩播放器已开启' : '自动压缩播放器已关闭');
+  if (key === 'memoryAutoTrimOnBackground') showToast(fx.memoryAutoTrimOnBackground !== false ? '仅后台触发压缩' : '后台压缩触发已关闭');
+  if (key === 'memoryAutoSystemTrim') {
+    updateMemoryControls();
+    configureMemoryReductFromFx('toggle', false);
+    showToast(fx.memoryAutoSystemTrim === true ? '系统级定时释放已开启' : '系统级定时释放已关闭');
+  }
+  if (key === 'memorySystemAutoElevate') {
+    updateMemoryControls();
+    configureMemoryReductFromFx('toggle', false);
+    showToast(fx.memorySystemAutoElevate === true ? '需要时将请求管理员权限' : '不再自动请求管理员权限');
   }
   if (key === 'lyricGlow') showToast(fx.lyricGlow ? '歌词溢光已开启' : '歌词溢光已关闭');
   if (key === 'lyricGlowBeat') showToast(fx.lyricGlowBeat ? '歌词溢光跟随鼓点' : '歌词溢光已脱离鼓点');
