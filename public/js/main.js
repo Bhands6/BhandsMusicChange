@@ -20456,7 +20456,7 @@ async function saveMusicSourcesConfigToServer() {
 function syncMusicSourcesUI() {
   if (!_musicSourcesConfig) return;
   var enabled = _musicSourcesConfig.enabledSources || [];
-  ['gdmusic', 'unblockMusic', 'lxMusic', 'custom'].forEach(function (src) {
+  ['gdmusic', 'unblockMusic', 'lxMusic', 'custom', 'kugou'].forEach(function (src) {
     var el = document.getElementById('t-src-' + src);
     if (el) el.classList.toggle('on', enabled.includes(src));
   });

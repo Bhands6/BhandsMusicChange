@@ -9,6 +9,7 @@ const { parseFromGDMusic } = require('./gdmusic');
 const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
 const { parseFromCustomApi } = require('./customApi');
+const { parseFromKugou } = require('./kugou');
 
 // ============================================================
 // 缓存配置
@@ -186,6 +187,37 @@ const customApiStrategy = {
 };
 
 /**
+ * 酷狗音源策略（移植自上游 Mineradio 2.2.0，免登录解析）
+ * 链路：酷狗搜索（按歌名/歌手匹配）→ mobile 播放接口（标准音质 128k）
+ */
+const kugouStrategy = {
+  name: 'kugou',
+  priority: 2,
+  canHandle: function (params) {
+    return params.enabledSources.includes('kugou');
+  },
+  parse: async function (params) {
+    if (isInFailedCache(params.id, 'kugou')) return null;
+
+    const result = await parseFromKugou({
+      id: params.id,
+      name: params.name,
+      artists: params.artists,
+      album: params.album,
+      duration: params.duration,
+      timeout: 15000
+    });
+
+    if (result && result.url) {
+      return { url: result.url, source: result.source || 'kugou', br: result.br };
+    }
+
+    addFailedCache(params.id, 'kugou');
+    return null;
+  }
+};
+
+/**
  * GD音乐台策略
  */
 const gdmusicStrategy = {
@@ -245,7 +277,7 @@ const unblockMusicStrategy = {
 };
 
 /** 所有策略列表 */
-const ALL_STRATEGIES = [lxMusicStrategy, customApiStrategy, gdmusicStrategy, unblockMusicStrategy];
+const ALL_STRATEGIES = [lxMusicStrategy, customApiStrategy, kugouStrategy, gdmusicStrategy, unblockMusicStrategy];
 
 // ============================================================
 // 主解析函数

@@ -2442,6 +2442,7 @@ function audioProxyHeadersFor(audioUrl, range) {
   try {
     const host = new URL(audioUrl).hostname.toLowerCase();
     if (host.includes('qq.com') || host.includes('qpic.cn')) headers.Referer = 'https://y.qq.com/';
+    if (host.includes('kugou.com')) headers.Referer = 'https://www.kugou.com/';
   } catch (e) {}
   if (range) headers.Range = range;
   return headers;
