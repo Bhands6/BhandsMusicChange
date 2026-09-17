@@ -20454,6 +20454,11 @@ async function loadMusicSourcesConfig() {
   }
 }
 
+// 启动时无条件加载一次音源配置。
+// 此前该调用只挂在 applyFxArchiveSnapshot（手动「应用存档」）路径上，
+// 正常启动永远不执行 → _musicSourcesConfig 为 null → 所有音源开关点击静默失效、状态全灰。
+loadMusicSourcesConfig();
+
 /**
  * 保存音源配置到服务端
  */
@@ -20519,7 +20524,10 @@ function syncMusicSourcesUI() {
  * 切换音源启用状态
  */
 function toggleMusicSource(source) {
-  if (!_musicSourcesConfig) return;
+  if (!_musicSourcesConfig) {
+    showToast('音源配置尚未加载完成，请稍后再试');
+    return;
+  }
   var enabled = _musicSourcesConfig.enabledSources || [];
   var idx = enabled.indexOf(source);
   if (idx >= 0) {
