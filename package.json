@@ -27,6 +27,7 @@
       "public/**/*",
       "build/**/*",
       "server/**/*",
+      "cuefield/**/*",
       "package.json",
       "!public/index.*.html",
       "public/index.html"
