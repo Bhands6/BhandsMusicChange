@@ -759,6 +759,7 @@ try {
     <button id="prev-btn" class="ctrl-btn" onclick="prevTrack()" title="上一首"><svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>
     <button id="play-btn" class="ctrl-btn" onclick="togglePlay()" title="播放/暂停"><svg id="play-icon" width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
     <button id="next-btn" class="ctrl-btn" onclick="nextTrack()" title="下一首"><svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg></button>
+    <button id="cuefield-automix-btn" class="ctrl-btn" onclick="toggleCuefieldAutoMix()" title="Cuefield AutoMix（实验功能，默认关闭）" aria-pressed="false"><svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h4l3 5 3-5h6"/><path d="M4 17h4l3-5 3 5h6"/><path d="M18 4v6M15 7h6"/></svg></button>
     <button id="mini-queue-btn" class="ctrl-btn" onclick="toggleMiniQueue(event)" title="当前队列"><svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></button>
     </div>
     <div class="control-cluster modes">
@@ -979,6 +980,17 @@ try {
 
 <!-- Toast 通知 -->
 <div id="toast"></div>
+<!-- Cuefield AutoMix 过渡反馈（自动过渡完成后弹出，30 秒未评自动隐藏） -->
+<div id="cuefield-feedback" aria-live="polite" aria-label="Cuefield AutoMix 反馈">
+  <div class="cuefield-feedback-kicker">CUEFIELD · 本地反馈</div>
+  <div class="cuefield-feedback-title">这次自动过渡顺滑吗？</div>
+  <div id="cuefield-feedback-meta" class="cuefield-feedback-meta"></div>
+  <div class="cuefield-feedback-actions">
+    <button type="button" onclick="submitCuefieldFeedback(1)">顺滑</button>
+    <button type="button" onclick="submitCuefieldFeedback(2)">生硬</button>
+    <button type="button" onclick="submitCuefieldFeedback(3)">不确定</button>
+  </div>
+</div>
 <!-- 音源自动换源通知（当前源不可用时自动切换并提示） -->
 <div id="source-fallback-notice" aria-live="polite">
   <div class="source-fallback-head">
@@ -1011,6 +1023,11 @@ try {
 <!-- ==================== 内联脚本（约 24000 行）==================== -->
 <!-- 主要模块：全局状态、Three.js 场景、粒子系统、音频分析、歌词引擎、
      播放控制、搜索、登录、歌单管理、桌面歌词、壁纸、快捷键、UI 控制等 -->
+<script src="js/cuefield-automix-core.js"></script>        <!-- cuefield 自动混音 · 计划判定核心 -->
+<script src="js/cuefield-timeline-executor.js"></script>   <!-- cuefield · 过渡时间线执行器 -->
+<script src="js/cuefield-bridge-engine.js"></script>       <!-- cuefield · WebAudio 过渡桥 -->
+<script src="js/cuefield-source-loop.js"></script>         <!-- cuefield · 源循环 -->
+<script src="js/cuefield-automix-integration.js"></script> <!-- cuefield · 播放集成（播放时才触碰 main.js 全局，安全） -->
 <script src="js/main.js"></script>
 </body>
 </html>

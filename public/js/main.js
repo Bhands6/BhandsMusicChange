@@ -16017,6 +16017,11 @@ async function playQueueAt(idx, opts) {
   if (!opts.preserveHomeState) homeSuppressed = false;
   currentIdx = idx;
   trackSwitchToken++;
+  // cuefield：普通切歌清空自动过渡状态；automix 自己的 handoff 调用则保住正在交接的 B deck
+  if (typeof resetCuefieldAutoMix === 'function') {
+    resetCuefieldAutoMix(opts.cuefieldAutoMix ? 'cuefield-handoff' : 'track-switch',
+      opts.cuefieldAutoMix ? { preserveExecution: true, preservePreparedAudio: true } : undefined);
+  }
   markPlayPhase('cancel-previous-track');
   cancelBeatAnalysisTimer();
   cancelBeatPrefetchTimer();
@@ -16188,6 +16193,12 @@ async function playQueueAt(idx, opts) {
     updatePlaybackProgressUi();
     audio.onended = function(){
       if (token !== trackSwitchToken) return;
+      // cuefield：自动过渡进行中 A deck 自然播完时，不立即切歌——
+      // B deck 已在淡入，交给 executeCuefieldAutoMix 完成 handoff（其内部有恢复兜底）
+      if (typeof cuefieldAutoMixExecuting !== 'undefined' && cuefieldAutoMixExecuting && typeof noteCuefieldAutoMixOutgoingEnded === 'function') {
+        noteCuefieldAutoMixOutgoingEnded(audio, token, currentIdx);
+        return;
+      }
       finalizeListenSession(true);
       if (playMode === 'single') setTimeout(function(){ playQueueAt(currentIdx, { autoRepeat: true }); }, 0);
       else setTimeout(nextTrack, 0);
@@ -16329,6 +16340,8 @@ async function attemptAudioPlay(opts) {
       playing = true; setPlayIcon(true);
     if (opts.fade !== false) startPlaybackFadeIn();
     else restorePlaybackGain();
+    // cuefield：真正起声后调度准备下一首的自动过渡
+    if (typeof scheduleCuefieldAutoMixPrepare === 'function') scheduleCuefieldAutoMixPrepare(trackSwitchToken, currentIdx, 900);
     forcePlaybackControlsInteractive();
     hideLoading();
     return true;
@@ -16362,6 +16375,8 @@ async function togglePlay() {
       await fadeOutAndPauseAudio();
       playing = false;
       setPlayIcon(false);
+      // cuefield：手动暂停时清理 B deck 与过渡状态
+      if (typeof resetCuefieldAutoMix === 'function') resetCuefieldAutoMix('manual-pause');
       hideLoading();
       safePlaybackStep('listen-stats-pause', function(){ updateListenStatsTick(true); });
       forcePlaybackControlsInteractive();
@@ -17621,6 +17636,8 @@ function bindPlaybackProgressEvents(audioEl) {
     audioEl.addEventListener(name, function(){ syncPlaybackStateFromAudioEvent(name); });
   });
   audioEl.addEventListener('timeupdate', throttledLastSessionPositionSave);
+  // cuefield 自动混音触发器：进度更新时检查是否到达过渡点
+  if (typeof tickCuefieldAutoMix === 'function') audioEl.addEventListener('timeupdate', tickCuefieldAutoMix);
 }
 function emitProgressDragParticles(x, y) {
   var now = performance.now();
@@ -17648,6 +17665,9 @@ function seekFromProgressPointer(e, emitParticles) {
   audio.currentTime = ratio * durationSec;
   setProgressVisual(ratio * 100);
   syncBeatMapPlaybackCursor(audio.currentTime);
+  // cuefield：手动 seek 后原过渡计划失效，重置并重新准备
+  if (typeof resetCuefieldAutoMix === 'function') resetCuefieldAutoMix('manual-seek');
+  if (typeof scheduleCuefieldAutoMixPrepare === 'function') scheduleCuefieldAutoMixPrepare(trackSwitchToken, currentIdx, 900);
   if (emitParticles) emitProgressDragParticles(e.clientX, rect.top + rect.height / 2);
 }
 var progressBar = document.getElementById('progress-bar');

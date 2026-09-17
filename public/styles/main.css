@@ -1920,3 +1920,18 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
   .fx-slider{grid-template-columns:74px minmax(0,1fr) 40px 28px;gap:8px;padding:8px}
   .lyric-color-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
+
+/* ============================================================ */
+/*  Cuefield AutoMix（自动混音，实验功能）                         */
+/* ============================================================ */
+#cuefield-automix-btn.cuefield-automix-on{color:rgba(255,221,150,.98);text-shadow:0 0 14px rgba(255,191,100,.42)}
+#cuefield-automix-btn.cuefield-automix-ready{color:rgba(153,241,211,1);text-shadow:0 0 16px rgba(86,255,189,.52);animation:cuefield-ready-pulse 1.8s ease-in-out infinite}
+@keyframes cuefield-ready-pulse{50%{transform:translateY(-1px) scale(1.08)}}
+#cuefield-feedback{position:fixed;z-index:201;left:50%;bottom:112px;width:min(330px,calc(100vw - 34px));padding:13px 14px 12px;background:rgba(12,14,22,.88);border:1px solid rgba(255,240,196,.18);border-radius:14px;backdrop-filter:blur(22px) saturate(1.4);-webkit-backdrop-filter:blur(22px) saturate(1.4);box-shadow:0 18px 60px rgba(0,0,0,.45);color:rgba(255,250,238,.92);opacity:0;pointer-events:none;transform:translate(-50%,14px) scale(.98);transition:opacity .24s ease,transform .28s cubic-bezier(.16,1,.3,1)}
+#cuefield-feedback.show{opacity:1;pointer-events:auto;transform:translate(-50%,0) scale(1)}
+.cuefield-feedback-kicker{color:rgba(255,212,128,.72);font-size:9px;font-weight:800;letter-spacing:1.1px}
+.cuefield-feedback-title{margin-top:5px;font-size:13px;font-weight:700}
+.cuefield-feedback-meta{margin-top:4px;overflow:hidden;color:rgba(255,255,255,.55);font-size:10.5px;text-overflow:ellipsis;white-space:nowrap}
+.cuefield-feedback-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+.cuefield-feedback-actions button{min-height:29px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.82);cursor:pointer;font-size:11px;transition:transform .16s ease,background .16s ease,border-color .16s ease}
+.cuefield-feedback-actions button:hover{transform:translateY(-1px);border-color:rgba(255,218,144,.42);background:rgba(255,201,104,.13)}
