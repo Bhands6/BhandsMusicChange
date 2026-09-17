@@ -3431,6 +3431,64 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  /* ==================== cuefield 自动混音 ==================== */
+  // cuefield 仅消费本地节拍映射磁盘缓存，本路由不会接触账号 Cookie、歌曲文件或播放地址。
+  if (pn === '/api/cuefield/transition') {
+    if (req.method !== 'POST') {
+      sendJSON(res, { ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
+      return;
+    }
+    try {
+      const body = await readRequestBody(req);
+      const plan = planCuefieldTransitionFromCache({
+        fromKey: body.fromKey,
+        toKey: body.toKey,
+        fromLrc: body.fromLrc,
+        toLrc: body.toLrc,
+        exitBias: body.exitBias || 'late',
+        maxEntryTime: Math.max(8, Math.min(32, Number(body.maxEntryTime) || 32)),
+        recentRecipes: Array.isArray(body.recentRecipes) ? body.recentRecipes.slice(-2) : [],
+        minimumListenUntil: body.minimumListenUntil,
+        enableLiveEndCrossfadeFallback: body.enableLiveEndCrossfadeFallback === true,
+        enableCadenceFallback: body.enableCadenceFallback === true,
+        boundaryEvidence: body.boundaryEvidence,
+        tailEvidence: body.tailEvidence,
+        readBeatMapCache,
+      });
+      sendJSON(res, plan);
+    } catch (err) {
+      sendJSON(res, {
+        ok: false,
+        error: err && (err.code || err.message) || 'CUEFIELD_TRANSITION_FAILED',
+      }, 400);
+    }
+    return;
+  }
+
+  // 反馈记录只落在本机（桌面端 userData），不接入任何远程反馈通道。
+  if (pn === '/api/cuefield/feedback') {
+    if (req.method === 'GET') {
+      try {
+        sendJSON(res, { ok: true, stats: readCuefieldFeedbackStats(CUEFIELD_FEEDBACK_FILE) });
+      } catch (err) {
+        sendJSON(res, { ok: false, error: err.message || 'CUEFIELD_FEEDBACK_READ_FAILED' }, 500);
+      }
+      return;
+    }
+    if (req.method === 'POST') {
+      try {
+        const body = await readRequestBody(req);
+        const record = appendCuefieldFeedback(CUEFIELD_FEEDBACK_FILE, body);
+        sendJSON(res, { ok: true, record });
+      } catch (err) {
+        sendJSON(res, { ok: false, error: err.code || err.message || 'CUEFIELD_FEEDBACK_SAVE_FAILED' }, 400);
+      }
+      return;
+    }
+    sendJSON(res, { ok: false, error: 'METHOD_NOT_ALLOWED' }, 405);
+    return;
+  }
+
   if (pn === '/api/beatmap/cache/status') {
     const info = beatCacheRootInfo();
     sendJSON(res, {

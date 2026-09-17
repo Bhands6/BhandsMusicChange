@@ -2070,6 +2070,7 @@ async function createWindow() {
   process.env.COOKIE_FILE = path.join(app.getPath('userData'), '.cookie');
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
   process.env.BHANDSMUSIC_UPDATE_DIR = getUpdateDownloadDir();
+  process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(app.getPath('userData'), 'cuefield-feedback.jsonl');
 
   // 迁移旧版 QQ Cookie 文件到新位置
   try {

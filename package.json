@@ -35,7 +35,8 @@
     "asar": true,
     "asarUnpack": [
       "public/js/server.js",
-      "public/js/dj-analyzer.js"
+      "public/js/dj-analyzer.js",
+      "cuefield/**/*"
     ],
     "win": {
       "executableName": "BhandsMusic",
