@@ -189,10 +189,12 @@ const customApiStrategy = {
 /**
  * 酷狗音源策略（移植自上游 Mineradio 2.2.0，免登录解析）
  * 链路：酷狗搜索（按歌名/歌手匹配）→ mobile 播放接口（标准音质 128k）
+ * 优先级 3.5：排在 gdmusic（可拿高音质）之后作兜底，避免抢占 320k/无损；
+ * 免登录只能拿免费曲目 128k，VIP 曲目自动落到 unblockMusic
  */
 const kugouStrategy = {
   name: 'kugou',
-  priority: 2,
+  priority: 3.5,
   canHandle: function (params) {
     return params.enabledSources.includes('kugou');
   },
