@@ -18017,6 +18017,8 @@ var presetMeta = [
   { name: '唱片', desc: '唱片 · 圆形封面' },
   { name: '星河', desc: '壁纸粒子 · 音乐律动' },
   { name: '安魂', desc: '骷髅·YUI7W', descHtml: '骷髅·<span class="pc-yui7w">YUI7W</span>' },
+  { name: '音域回响', nameHtml: '音域回响 <span class="pc-name-en">Sonic-Topography</span>', desc: '作者 Ajin', descHtml: '作者 <span class="pc-author-ajin">Ajin</span>' },
+  { name: '音域回响', nameHtml: '音域回响 <span class="pc-name-en">Wallpaper Engine</span>', desc: '作者 CmzYa' },
 ];
 var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 5-2 8 0s5 2 8 0M3 10c3-2 5-2 8 0s5 2 8 0M3 18c3-2 5-2 8 0s5 2 8 0"/></svg>',
@@ -19219,6 +19221,11 @@ function setPreset(p, opts) {
   var prev = fx.preset;
   var changed = prev !== p;
   fx.preset = p;
+  // 音域回响两预设的清场/预热钩子（对齐上游 preset-grid onPresetChange）
+  if (changed) {
+    if (window.MineradioSonicTopography) MineradioSonicTopography.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioSonicWorkshop) MineradioSonicWorkshop.onPresetChange(prev, p, { scene: scene, fx: fx });
+  }
   if (changed && prev === SKULL_PRESET_INDEX && p !== SKULL_PRESET_INDEX) clearSkullPresetResidue();
   if (p === SKULL_PRESET_INDEX) loadSkullParticleAsset();
   uniforms.uPreset.value = p;
@@ -25541,7 +25548,8 @@ function animate() {
   uniforms.uEnergy.value = audioEnergy;
   uniforms.uMouseXY.value.set(mouseWorld.x, mouseWorld.y);
   uniforms.uMouseActive.value = mouseActive ? 1 : 0;
-  var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58 : 1;
+  var sonicPresetActiveEarly = !!(window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) || !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
+  var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58 : (sonicPresetActiveEarly ? 0.82 : 1);
   var shelfDimTarget = shouldDimWallpaperForShelf() ? 0.48 : skullBackdropDim;
   var shelfDimEase = shelfDimTarget < uniforms.uParticleDim.value ? 0.18 : 0.10;
   uniforms.uParticleDim.value += (shelfDimTarget - uniforms.uParticleDim.value) * Math.min(1, shelfDimEase * Math.max(1, dt * 60));
@@ -25583,6 +25591,27 @@ function animate() {
   }
   if (backCoverGroup) {
     backCoverGroup.rotation.copy(particles.rotation);
+  }
+  // 音域回响两预设：地形（宿主 scene 内）+ 工坊（iframe 桥接），移植自上游 11-main-loop
+  if (window.MineradioSonicTopography) {
+    MineradioSonicTopography.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      screenHeight: window.innerHeight,
+      dpr: renderer.getPixelRatio ? renderer.getPixelRatio() : (window.devicePixelRatio || 1),
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      visualRotationActive: !!(orbit && orbit.rotating),
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+  if (window.MineradioSonicWorkshop) {
+    MineradioSonicWorkshop.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
   }
   updateSkullParticleLayer(dt);
   updateStageLyrics3D(dt);
