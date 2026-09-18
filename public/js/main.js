@@ -586,7 +586,7 @@ var fxDefaults = {
   lyricGlowParticles: false,
   lyricCameraLock: false,
   particleLyrics: true,    // v7.2: 粒子歌词
-  particleLyricLines: 1,   // 控制栏"词"按钮三态：1=单行 5=多行（当前行+上方四行停驻）
+  particleLyricLines: 1,   // 控制栏"词"按钮三态：1=单行 5=五行（当前行居中，上下各两行）
   backCover: false,        // 旧的封面背面粒子层关闭；浮空粒子层会跟随封面翻转
   shelf: 'side',
   shelfCameraMode: 'static',
@@ -4562,6 +4562,7 @@ var stageLyrics = {
   group: null,
   current: null,
   outgoing: [],
+  upcoming: [null, null],   // 多行模式下方两行预告 mesh（按下一/下二排序）
   currentIdx: -1,
   currentText: '',
   highBloom: 0,
@@ -6316,7 +6317,7 @@ function updateLyricMeshProgress(mesh, progress) {
 
 // 多行模式停驻（park）行管理：停驻行保留在 outgoing 队列里，靠 userData.parked 标志走常驻动画
 function expireParkedLyricLines() {
-  var keep = Math.max(0, (fx.particleLyricLines > 1 ? fx.particleLyricLines : 1) - 1);
+  var keep = fx.particleLyricLines > 1 ? 2 : 0;   // 五行模式：上方保留两行已唱停驻
   var parked = 0;
   var i, m;
   for (i = 0; i < stageLyrics.outgoing.length; i++) {
@@ -6342,12 +6343,14 @@ function unparkAllLyricLines() {
     }
   }
 }
-// 多行模式停驻行布局表（按停驻序 1..4：越旧越远越淡越小，做出纵深层次）
+// 五行歌词布局：当前行 y0.18 居中，上下各两行停驻/预告（越远越淡越小）
 var PARK_LYRIC_STYLES = [
-  { y: 0.78, z: 0.92, scale: 0.72, opacity: 0.34, readability: 0.26 },
-  { y: 1.30, z: 0.86, scale: 0.62, opacity: 0.26, readability: 0.20 },
-  { y: 1.78, z: 0.80, scale: 0.54, opacity: 0.20, readability: 0.15 },
-  { y: 2.22, z: 0.74, scale: 0.47, opacity: 0.15, readability: 0.11 }
+  { y: 0.76, z: 0.88, scale: 0.68, opacity: 0.30, readability: 0.22 },  // 停驻序1：上一行（已唱）
+  { y: 1.32, z: 0.80, scale: 0.60, opacity: 0.22, readability: 0.16 }   // 停驻序2：上二行（已唱）
+];
+var UPCOMING_LYRIC_STYLES = [
+  { y: -0.40, z: 0.88, scale: 0.68, opacity: 0.28, readability: 0.22 }, // 下一行（未唱）
+  { y: -0.96, z: 0.80, scale: 0.60, opacity: 0.20, readability: 0.16 }  // 下二行（未唱）
 ];
 function showStageLine(text, redrawOnly) {
   createLyricsParticles();
@@ -6383,12 +6386,51 @@ function refreshCurrentLyricStyle() {
   if (stageLyrics.current && stageLyrics.current.userData) stageLyrics.current.userData.age = 0.48;
 }
 
+// 五行模式下方预告行维护：与当前行号对不上（自然推进/seek）就重建对应槽位
+function clearUpcomingLyricLines() {
+  if (!Array.isArray(stageLyrics.upcoming)) stageLyrics.upcoming = [null, null];
+  for (var i = 0; i < stageLyrics.upcoming.length; i++) {
+    if (stageLyrics.upcoming[i]) disposeLyricMesh(stageLyrics.upcoming[i]);
+    stageLyrics.upcoming[i] = null;
+  }
+}
+function syncUpcomingLyricLines(idx) {
+  if (!stageLyrics.group) return;
+  if (!Array.isArray(stageLyrics.upcoming)) stageLyrics.upcoming = [null, null];
+  for (var slot = 0; slot < 2; slot++) {
+    var lineIdx = idx + 1 + slot;
+    var line = lyricsLines[lineIdx];
+    var wantText = line ? String(line.text || '') : '';
+    var mesh = stageLyrics.upcoming[slot];
+    if (mesh && mesh.userData.lineIdx !== lineIdx) {
+      disposeLyricMesh(mesh);
+      mesh = null;
+      stageLyrics.upcoming[slot] = null;
+    }
+    if (!wantText) {
+      if (mesh) { disposeLyricMesh(mesh); stageLyrics.upcoming[slot] = null; }
+      continue;
+    }
+    if (!mesh) {
+      mesh = buildLyricMesh(wantText);
+      mesh.userData.lineIdx = lineIdx;
+      mesh.userData.upcoming = true;
+      var ps = UPCOMING_LYRIC_STYLES[slot] || UPCOMING_LYRIC_STYLES[0];
+      mesh.position.set(0, ps.y, ps.z);
+      mesh.scale.setScalar(ps.scale);
+      stageLyrics.group.add(mesh);
+      stageLyrics.upcoming[slot] = mesh;
+    }
+  }
+}
+
 function clearStageLyrics() {
   disposeLyricMesh(stageLyrics.current);
   stageLyrics.current = null;
   stageLyrics.currentIdx = -1;
   stageLyrics.currentText = '';
   while (stageLyrics.outgoing.length) disposeLyricMesh(stageLyrics.outgoing.pop());
+  clearUpcomingLyricLines();
 }
 
 function updateStageLyrics3D(dt) {
@@ -6696,11 +6738,36 @@ function updateStageLyrics3D(dt) {
     mesh.scale.setScalar(0.98 - a * 0.06);
     return a < 1;
   }
+  // 五行模式：下方预告行常驻动画（渐显后保持，无卡拉OK/光效）
+  function tickUpcoming(mesh, slot) {
+    if (!mesh) return;
+    mesh.userData.age += dt;
+    var a = Math.min(1, mesh.userData.age / 0.42);
+    a = a * a * (3 - 2 * a);
+    var data = mesh.userData.lyric || {};
+    var ps = UPCOMING_LYRIC_STYLES[slot] || UPCOMING_LYRIC_STYLES[0];
+    if (data.glow) data.glow.position.set(stageLyrics.glowFollowX * 0.14, stageLyrics.glowFollowY * 0.12, -0.006);
+    if (data.textMat) data.textMat.uniforms.uOpacity.value = ps.opacity * a * shelfDetailLyricProfile.outgoing;
+    if (data.readabilityMat) data.readabilityMat.opacity = ps.readability * a * (shelfDetailOpen ? shelfDetailLyricProfile.readability : 0.62);
+    if (data.textMat && data.textMat.uniforms.uSolar) data.textMat.uniforms.uSolar.value *= 0.80;
+    if (data.glowMat) data.glowMat.opacity = 0;
+    if (data.sparkMat) setLyricSparkOpacity(data, 0);
+    if (data.sunMat) data.sunMat.opacity = 0;
+    if (data.sparks) data.sparks.visible = false;
+    mesh.position.y += (ps.y - mesh.position.y) * 0.10;
+    mesh.position.z += (ps.z - mesh.position.z) * 0.08;
+    mesh.scale.setScalar(mesh.scale.x + (ps.scale - mesh.scale.x) * 0.12);
+  }
   tickMesh(stageLyrics.current, true);
   for (var i = stageLyrics.outgoing.length - 1; i >= 0; i--) {
     if (!tickMesh(stageLyrics.outgoing[i], false)) {
       disposeLyricMesh(stageLyrics.outgoing[i]);
       stageLyrics.outgoing.splice(i, 1);
+    }
+  }
+  if (Array.isArray(stageLyrics.upcoming)) {
+    for (var ui = 0; ui < stageLyrics.upcoming.length; ui++) {
+      if (stageLyrics.upcoming[ui]) tickUpcoming(stageLyrics.upcoming[ui], ui);
     }
   }
 }
@@ -6735,7 +6802,8 @@ function tickLyricsParticles() {
     return;
   }
   if (!playing || !audio || !lyricsLines.length) {
-    unparkAllLyricLines();   // 暂停/无歌词时停驻行跟随现状一起退场
+    unparkAllLyricLines();      // 暂停/无歌词时停驻行跟随现状一起退场
+    clearUpcomingLyricLines();  // 预告行一并退场，恢复播放后自动重建
     if (stageLyrics.current) {
       stageLyrics.current.userData.state = 'out';
       stageLyrics.current.userData.age = 0;
@@ -6778,6 +6846,12 @@ function tickLyricsParticles() {
     var nextLine = lyricsLines[newIdx + 1];
     var progress = getLyricLineProgress(curLine, nextLine, t);
     updateLyricMeshProgress(stageLyrics.current, progress);
+  }
+  // 五行模式：同步下方两行预告；单行模式兜底清理
+  if (fx.particleLyricLines > 1) {
+    syncUpcomingLyricLines(newIdx);
+  } else if (Array.isArray(stageLyrics.upcoming) && (stageLyrics.upcoming[0] || stageLyrics.upcoming[1])) {
+    clearUpcomingLyricLines();
   }
 }
 
@@ -16929,11 +17003,14 @@ function toggleLyricsPanel(force) {
     announce = '歌词已隐藏';
   } else {
     fx.particleLyricLines = 5;
-    announce = '歌词：五行（当前 + 上方四行）';
+    announce = '歌词：五行（当前 + 上下各两行）';
   }
   if (fx.particleLyrics) {
     createLyricsParticles();
-    if (fx.particleLyricLines === 1) unparkAllLyricLines();   // 切回单行时停驻行立即淡出退场
+    if (fx.particleLyricLines === 1) {
+      unparkAllLyricLines();      // 切回单行时停驻行立即淡出退场
+      clearUpcomingLyricLines();  // 预告行一并退场
+    }
     if (announce) showToast(announce);
   } else {
     clearStageLyrics();
