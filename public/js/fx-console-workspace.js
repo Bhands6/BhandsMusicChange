@@ -258,6 +258,7 @@ var FX_CONSOLE_LAYOUT = [
     groups: [
       { key: 'startup', title: '启动与退出', hint: '关闭窗口行为和恢复播放方式', open: true, items: [
         fxConsoleItem('close-behavior-seg', '关闭窗口', '直接退出 后台托盘'),
+        fxConsoleItem('t-rememberClose', '记住关闭选择', '记住关闭行为 最小化托盘 不再询问'),
         fxConsoleItem('t-startupAutoplay', '启动自动播放', '打开软件继续播放'),
         fxConsoleItem('t-startupFastSkip', '秒启动跳过启动页', '快速启动'),
         fxConsoleItem('startup-resume-mode-seg', '恢复播放位置', '按上次进度 重播整首')
@@ -292,7 +293,6 @@ var FX_CONSOLE_LAYOUT = [
       ] },
       { key: 'bhands-advanced', title: 'BhandsMusic 专属', hint: '高级参数、系统设置与第三方音源', items: [
         fxConsoleItem({ selector: '#fx-advanced' }, '高级参数', '直播后台 画质档位 内存压缩 Mem Reduct 粒子尺寸 流速 扭曲 色彩张力 溢光 离散 背景压缩'),
-        fxConsoleItem({ selector: '#fx-system-settings' }, '系统设置', '关闭窗口 最小化 托盘 记住关闭'),
         fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本')
       ] },
       { key: 'experimental', title: '实验功能', hint: '尚未开放或需要谨慎使用的能力', items: [
