@@ -17046,14 +17046,24 @@ function updateLyricsToggleButton() {
 function syncLyricDisplayModeSeg() {
   var seg = document.getElementById('lyric-display-mode-seg');
   if (!seg) return;
-  var current = (fx.particleLyrics && fx.particleLyricLines > 1) ? '5' : '1';
+  var current = !fx.particleLyrics ? '0' : (fx.particleLyricLines > 1 ? '5' : '1');
   var buttons = seg.querySelectorAll('button[data-lyric-lines]');
   for (var i = 0; i < buttons.length; i++) {
     buttons[i].classList.toggle('active', buttons[i].getAttribute('data-lyric-lines') === current);
   }
 }
-// 控制台直接设置歌词行数（与"词"按钮三态独立，始终确保歌词可见）
+// 控制台直接设置歌词行数（0=隐藏；1/5 与"词"按钮三态共用同一份 fx 状态与存档）
 function setLyricConsoleLines(lines) {
+  if (lines === 0) {
+    fx.particleLyrics = false;
+    fx.particleLyricLines = 1;
+    clearStageLyrics();         // 内部尾部会一并清理预告行
+    lyricsVisible = false;
+    updateLyricsToggleButton();
+    saveLyricLayout();
+    showToast('歌词已隐藏');
+    return;
+  }
   var want = lines === 5 ? 5 : 1;
   fx.particleLyrics = true;
   fx.particleLyricLines = want;
