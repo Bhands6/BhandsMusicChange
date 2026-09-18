@@ -593,6 +593,7 @@ var fxDefaults = {
   lyricCameraLock: false,
   particleLyrics: true,    // v7.2: 粒子歌词
   particleLyricLines: 1,   // 控制栏"词"按钮三态：1=单行 5=五行（当前行居中，上下各两行）
+  lyricShowOnPause: true,  // 暂停时歌词：true=冻结显示当前画面，false=暂停即退场（旧行为）
   backCover: false,        // 旧的封面背面粒子层关闭；浮空粒子层会跟随封面翻转
   shelf: 'side',
   shelfCameraMode: 'static',
@@ -688,6 +689,7 @@ var PACKAGED_DEFAULT_FX_SNAPSHOT = Object.freeze({
   liveBackgroundKeep: false,
   particleLyrics: true,
   particleLyricLines: 1,
+  lyricShowOnPause: true,
   backCover: false,
   shelf: 'side',
   shelfCameraMode: 'static',
@@ -4998,7 +5000,8 @@ function readSavedLyricLayout() {
       memorySystemMask: normalizeMemorySystemMask(raw.memorySystemMask == null ? fxDefaults.memorySystemMask : raw.memorySystemMask),
       cam: /^(off|gesture)$/.test(String(raw.cam || '')) ? raw.cam : fxDefaults.cam,
       particleLyrics: raw.particleLyrics !== false,
-      particleLyricLines: raw.particleLyricLines === 2 || raw.particleLyricLines === 5 ? raw.particleLyricLines : 1
+      particleLyricLines: raw.particleLyricLines === 2 || raw.particleLyricLines === 5 ? raw.particleLyricLines : 1,
+      lyricShowOnPause: raw.lyricShowOnPause !== false
     };
   } catch (e) {
     return {};
@@ -5097,7 +5100,8 @@ function saveLyricLayout() {
       memorySystemMask: normalizeMemorySystemMask(fx.memorySystemMask == null ? fxDefaults.memorySystemMask : fx.memorySystemMask),
       cam: /^(off|gesture)$/.test(String(fx.cam || '')) ? fx.cam : fxDefaults.cam,
       particleLyrics: !!fx.particleLyrics,
-      particleLyricLines: fx.particleLyricLines === 2 || fx.particleLyricLines === 5 ? fx.particleLyricLines : 1
+      particleLyricLines: fx.particleLyricLines === 2 || fx.particleLyricLines === 5 ? fx.particleLyricLines : 1,
+      lyricShowOnPause: fx.lyricShowOnPause !== false
     }));
   } catch (e) {}
 }
@@ -6806,21 +6810,37 @@ function getLyricLineProgress(line, nextLine, now) {
   return prog * prog * (3 - 2 * prog);
 }
 
+function clearCurrentLyricLineToOutgoing() {
+  if (!stageLyrics.current) return;
+  stageLyrics.current.userData.state = 'out';
+  stageLyrics.current.userData.age = 0;
+  stageLyrics.outgoing.push(stageLyrics.current);
+  stageLyrics.current = null;
+  stageLyrics.currentIdx = -1;
+  stageLyrics.currentText = '';
+}
 function tickLyricsParticles() {
   if (!fx.particleLyrics) {
     if (stageLyrics.current || stageLyrics.currentText || (stageLyrics.outgoing && stageLyrics.outgoing.length)) clearStageLyrics();
     return;
   }
-  if (!playing || !audio || !lyricsLines.length) {
-    unparkAllLyricLines();      // 暂停/无歌词时停驻行跟随现状一起退场
-    clearUpcomingLyricLines();  // 预告行一并退场，恢复播放后自动重建
-    if (stageLyrics.current) {
-      stageLyrics.current.userData.state = 'out';
-      stageLyrics.current.userData.age = 0;
-      stageLyrics.outgoing.push(stageLyrics.current);
-      stageLyrics.current = null;
-      stageLyrics.currentIdx = -1;
-      stageLyrics.currentText = '';
+  if (!lyricsLines.length) {
+    // 无歌词：无论暂停开关一律退场，不残留上一首的词
+    unparkAllLyricLines();
+    clearUpcomingLyricLines();
+    clearCurrentLyricLineToOutgoing();
+    return;
+  }
+  if (!playing || !audio) {
+    if (fx.lyricShowOnPause === false) {
+      // 暂停即退场（旧行为）：停驻行/预告行/当前行全部淡出
+      unparkAllLyricLines();
+      clearUpcomingLyricLines();
+      clearCurrentLyricLineToOutgoing();
+    } else {
+      // 暂停保持显示：当前行与停驻行冻结（进度停在暂停瞬间），
+      // 预告行退场，恢复播放后由主分支自动重建
+      clearUpcomingLyricLines();
     }
     return;
   }
@@ -17086,6 +17106,22 @@ function setLyricConsoleLines(lines) {
   saveLyricLayout();
   showToast(want === 5 ? '歌词：五行（当前 + 上下各两行）' : '歌词：单行');
 }
+// 控制台设置"暂停时歌词"：true=暂停时冻结显示当前画面，false=暂停即退场（旧行为）
+function setLyricPauseDisplay(show) {
+  fx.lyricShowOnPause = show !== false;
+  updateLyricPauseDisplaySeg();
+  saveLyricLayout();
+  showToast(show !== false ? '暂停时：保持显示歌词' : '暂停时：隐藏歌词');
+}
+function updateLyricPauseDisplaySeg() {
+  var seg = document.getElementById('lyric-pause-display-seg');
+  if (!seg) return;
+  var current = fx.lyricShowOnPause === false ? 'hide' : 'show';
+  var buttons = seg.querySelectorAll('button[data-lyric-pause]');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-lyric-pause') === current);
+  }
+}
 function updateLyricsHighlight() { /* v8: 由 tickLyricsParticles 接管 */ }
 
 // ============================================================
@@ -18167,6 +18203,7 @@ function normalizeFxArchiveSnapshot(raw) {
     liveBackgroundKeep: normalizePerformanceBackgroundMode(raw.performanceBackground, raw.liveBackgroundKeep === true) === 'keep',
     particleLyrics: raw.particleLyrics !== false,
     particleLyricLines: raw.particleLyricLines === 2 || raw.particleLyricLines === 5 ? raw.particleLyricLines : 1,
+    lyricShowOnPause: raw.lyricShowOnPause !== false,
     backCover: !!raw.backCover,
     shelf: archiveMode(raw, 'shelf', /^(off|side|stage)$/, fxDefaults.shelf),
     shelfCameraMode: archiveMode(raw, 'shelfCameraMode', /^(dynamic|static)$/, fxDefaults.shelfCameraMode),
@@ -25277,6 +25314,7 @@ applyPlaylistPanelPinState(false);
 if (fx.floatLayer) createFloatLayer();
 if (fx.particleLyrics) createLyricsParticles();
 updateLyricsToggleButton();
+updateLyricPauseDisplaySeg();
 if (fx.backCover) createBackCoverLayer();
 initIdleGuideCanvas();
 var startupLoginStatusPromise = Promise.all([refreshLoginStatus(), refreshQQLoginStatus()]);

@@ -355,6 +355,11 @@ try {
         <button data-lyric-lines="5" type="button" onclick="setLyricConsoleLines(5)">五行</button>
         <button data-lyric-lines="0" type="button" onclick="setLyricConsoleLines(0)">隐藏</button>
       </div>
+      <div class="fx-section-label">暂停时歌词</div>
+      <div class="fx-seg" id="lyric-pause-display-seg">
+        <button data-lyric-pause="show" type="button" class="active" onclick="setLyricPauseDisplay(true)">显示</button>
+        <button data-lyric-pause="hide" type="button" onclick="setLyricPauseDisplay(false)">隐藏</button>
+      </div>
       <div class="fx-section-label">歌词字体</div>
       <div class="fx-font-grid expanded" id="lyric-font-grid">
         <button type="button" data-font="sans" onclick="setLyricFont('sans')">默认</button>

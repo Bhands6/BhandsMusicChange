@@ -69,6 +69,7 @@ var FX_CONSOLE_LAYOUT = [
       { key: 'display', title: '显示与翻译', hint: '歌词来源、行数和双语译文', open: true, items: [
         fxConsoleItem('lyric-source-seg', '歌词来源', '原词 自定义歌词', false),
         fxConsoleItem('lyric-display-mode-seg', '歌词行数', '隐藏 单行 五行'),
+        fxConsoleItem('lyric-pause-display-seg', '暂停时歌词', '暂停 显示 隐藏 冻结'),
         fxConsoleItem('fx-lyriccustomlines', '显示行数', '自定义歌词行数'),
         fxConsoleItem('lyric-translation-mode-seg', '双语翻译', '译文 当前 双行 多行 关闭'),
         fxConsoleItem('fx-lyrictranslationgap', '译文间距', '翻译距离'),
