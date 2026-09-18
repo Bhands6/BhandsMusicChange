@@ -1169,6 +1169,9 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,cal
 .preset-card[data-preset="6"] .pc-desc{font-size:10.5px;color:rgba(255,255,255,.52);font-weight:700}
 .preset-card[data-preset="6"] .pc-yui7w{color:#3257f7;font-family:"Microsoft Yi Baiti","SimHei","Microsoft YaHei",sans-serif;font-weight:900;font-style:italic;letter-spacing:.7px}
 .preset-card[data-preset="6"] .pc-icon{color:#3257f7}
+.preset-card[data-preset="7"] .pc-name,.preset-card[data-preset="8"] .pc-name{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px;row-gap:1px}
+.preset-card .pc-name-en{color:rgba(255,255,255,.48);font-size:9px;font-weight:520;line-height:1.2;letter-spacing:.15px;white-space:nowrap}
+.preset-card .pc-author-ajin{color:#f59e0b;font-weight:650}
 .preset-card[data-preset="6"].active .pc-icon{color:#3257f7!important;text-shadow:0 0 12px rgba(50,87,247,.44)}
 .preset-card .pc-bg{position:absolute;inset:0;opacity:.35;pointer-events:none}
 @keyframes preset-card-pulse{0%{opacity:0;transform:scale(.6) rotate(0deg)}35%{opacity:1}100%{opacity:0;transform:scale(1.25) rotate(12deg)}}

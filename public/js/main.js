@@ -18026,8 +18026,10 @@ var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.4"/><path d="M16.5 5.2c2.1.9 3.4 2.4 4 4.5"/><path d="M18.8 3.2l1.5 4.8"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 15c2.2-4.4 4.4-4.4 6.6 0s4.4 4.4 6.6 0S20.6 10.6 23 15"/><path d="M3 9c2.2 2.2 4.4 2.2 6.6 0s4.4-2.2 6.6 0S20.6 11.2 23 9"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.2h4v6.2h4.2v3.8H14v7.6h-4v-7.6H5.8V9.4H10z"/></svg>',
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 12c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M3 6c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><circle cx="18" cy="5" r="1.2" fill="currentColor"/></svg>',
+  '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M5 15c1.4-4 2.8-4 4.2 0s2.8 4 4.2 0 2.8-4 4.6 0"/><path d="M4 10c2-2 4-2 6 0s4 2 6 0 3-2 4 0"/><path d="M7 6h10"/><circle cx="18.2" cy="5.8" r="1.35" fill="currentColor"/></svg>',
 ];
-var presetDisplayOrder = [0, 6, 5, 4, 2, 1, 3];
+var presetDisplayOrder = [0, 6, 7, 8, 5, 4, 2, 1, 3];
 var lyricColorPresets = [
   { name:'雾蓝', color:'#a9b8c8' },
   { name:'银蓝', color:'#9db8cf' },
@@ -25563,10 +25565,11 @@ function animate() {
   // v7.2 旋转 = 头部+眼球追踪 + 鼠标/手势拖动 + 惯性
   tickGestureRotation(dt);
   var skullPresetActive = fx && fx.preset === SKULL_PRESET_INDEX;
-  particles.visible = !skullPresetActive;
-  if (bloomParticles) bloomParticles.visible = !skullPresetActive && fx.bloom && fx.bloomStrength > 0.01;
-  if (floatGroup) floatGroup.visible = !skullPresetActive;
-  if (backCoverGroup) backCoverGroup.visible = !skullPresetActive;
+  var workshopPresetActive = !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
+  particles.visible = !skullPresetActive && !workshopPresetActive;
+  if (bloomParticles) bloomParticles.visible = !skullPresetActive && !workshopPresetActive && fx.bloom && fx.bloomStrength > 0.01;
+  if (floatGroup) floatGroup.visible = !skullPresetActive && !workshopPresetActive;
+  if (backCoverGroup) backCoverGroup.visible = !skullPresetActive && !workshopPresetActive;
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
   var targetRotX = orbit.centerLocked ? 0 : (headParallax.active ? -headParallax.y * 0.35 : 0) + gestureRotation.x;
   particles.rotation.y += (targetRotY - particles.rotation.y) * 0.055;
