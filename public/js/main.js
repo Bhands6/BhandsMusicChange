@@ -6837,11 +6837,9 @@ function tickLyricsParticles() {
       unparkAllLyricLines();
       clearUpcomingLyricLines();
       clearCurrentLyricLineToOutgoing();
-    } else {
-      // 暂停保持显示：当前行与停驻行冻结（进度停在暂停瞬间），
-      // 预告行退场，恢复播放后由主分支自动重建
-      clearUpcomingLyricLines();
     }
+    // lyricShowOnPause=true：整体冻结——当前行/停驻行/预告行原样保留，
+    // 恢复播放后由主分支继续推进（seek 错位时预告行自动重建）
     return;
   }
   var t = audio.currentTime;
