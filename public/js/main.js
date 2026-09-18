@@ -4993,7 +4993,9 @@ function readSavedLyricLayout() {
       memorySystemIntervalMin: clampRange(raw.memorySystemIntervalMin == null ? fxDefaults.memorySystemIntervalMin : Number(raw.memorySystemIntervalMin), 5, 180),
       memorySystemThresholdPercent: clampRange(raw.memorySystemThresholdPercent == null ? fxDefaults.memorySystemThresholdPercent : Number(raw.memorySystemThresholdPercent), 50, 98),
       memorySystemMask: normalizeMemorySystemMask(raw.memorySystemMask == null ? fxDefaults.memorySystemMask : raw.memorySystemMask),
-      cam: /^(off|gesture)$/.test(String(raw.cam || '')) ? raw.cam : fxDefaults.cam
+      cam: /^(off|gesture)$/.test(String(raw.cam || '')) ? raw.cam : fxDefaults.cam,
+      particleLyrics: raw.particleLyrics !== false,
+      particleLyricLines: raw.particleLyricLines === 2 || raw.particleLyricLines === 5 ? raw.particleLyricLines : 1
     };
   } catch (e) {
     return {};
@@ -5090,7 +5092,9 @@ function saveLyricLayout() {
       memorySystemIntervalMin: clampRange(fx.memorySystemIntervalMin == null ? fxDefaults.memorySystemIntervalMin : Number(fx.memorySystemIntervalMin), 5, 180),
       memorySystemThresholdPercent: clampRange(fx.memorySystemThresholdPercent == null ? fxDefaults.memorySystemThresholdPercent : Number(fx.memorySystemThresholdPercent), 50, 98),
       memorySystemMask: normalizeMemorySystemMask(fx.memorySystemMask == null ? fxDefaults.memorySystemMask : fx.memorySystemMask),
-      cam: /^(off|gesture)$/.test(String(fx.cam || '')) ? fx.cam : fxDefaults.cam
+      cam: /^(off|gesture)$/.test(String(fx.cam || '')) ? fx.cam : fxDefaults.cam,
+      particleLyrics: !!fx.particleLyrics,
+      particleLyricLines: fx.particleLyricLines === 2 || fx.particleLyricLines === 5 ? fx.particleLyricLines : 1
     }));
   } catch (e) {}
 }
@@ -17025,6 +17029,7 @@ function toggleLyricsPanel(force) {
   }
   lyricsVisible = fx.particleLyrics;
   updateLyricsToggleButton();
+  saveLyricLayout();
 }
 function updateLyricsToggleButton() {
   var btn = document.getElementById('lyrics-toggle-btn');
@@ -17059,6 +17064,7 @@ function setLyricConsoleLines(lines) {
   }
   lyricsVisible = true;
   updateLyricsToggleButton();
+  saveLyricLayout();
   showToast(want === 5 ? '歌词：五行（当前 + 上下各两行）' : '歌词：单行');
 }
 function updateLyricsHighlight() { /* v8: 由 tickLyricsParticles 接管 */ }
