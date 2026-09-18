@@ -45,6 +45,9 @@ var CUSTOM_LYRIC_STORE_KEY = 'bhandsmusic-custom-lyrics-v1';
 var CUSTOM_LYRIC_PREF_STORE_KEY = 'bhandsmusic-custom-lyric-prefs-v1';
 var LYRIC_LAYOUT_STORE_KEY = 'bhandsmusic-lyric-layout-v1';
 var VISUAL_PRESET_SCHEMA = 'skull-preset-v2';
+// 视觉预设索引上限：presetMeta 定义在文件后部，而启动恢复（readSavedPlaybackVisualPreset /
+// readSavedLyricLayout）先于其执行，故此处给初始化期兜底值；presetMeta 定义后按其长度校准
+var VISUAL_PRESET_INDEX_MAX = 8;
 var PLAYBACK_QUALITY_STORE_KEY = 'bhandsmusic-playback-quality-v1';
 var UPLOAD_TIP_STORE_KEY = 'bhandsmusic-upload-tip-seen';
 var DIY_MODE_STORE_KEY = 'bhandsmusic-diy-player-mode-v1';
@@ -722,7 +725,7 @@ function readSavedPlaybackVisualPreset() {
   try {
     var raw = JSON.parse(localStorage.getItem(LYRIC_LAYOUT_STORE_KEY) || '{}') || {};
     if (!Object.prototype.hasOwnProperty.call(raw, 'preset')) return fxDefaults.preset;
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, 6);
+    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_INDEX_MAX);
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) savedPreset = 5;
     return savedPreset;
   } catch (e) {
@@ -4892,7 +4895,7 @@ function readSavedLyricLayout() {
   try {
     var savedLayoutRaw = localStorage.getItem(LYRIC_LAYOUT_STORE_KEY);
     var raw = savedLayoutRaw ? (JSON.parse(savedLayoutRaw) || {}) : packagedDefaultLyricLayoutRaw();
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, 6);
+    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_INDEX_MAX);
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) {
       savedPreset = 5;
     }
@@ -18051,6 +18054,8 @@ var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M5 15c1.4-4 2.8-4 4.2 0s2.8 4 4.2 0 2.8-4 4.6 0"/><path d="M4 10c2-2 4-2 6 0s4 2 6 0 3-2 4 0"/><path d="M7 6h10"/><circle cx="18.2" cy="5.8" r="1.35" fill="currentColor"/></svg>',
 ];
 var presetDisplayOrder = [0, 6, 7, 8, 5, 4, 2, 1, 3];
+// presetMeta 已就绪：校准头部兜底的预设索引上限（启动恢复读取端使用），新增预设时只需维护 presetMeta 本身
+VISUAL_PRESET_INDEX_MAX = presetMeta.length - 1;
 var lyricColorPresets = [
   { name:'雾蓝', color:'#a9b8c8' },
   { name:'银蓝', color:'#9db8cf' },
