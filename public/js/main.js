@@ -25574,10 +25574,8 @@ function animate() {
   tickGestureRotation(dt);
   var skullPresetActive = fx && fx.preset === SKULL_PRESET_INDEX;
   var workshopPresetActive = !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
-  // 音域地形（preset 7）：地形自带浮块/流星/尾迹氛围，不再叠加星河主粒子（用户反馈：星河混入）
-  var topographyPresetActive = !!(window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx));
-  particles.visible = !skullPresetActive && !workshopPresetActive && !topographyPresetActive;
-  if (bloomParticles) bloomParticles.visible = !skullPresetActive && !workshopPresetActive && !topographyPresetActive && fx.bloom && fx.bloomStrength > 0.01;
+  particles.visible = !skullPresetActive && !workshopPresetActive;
+  if (bloomParticles) bloomParticles.visible = !skullPresetActive && !workshopPresetActive && fx.bloom && fx.bloomStrength > 0.01;
   if (floatGroup) floatGroup.visible = !skullPresetActive && !workshopPresetActive;
   if (backCoverGroup) backCoverGroup.visible = !skullPresetActive && !workshopPresetActive;
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
