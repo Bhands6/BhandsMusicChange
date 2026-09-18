@@ -13592,8 +13592,11 @@ function switchPlaybackVisualToEmily() {
 function applyStartupStarfieldPreset() {
   if (playing || currentIdx >= 0) return;
   startupVisualPreviewActive = true;
-  if (typeof setPreset === 'function' && fx.preset !== 5) {
-    setPreset(5, { silent: true, preserveCamera: false, skipTransition: true, noSave: true });
+  // 启动恢复态直接显示存档配置的预设（fx.preset 已由 readSavedLyricLayout 恢复），
+  // 不再强制切星河：旧行为导致启动画面与点歌后的特效不一致，被误认为没读配置。
+  // 仍经 setPreset 走一遍以触发预设副作用（骷髅资源加载 / uniforms / 控制台网格刷新）。
+  if (typeof setPreset === 'function') {
+    setPreset(fx.preset, { silent: true, preserveCamera: true, skipTransition: true, noSave: true });
   } else if (typeof syncFxUniforms === 'function') {
     syncFxUniforms();
   }
