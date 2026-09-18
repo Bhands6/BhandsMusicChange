@@ -6345,12 +6345,12 @@ function unparkAllLyricLines() {
 }
 // 五行歌词布局：当前行 y0.18 居中，上下各两行停驻/预告（越远越淡越小）
 var PARK_LYRIC_STYLES = [
-  { y: 0.76, z: 0.88, scale: 0.68, opacity: 0.30, readability: 0.22 },  // 停驻序1：上一行（已唱）
-  { y: 1.32, z: 0.80, scale: 0.60, opacity: 0.22, readability: 0.16 }   // 停驻序2：上二行（已唱）
+  { y: 0.76, z: 0.88, scale: 0.68, opacity: 0.55, readability: 0.46 },  // 停驻序1：上一行（已唱）
+  { y: 1.32, z: 0.80, scale: 0.60, opacity: 0.42, readability: 0.36 }   // 停驻序2：上二行（已唱）
 ];
 var UPCOMING_LYRIC_STYLES = [
-  { y: -0.40, z: 0.88, scale: 0.68, opacity: 0.28, readability: 0.22 }, // 下一行（未唱）
-  { y: -0.96, z: 0.80, scale: 0.60, opacity: 0.20, readability: 0.16 }  // 下二行（未唱）
+  { y: -0.40, z: 0.88, scale: 0.68, opacity: 0.52, readability: 0.46 }, // 下一行（未唱）
+  { y: -0.96, z: 0.80, scale: 0.60, opacity: 0.38, readability: 0.36 }  // 下二行（未唱）
 ];
 function showStageLine(text, redrawOnly) {
   createLyricsParticles();
