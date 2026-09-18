@@ -16161,6 +16161,9 @@ function scheduleAudioResumePosition(media, seconds, token) {
 async function playQueueAt(idx, opts) {
   opts = opts || {};
   if (idx < 0 || idx >= playQueue.length) return;
+  // 首次点播即结束"启动恢复态"豁免：恢复会话后第一次点歌时 audio 尚未创建（16337 行才 new Audio），
+  // 若不清标志，下方 updateEmptyHomeVisibility 仍按 restoredIdle 豁免把主页留在播放页上，第二次点播才恢复
+  restoredIdleSession = false;
   markRenderInteraction('track-switch', 1500);
   var playPhase = 'start';
   function markPlayPhase(name) { playPhase = name; }
