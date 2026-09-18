@@ -17028,6 +17028,31 @@ function updateLyricsToggleButton() {
   btn.classList.toggle('multi', multi);
   btn.setAttribute('aria-pressed', on ? 'true' : 'false');
   btn.title = !on ? '歌词：隐藏（点击开启单行）' : (multi ? '歌词：五行（点击隐藏）' : '歌词：单行（点击切换五行）');
+  syncLyricDisplayModeSeg();
+}
+// 视觉控制台"歌词行数"分段与"词"按钮状态保持一致
+function syncLyricDisplayModeSeg() {
+  var seg = document.getElementById('lyric-display-mode-seg');
+  if (!seg) return;
+  var current = (fx.particleLyrics && fx.particleLyricLines > 1) ? '5' : '1';
+  var buttons = seg.querySelectorAll('button[data-lyric-lines]');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-lyric-lines') === current);
+  }
+}
+// 控制台直接设置歌词行数（与"词"按钮三态独立，始终确保歌词可见）
+function setLyricConsoleLines(lines) {
+  var want = lines === 5 ? 5 : 1;
+  fx.particleLyrics = true;
+  fx.particleLyricLines = want;
+  createLyricsParticles();
+  if (want === 1) {
+    unparkAllLyricLines();      // 切回单行时停驻行立即淡出退场
+    clearUpcomingLyricLines();  // 预告行一并退场
+  }
+  lyricsVisible = true;
+  updateLyricsToggleButton();
+  showToast(want === 5 ? '歌词：五行（当前 + 上下各两行）' : '歌词：单行');
 }
 function updateLyricsHighlight() { /* v8: 由 tickLyricsParticles 接管 */ }
 
@@ -19729,18 +19754,35 @@ function ensureFxSliderResetButton(id, key) {
   });
   el.parentElement.appendChild(btn);
 }
-var fxPanelTab = 'presets';
+var fxPanelTab = 'home';
+var fxPanelTabScroll = {};
 function setFxPanelTab(tab) {
-  var allowed = { presets:1, appearance:1, lyrics:1, motion:1, advanced:1 };
-  fxPanelTab = allowed[tab] ? tab : 'presets';
+  var allowed = { home:1, interface:1, lyrics:1, motion:1, shelf:1, system:1 };
   var panel = document.getElementById('fx-panel');
+  var nextTab = allowed[tab] ? tab : 'home';
+  var previousTab = fxPanelTab;
+  if (panel && previousTab !== nextTab && panel.getAttribute('data-console-layout') === 'task-first-v2') {
+    fxPanelTabScroll[previousTab] = panel.scrollTop;
+  }
+  fxPanelTab = nextTab;
   if (panel) panel.setAttribute('data-active-tab', fxPanelTab);
   document.querySelectorAll('#fx-panel-tabs [data-fx-tab]').forEach(function(btn){
-    btn.classList.toggle('active', btn.getAttribute('data-fx-tab') === fxPanelTab);
+    var active = btn.getAttribute('data-fx-tab') === fxPanelTab;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.setAttribute('tabindex', active ? '0' : '-1');
+    if (active && previousTab !== fxPanelTab && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
   document.querySelectorAll('#fx-panel .fx-tab-page').forEach(function(page){
-    page.classList.toggle('active', page.getAttribute('data-fx-page') === fxPanelTab);
+    var active = page.getAttribute('data-fx-page') === fxPanelTab;
+    page.classList.toggle('active', active);
+    page.setAttribute('aria-hidden', active ? 'false' : 'true');
   });
+  if (panel && previousTab !== fxPanelTab && panel.getAttribute('data-console-layout') === 'task-first-v2') {
+    requestAnimationFrame(function () {
+      panel.scrollTop = Object.prototype.hasOwnProperty.call(fxPanelTabScroll, fxPanelTab) ? fxPanelTabScroll[fxPanelTab] : 0;
+    });
+  }
   repositionFxFloatingPanels();
 }
 function fxPanelInputId(node) {
@@ -19762,6 +19804,11 @@ function fxPanelTargetForNode(node, current) {
   return current || 'presets';
 }
 function organizeFxPanel() {
+  if (typeof organizeFxConsoleWorkspace === 'function') {
+    organizeFxConsoleWorkspace();
+    if (typeof initFxConsoleSearchAndHistory === 'function') initFxConsoleSearchAndHistory();
+    return;
+  }
   var panel = document.getElementById('fx-panel');
   if (!panel) return;
   if (panel._fxPanelOrganized) {

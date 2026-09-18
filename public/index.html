@@ -349,6 +349,11 @@ try {
           <button id="lyric-source-custom" type="button" onclick="setLyricSourceMode('custom')">自定义</button>
         </div>
       </div>
+      <div class="fx-section-label">歌词行数</div>
+      <div class="fx-seg" id="lyric-display-mode-seg">
+        <button data-lyric-lines="1" type="button" class="active" onclick="setLyricConsoleLines(1)">单行</button>
+        <button data-lyric-lines="5" type="button" onclick="setLyricConsoleLines(5)">五行</button>
+      </div>
       <div class="fx-section-label">歌词字体</div>
       <div class="fx-font-grid expanded" id="lyric-font-grid">
         <button type="button" data-font="sans" onclick="setLyricFont('sans')">默认</button>
@@ -1028,6 +1033,7 @@ try {
 <script src="js/cuefield-bridge-engine.js"></script>       <!-- cuefield · WebAudio 过渡桥 -->
 <script src="js/cuefield-source-loop.js"></script>         <!-- cuefield · 源循环 -->
 <script src="js/cuefield-automix-integration.js"></script> <!-- cuefield · 播放集成（播放时才触碰 main.js 全局，安全） -->
+<script src="js/fx-console-workspace.js"></script>          <!-- 视觉控制台工作台（移植自上游：6 tab + 搜索 + 撤销/历史），须在 main.js 前加载 -->
 <script src="js/main.js"></script>
 </body>
 </html>
