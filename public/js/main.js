@@ -90,6 +90,9 @@ var visualGuideState = { bottomWasVisible: false, searchWasPeek: false, manual: 
 var emptyHomeActive = false;
 var homeForcedOpen = false;
 var homeSuppressed = false;
+// 启动恢复了上次播放列表但用户尚未点播（audio 懒创建，new Audio 仅发生在首次播放入口）
+// 此状态下主页仍应显示；用户点播创建 audio 后自动失效（见 shouldShowEmptyHomeCore）
+var restoredIdleSession = false;
 var homeDiscoverState = { loading: false, loaded: false, loggedIn: false, mode: 'starter', songs: [], playlists: [], podcasts: [], error: '', updatedAt: 0 };
 var homeDiscoverToken = 0;
 var toplistTracks = [];        // 飙升榜预加载歌曲
@@ -13461,8 +13464,10 @@ function shouldShowEmptyHomeCore(ignoreSplash) {
   if (homeSuppressed) return false;
   if (shelfPinnedOpen) return false;
   if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return false;
-  if (playQueue && playQueue.length) return false;
-  if (currentIdx >= 0 && playQueue[currentIdx]) return false;
+  // 启动恢复了上次列表但还没点播：恢复态不顶掉主页；一点播（audio 创建）恢复既有语义
+  var restoredIdle = restoredIdleSession && !audio && !playing;
+  if (!restoredIdle && playQueue && playQueue.length) return false;
+  if (!restoredIdle && currentIdx >= 0 && playQueue[currentIdx]) return false;
   if (playing) return false;
   return true;
 }
@@ -13476,8 +13481,10 @@ function shouldForceEmptyHomeAfterSplash() {
   if (immersiveMode) return false;
   if (shelfPinnedOpen) return false;
   if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return false;
-  if (playQueue && playQueue.length) return false;
-  if (currentIdx >= 0 && playQueue[currentIdx]) return false;
+  // 与 shouldShowEmptyHomeCore 同款豁免：恢复态未点播时 splash 结束应强制进主页
+  var restoredIdle = restoredIdleSession && !audio && !playing;
+  if (!restoredIdle && playQueue && playQueue.length) return false;
+  if (!restoredIdle && currentIdx >= 0 && playQueue[currentIdx]) return false;
   if (playing) return false;
   return true;
 }
@@ -25173,6 +25180,8 @@ async function restoreLastPlaybackSession() {
 
     playQueue = rebuilt;
     currentIdx = idx;
+    // 恢复态标记：主页不因恢复的列表被顶掉；用户首次点播（创建 audio）后由判定函数自动失效
+    restoredIdleSession = true;
     var current = playQueue[idx];
     var position = Math.max(0, Number(record.position) || 0);
     if (position > 2) pendingResumeAt = { key: queueItemKey(current), position: position };
