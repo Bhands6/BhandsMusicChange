@@ -1172,6 +1172,11 @@ body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,cal
 .preset-card[data-preset="7"] .pc-name,.preset-card[data-preset="8"] .pc-name{display:flex;align-items:baseline;flex-wrap:wrap;column-gap:5px;row-gap:1px}
 .preset-card .pc-name-en{color:rgba(255,255,255,.48);font-size:9px;font-weight:520;line-height:1.2;letter-spacing:.15px;white-space:nowrap}
 .preset-card .pc-author-ajin{color:#f59e0b;font-weight:650}
+/* 音域回响 Wallpaper Engine（preset 8）：工坊 iframe 全屏层（移植自上游 index.css 1096-1133） */
+#sonic-workshop-layer{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none !important;background:#000;opacity:0;transition:opacity 520ms cubic-bezier(.16,1,.3,1);-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+#sonic-workshop-layer iframe{position:absolute;inset:0;display:block;width:100%;height:100%;border:0;background:#000;pointer-events:none !important;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+#sonic-workshop-layer,#sonic-workshop-layer *{pointer-events:none !important}
+body.sonic-workshop-active #album-bg,body.sonic-workshop-active #album-bg-next,body.sonic-workshop-active #custom-bg{opacity:0 !important}
 .preset-card[data-preset="6"].active .pc-icon{color:#3257f7!important;text-shadow:0 0 12px rgba(50,87,247,.44)}
 .preset-card .pc-bg{position:absolute;inset:0;opacity:.35;pointer-events:none}
 @keyframes preset-card-pulse{0%{opacity:0;transform:scale(.6) rotate(0deg)}35%{opacity:1}100%{opacity:0;transform:scale(1.25) rotate(12deg)}}
