@@ -143,21 +143,62 @@ const NETEASE_LOGIN_COOKIE_PRIORITY = [
  * @param {number} startPort - 起始端口号
  * @returns {Promise<number>} 可用的端口号
  */
+/**
+ * 探测端口上是否已有 HTTP 服务在应答（含被 Windows "双绑定"掩盖的冒充者）
+ * Windows 允许 127.0.0.1 同端口被多个进程绑定：残留实例（如 Mineradio.exe）先占
+ * 3000 后，本应用的测试 socket 仍可能"绑定成功"，但**每条连接的路由随机**——
+ * 主窗口的请求可能落到冒充者手里（表现为主页空白/一直转圈）。
+ * 因此绑定测试之前做 3 次独立 HTTP 探测：任一次收到应答或超时（有监听但不
+ * accept 的半死 socket）即判定占用；全部 ECONNREFUSED 才视为空闲。
+ * @param {number} port - 待探测端口
+ * @returns {Promise<boolean>} true = 端口可疑/已有服务（应跳过）
+ */
+function probeHttpInUse(port) {
+  function once() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (verdict) => { if (!settled) { settled = true; resolve(verdict); } };
+      try {
+        const http = require('http');
+        const req = http.request({ host: '127.0.0.1', port: port, path: '/', method: 'GET', timeout: 1200 }, (res) => {
+          res.resume();
+          done('busy');        // 有 HTTP 应答 → 有服务在跑
+        });
+        req.on('error', (err) => done(err.code === 'ECONNREFUSED' ? 'free' : 'busy')); // refused→空闲迹象；其余错误→保守占用
+        req.on('timeout', () => { req.destroy(); done('busy'); }); // 有监听但不 accept → 半死服务，保守占用
+        req.end();
+      } catch (e) {
+        done('free');
+      }
+    });
+  }
+  return once().then((v1) => {
+    if (v1 === 'busy') return true;
+    return new Promise((r) => setTimeout(r, 120)).then(once).then((v2) => {
+      if (v2 === 'busy') return true;
+      return new Promise((r) => setTimeout(r, 120)).then(once).then((v3) => v3 === 'busy');
+    });
+  });
+}
+
 function findOpenPort(startPort) {
   return new Promise((resolve, reject) => {
     function tryPort(port) {
-      const tester = net.createServer();
-      tester.once('error', (err) => {
-        if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
-          tryPort(port + 1); // 端口被占用，尝试下一个
-          return;
-        }
-        reject(err);
-      });
-      tester.once('listening', () => {
-        tester.close(() => resolve(port)); // 端口可用，关闭测试服务器后返回
-      });
-      tester.listen(port, '127.0.0.1');
+      probeHttpInUse(port).then((inUse) => {
+        if (inUse) { tryPort(port + 1); return; }
+        const tester = net.createServer();
+        tester.once('error', (err) => {
+          if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+            tryPort(port + 1); // 端口被占用，尝试下一个
+            return;
+          }
+          reject(err);
+        });
+        tester.once('listening', () => {
+          tester.close(() => resolve(port)); // 端口可用，关闭测试服务器后返回
+        });
+        tester.listen(port, '127.0.0.1');
+      }).catch(reject);
     }
     tryPort(startPort);
   });
@@ -174,6 +215,68 @@ function waitForServer(server) {
     server.once('listening', resolve);
     server.once('error', reject);
   });
+}
+
+/**
+ * 验证端口上应答的确实是本应用的 server（防双绑定冒充/僵尸 socket）
+ * Windows 允许 127.0.0.1 同端口被多个进程绑定，且**每条连接的路由相互独立**：
+ * 残留实例（如 Mineradio.exe 的半死 server）先占 3000 时，本 server 绑定"成功"
+ * 后，部分请求仍会被路由进对方的黑洞（连接被 RST/挂起）。因此发 6 次身份请求，
+ * 要求全部由本 server 应答（带 X-BhandsMusic-Server 头），任一次失败即换口。
+ * 全部路由到对方的逃逸概率约 1.6%（六连全中），实际足以规避。
+ * @param {number} port - 待验证端口
+ * @returns {Promise<boolean>} true = 六连验证全部通过
+ */
+function verifyServerIdentity(port) {
+  function identityOnce() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+      try {
+        const http = require('http');
+        const req = http.request({ host: '127.0.0.1', port: port, path: '/__bhands_identity', method: 'GET', timeout: 2500 }, (res) => {
+          const ok = res.statusCode === 200 && !!res.headers['x-bhandsmusic-server'];
+          res.resume();
+          done(ok);
+        });
+        req.on('error', () => done(false));
+        req.on('timeout', () => { req.destroy(); done(false); });
+        req.end();
+      } catch (e) {
+        done(false);
+      }
+    });
+  }
+  // 首页内容校验：身份端点通过后，再拉一次首页，确认返回的是本应用页面。
+  // 黑洞型冒充者（半死 socket 吞掉部分连接）会在这一步暴露——六连身份全过
+  // 也可能出现首页请求被路由进黑洞（挂起/RST），此时必须换端口。
+  function pageCheck() {
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = (ok) => { if (!settled) { settled = true; resolve(ok); } };
+      try {
+        const http = require('http');
+        const req = http.request({ host: '127.0.0.1', port: port, path: '/', method: 'GET', timeout: 4000 }, (res) => {
+          let buf = '';
+          // 注意：不要中途 res.destroy() 截断——destroy 后 end/error 都不触发会让
+          // Promise 永远挂起；首页 ~70KB 全量读完耗时极短，直接读到 end 即可。
+          res.on('data', (c) => { buf += c; });
+          res.on('end', () => done(res.statusCode === 200 && buf.indexOf('BhandsMusic') !== -1));
+          res.on('error', () => done(false));
+        });
+        req.on('error', () => done(false));
+        req.on('timeout', () => { req.destroy(); done(false); });
+        req.end();
+      } catch (e) {
+        done(false);
+      }
+    });
+  }
+  let pass = Promise.resolve(true);
+  for (let i = 0; i < 6; i++) {
+    pass = pass.then((ok) => (ok ? identityOnce() : false));
+  }
+  return pass.then((ok) => (ok ? pageCheck() : false));
 }
 
 // ==================== 窗口状态通信 ====================
@@ -2060,13 +2163,8 @@ async function createWindow() {
   htmlFullscreenActive = false;
   windowFullscreenActive = false;
 
-  // 查找可用端口并启动本地服务器
-  const port = await findOpenPort(3000);
-  mainServerPort = port;
-
   // 配置环境变量，供 server.js 读取
   process.env.HOST = '127.0.0.1';
-  process.env.PORT = String(port);
   process.env.COOKIE_FILE = path.join(app.getPath('userData'), '.cookie');
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
   process.env.BHANDSMUSIC_UPDATE_DIR = getUpdateDownloadDir();
@@ -2085,9 +2183,34 @@ async function createWindow() {
     console.warn('QQ cookie migration skipped:', e.message);
   }
 
-  // 启动本地 HTTP 服务器（提供前端页面和 API）
-  localServer = require(path.join(__dirname, '..', 'public', 'js', 'server.js'));
-  await waitForServer(localServer);
+  // 查找可用端口并启动本地服务器（带身份自检，防双绑定冒充）
+  // ⚠ Windows 允许 127.0.0.1 同端口被多个进程"双绑定"：若有残留实例（如 Mineradio.exe）
+  // 先占了 3000，findOpenPort 的测试 socket 仍会误报可用，本 server 绑定成功却收不到
+  // 任何流量，主窗口会加载到冒充者的页面（表现为主页空白）。因此绑定成功后必须验证
+  // /__bhands_identity 是否由本 server 应答，失败则换下一个端口重试。
+  const serverPath = path.join(__dirname, '..', 'public', 'js', 'server.js');
+  let port = await findOpenPort(3000);
+  for (let attempt = 0; attempt < 10; attempt++) {
+    process.env.PORT = String(port);
+    delete require.cache[serverPath]; // 换端口重试时强制重新加载（server.js 顶层读取 PORT/HOST）
+    localServer = require(serverPath);
+    try {
+      await waitForServer(localServer);
+    } catch (err) {
+      console.warn('[startup] server listen failed on ' + port + ' (' + (err.code || err.message) + '), trying next port');
+      try { localServer.close(); } catch (e) {}
+      localServer = null;
+      port = await findOpenPort(port + 1);
+      continue;
+    }
+    if (await verifyServerIdentity(port)) break;
+    console.warn('[startup] port ' + port + ' is shadowed by another app (possibly a leftover Mineradio instance), switching to next port');
+    try { localServer.close(); } catch (e) {}
+    localServer = null;
+    port = await findOpenPort(port + 1);
+  }
+  mainServerPort = port;
+  console.log('[startup] local server ready on http://127.0.0.1:' + port);
 
   // 计算初始窗口尺寸
   const initialBounds = getWindowedBounds();

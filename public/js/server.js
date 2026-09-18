@@ -3359,6 +3359,15 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost:' + PORT);
   const pn = url.pathname;  // 请求路径
 
+  /* ---- 身份标识端点：主进程启动后用它验证端口上应答的确实是本 server ----
+   * Windows 允许 127.0.0.1 同端口被其他应用（如残留的 Mineradio）双绑定，
+   * 此时本 server"绑定成功"却收不到流量，必须靠身份自检识别并换端口。 */
+  if (pn === '/__bhands_identity') {
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'X-BhandsMusic-Server': String(APP_VERSION) });
+    res.end(JSON.stringify({ app: 'bhandsmusic', version: APP_VERSION, port: PORT }));
+    return;
+  }
+
   /* ---- 应用版本信息 ---- */
   if (pn === '/api/app/version') {
     sendJSON(res, {
@@ -4624,6 +4633,12 @@ server.listen(PORT, HOST, () => {
   console.log(' 粒子音乐可视化 v2  →  http://localhost:' + PORT);
   console.log(' 登录态: ' + (userCookie ? '已登录(cookie已加载)' : '未登录'));
   console.log('======================================================');
+});
+
+// 监听失败（如端口被其他进程占用/双绑定冲突）时打日志而不是未捕获崩溃；
+// Electron 主进程的 waitForServer 会通过 'error' 事件捕获并换端口重试。
+server.on('error', (err) => {
+  console.error('[server] listen/socket error on ' + HOST + ':' + PORT + ' → ' + (err.code || err.message));
 });
 
 /* ==================== 模块导出 ==================== */
