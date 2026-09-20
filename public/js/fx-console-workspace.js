@@ -9,12 +9,13 @@ var FX_CONSOLE_TABS = [
   { key: 'system', label: '系统' }
 ];
 
-function fxConsoleItem(ref, title, aliases, history) {
+function fxConsoleItem(ref, title, aliases, history, label) {
   return {
     ref: ref,
     title: title,
     aliases: aliases || '',
-    history: history !== false
+    history: history !== false,
+    label: label || ''
   };
 }
 
@@ -68,8 +69,8 @@ var FX_CONSOLE_LAYOUT = [
     groups: [
       { key: 'display', title: '显示与翻译', hint: '歌词来源、行数和双语译文', open: true, items: [
         fxConsoleItem('lyric-source-seg', '歌词来源', '原词 自定义歌词', false),
-        fxConsoleItem('lyric-display-mode-seg', '歌词行数', '隐藏 单行 五行'),
-        fxConsoleItem('lyric-pause-display-seg', '暂停时歌词', '暂停 显示 隐藏 冻结'),
+        fxConsoleItem('lyric-display-mode-seg', '歌词行数', '隐藏 单行 五行', true, '歌词行数'),
+        fxConsoleItem('lyric-pause-display-seg', '暂停时歌词', '暂停 显示 隐藏 冻结', true, '暂停时歌词'),
         fxConsoleItem('fx-lyriccustomlines', '显示行数', '自定义歌词行数'),
         fxConsoleItem('lyric-translation-mode-seg', '双语翻译', '译文 当前 双行 多行 关闭'),
         fxConsoleItem('fx-lyrictranslationgap', '译文间距', '翻译距离'),
@@ -403,6 +404,14 @@ function fxConsoleAppendItem(body, tabMeta, groupMeta, item, state) {
   if (existing) {
     existing.aliases += ' ' + item.aliases;
     return;
+  }
+  if (item.label) {
+    // index.html 里的裸 .fx-section-label 在 workspace 重组时会被当旧 DOM 删除，
+    // 需要说明标签的控件在此处补渲染（label 跟随控件进入分组 body）
+    var labelNode = document.createElement('div');
+    labelNode.className = 'fx-section-label';
+    labelNode.textContent = item.label;
+    body.appendChild(labelNode);
   }
   if (node.classList.contains('fx-toggle')) {
     if (!state.toggleGrid) {
