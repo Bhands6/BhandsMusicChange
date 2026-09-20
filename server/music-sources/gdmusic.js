@@ -180,9 +180,10 @@ async function parseFromGDMusic(params) {
     artists: artists || []
   };
 
-  // 超时兜底
+  // 超时兜底（主流程完成时清 timer，避免成功后仍残留"超时"假日志）
+  let timeoutTimer = null;
   const timeoutPromise = new Promise(function (resolve) {
-    setTimeout(function () {
+    timeoutTimer = setTimeout(function () {
       console.warn('[GDMusic] 解析超时(' + timeout + 'ms)');
       resolve(null);
     }, timeout);
@@ -192,7 +193,7 @@ async function parseFromGDMusic(params) {
   const allSources = ['joox', 'tidal', 'netease'];
 
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       (async function () {
         console.log('[GDMusic] 开始搜索:', searchQuery);
 
@@ -220,7 +221,10 @@ async function parseFromGDMusic(params) {
       })(),
       timeoutPromise
     ]);
+    if (timeoutTimer) clearTimeout(timeoutTimer);  // 主流程已完成（无论成败），清掉兜底 timer
+    return result;
   } catch (error) {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
     console.error('[GDMusic] 解析异常:', error.message);
     return null;
   }
