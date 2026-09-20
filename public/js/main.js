@@ -13168,6 +13168,16 @@ async function apiJson(url, opts) {
     if (timer) clearTimeout(timer);
   }
 }
+// 播放链专用：带超时的解析请求，失败/超时返回 null（不抛错），让解析链继续走下一级
+async function apiParseJson(url, timeoutMs) {
+  try {
+    var data = await apiJson(url, { timeoutMs: timeoutMs || 8000 });
+    return data && typeof data === 'object' ? data : null;
+  } catch (e) {
+    console.warn('[ApiParse] 解析请求失败/超时:', url.slice(0, 60), e && e.message);
+    return null;
+  }
+}
 function escHtml(s){ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 function normalizePlaybackQuality(value) {
   value = String(value || '').toLowerCase();
@@ -16568,11 +16578,16 @@ async function tryThirdPartyParse(song, quality, opts) {
     else if (song.album && song.album.name) albumName = song.album.name;
 
     // silent（恢复态预解析/启动自动播放）：后台请求不打扰用户
-    if (!opts || !opts.silent) showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
+    var silentParse = !!(opts && opts.silent);
+    if (!silentParse) showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
 
+    // 8s 超时：第三方源卡死时快速失败进下一链，不拖全程
+    var parseController = (window.AbortController ? new AbortController() : null);
+    var parseTimer = parseController ? setTimeout(function () { parseController.abort(); }, 8000) : null;
     var response = await fetch('/api/parse/music', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: parseController ? parseController.signal : undefined,
       body: JSON.stringify({
         id: song.id,
         name: song.name,
@@ -16582,13 +16597,14 @@ async function tryThirdPartyParse(song, quality, opts) {
         quality: quality || 'higher'
       })
     });
+    if (parseTimer) clearTimeout(parseTimer);
 
     if (!response.ok) return null;
 
     var result = await response.json();
     if (result && result.url) {
       console.log('[ThirdPartyParse] 解析成功, 来源:', result.source);
-      showSourceFallbackNotice('第三方音源可用', '已通过 ' + (result.source || '第三方') + ' 获取到音频。');
+      if (!silentParse) showSourceFallbackNotice('第三方音源可用', '已通过 ' + (result.source || '第三方') + ' 获取到音频。');
       return result.url;
     }
   } catch (e) {
@@ -16731,6 +16747,7 @@ async function playQueueAt(idx, opts) {
       opts.cuefieldAutoMix ? { preserveExecution: true, preservePreparedAudio: true } : undefined);
   }
   markPlayPhase('cancel-previous-track');
+  clearNextSongPreparseTimer();  // 切歌：旧的下首预取调度作废（成功后按新当前曲重新调度）
   cancelBeatAnalysisTimer();
   cancelBeatPrefetchTimer();
   if (localBeatAnalysis.active) cancelLocalBeatAnalysis();
@@ -16836,8 +16853,8 @@ async function playQueueAt(idx, opts) {
       if (!data || !data.url) {
         var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
         data = isQQPlayback
-          ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-          : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+          ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+          : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
         noteOfficialSourceResult(currentProvider, !!(data && data.url));
         if (token !== trackSwitchToken) return;
       }
@@ -16845,8 +16862,8 @@ async function playQueueAt(idx, opts) {
       // 官方优先（VIP + 未触发降级）：① 官方 API → ② 第三方 → ③ 跨平台换源
       var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
       data = isQQPlayback
-        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+        ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+        : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
       noteOfficialSourceResult(currentProvider, !!(data && data.url));
       if (token !== trackSwitchToken) return;
 
@@ -16868,7 +16885,7 @@ async function playQueueAt(idx, opts) {
       if (!isQQPlayback && song.type !== 'local' && song.type !== 'podcast') {
         try {
           showSourceFallbackNotice('正在获取试听片段', '完整版不可用，尝试获取官方试听...');
-          var trialData = await apiJson('/api/song/url?id=' + song.id + '&quality=standard');
+          var trialData = await apiParseJson('/api/song/url?id=' + song.id + '&quality=standard');
           if (token !== trackSwitchToken) return;
           if (trialData && trialData.url) {
             data = trialData;
@@ -16917,6 +16934,7 @@ async function playQueueAt(idx, opts) {
     var proxyAudioUrl = isLocalPlayback ? data.url : ('/api/audio?url=' + encodeURIComponent(data.url));
     audio.src = proxyAudioUrl;
     updatePlaybackProgressUi();
+    scheduleNextSongPreparse();  // 下一首预取：当前歌播放中后台解析队列下一首（提案 3）
     audio.onended = function(){
       if (token !== trackSwitchToken) return;
       // cuefield：自动过渡进行中 A deck 自然播完时，不立即切歌——
@@ -25979,67 +25997,148 @@ syncStartupAutoplayToggle();
 //  - 一次性消费；TTL 内有效（音源 URL 有时效），过期自动作废
 //  - 同曲同音质才命中；点其他歌后缓存留存（切回同曲且未过期可复用）
 // ============================================================
-var STARTUP_PREPARSE_TTL = 10 * 60 * 1000;
-var startupPreparsedAudio = null;
+var STARTUP_PREPARSE_TTL = 10 * 60 * 1000;        // 第三方/未知来源 URL 保守时效
+var OFFICIAL_PREPARSE_TTL = 20 * 60 * 1000;       // 官方 API URL 时效较长
+var PREPARSE_CACHE_MAX = 8;                        // LRU 上限：当前曲 + 下一首 + 切回复用
+var preparseCache = [];                            // [{ key, data, at, quality, ttl }]，新在前
 
-function takePreparsedSongSource(song, requestedQuality) {
-  if (!startupPreparsedAudio) return null;
-  var hit = startupPreparsedAudio;
-  startupPreparsedAudio = null;  // 一次性消费
-  if (!hit.data || !hit.data.url) return null;
-  if (hit.key !== queueItemKey(song)) return null;
-  if (hit.quality !== requestedQuality) return null;
-  if (Date.now() - hit.at > STARTUP_PREPARSE_TTL) return null;
-  return hit.data;
+function preparseTtlFor(data) {
+  return data && data.source === 'third-party' ? STARTUP_PREPARSE_TTL : OFFICIAL_PREPARSE_TTL;
 }
-
+function takePreparsedSongSource(song, requestedQuality) {
+  if (!preparseCache.length) return null;
+  var key = queueItemKey(song);
+  for (var i = 0; i < preparseCache.length; i++) {
+    if (preparseCache[i].key !== key) continue;
+    var hit = preparseCache.splice(i, 1)[0];  // 命中即出队（一次性消费）
+    if (!hit.data || !hit.data.url) return null;
+    if (hit.quality !== requestedQuality) return null;
+    if (Date.now() - hit.at > hit.ttl) return null;
+    return hit.data;
+  }
+  return null;
+}
+function putPreparsedSongSource(song, data, requestedQuality) {
+  if (!data || !data.url) return;
+  var key = queueItemKey(song);
+  for (var i = 0; i < preparseCache.length; i++) {
+    if (preparseCache[i].key === key) { preparseCache.splice(i, 1); break; }
+  }
+  preparseCache.unshift({ key: key, data: data, at: Date.now(), quality: requestedQuality, ttl: preparseTtlFor(data) });
+  if (preparseCache.length > PREPARSE_CACHE_MAX) preparseCache.pop();
+}
+function hasFreshPreparseFor(song, requestedQuality) {
+  var key = queueItemKey(song);
+  for (var i = 0; i < preparseCache.length; i++) {
+    var c = preparseCache[i];
+    if (c.key === key && c.quality === requestedQuality && Date.now() - c.at < c.ttl - 30000) return true;
+  }
+  return false;
+}
+// 登录态/会员状态就绪后再做解析路由决策（提案 1：路由固化）——
+// 启动早期 loginStatus 未加载时 hasVip 恒为 false，VIP 用户会被误判走第三方
+async function waitForStartupLoginStatus(maxMs) {
+  try {
+    if (typeof startupLoginStatusPromise !== 'undefined' && startupLoginStatusPromise) {
+      var timeoutP = new Promise(function (resolve) { setTimeout(resolve, maxMs || 3000, null); });
+      await Promise.race([startupLoginStatusPromise, timeoutP]);
+    }
+  } catch (e) {}
+}
+// 公共静默解析（预解析专用）：完整主链决策 + 请求超时，不碰 UI/播放状态
+async function resolveSongSourceQuietly(song) {
+  var isQQPlayback = songProviderKey(song) === 'qq';
+  var currentProvider = isQQPlayback ? 'qq' : 'netease';
+  var currentStatus = isQQPlayback ? qqLoginStatus : loginStatus;
+  var requestedQuality = normalizePlaybackQuality(playbackQuality);
+  if (isQQPlayback && qqPlaybackQualityCeiling && (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless')) {
+    requestedQuality = qqPlaybackQualityCeiling;
+  }
+  var hasVip = hasProviderVip(currentProvider, currentStatus);
+  var preferThirdParty = shouldPreferThirdPartyParse(currentProvider, hasVip);
+  var data = null;
+  if (!preferThirdParty) {
+    // 官方优先（会员态路由）：① 官方 API（8s 超时）→ ② 第三方（静默）
+    var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
+    data = isQQPlayback
+      ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+      : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
+    noteOfficialSourceResult(currentProvider, !!(data && data.url));
+    if (!data || !data.url) {
+      var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+      if (thirdPartyUrl) data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+    }
+  } else {
+    // 第三方优先：① 第三方（静默，8s 超时）→ ② 官方 API（8s 超时）
+    var thirdPartyUrl2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+    if (thirdPartyUrl2) {
+      data = { url: thirdPartyUrl2, trial: false, playable: true, source: 'third-party' };
+    } else {
+      var qualityParam2 = '&quality=' + encodeURIComponent(requestedQuality);
+      data = isQQPlayback
+        ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam2)
+        : await apiParseJson('/api/song/url?id=' + song.id + qualityParam2);
+      noteOfficialSourceResult(currentProvider, !!(data && data.url));
+    }
+  }
+  return data && data.url ? { data: data, quality: requestedQuality } : null;
+}
 async function preparseRestoredSongSource() {
   try {
-    if (startupPreparsedAudio) return;
     if (!(Array.isArray(playQueue) && currentIdx >= 0 && playQueue[currentIdx])) return;
     var song = playQueue[currentIdx];
     if (!song || song.type === 'local' || song.type === 'podcast') return;
-    var isQQPlayback = songProviderKey(song) === 'qq';
-    var currentProvider = isQQPlayback ? 'qq' : 'netease';
-    var currentStatus = isQQPlayback ? qqLoginStatus : loginStatus;
-    var requestedQuality = normalizePlaybackQuality(playbackQuality);
-    if (isQQPlayback && qqPlaybackQualityCeiling && (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless')) {
-      requestedQuality = qqPlaybackQualityCeiling;
-    }
-    var hasVip = hasProviderVip(currentProvider, currentStatus);
-    var preferThirdPartyPreparse = shouldPreferThirdPartyParse(currentProvider, hasVip);
-    var data = null;
-    if (!preferThirdPartyPreparse) {
-      // 官方优先：① 官方 API → ② 第三方（静默）
-      var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
-      data = isQQPlayback
-        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
-      noteOfficialSourceResult(currentProvider, !!(data && data.url));
-      if (!data || !data.url) {
-        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality, { silent: true });
-        if (thirdPartyUrl) data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
-      }
-    } else {
-      // 第三方优先：① 第三方（静默）→ ② 官方 API
-      var thirdPartyUrl2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
-      if (thirdPartyUrl2) {
-        data = { url: thirdPartyUrl2, trial: false, playable: true, source: 'third-party' };
-      } else {
-        var qualityParam2 = '&quality=' + encodeURIComponent(requestedQuality);
-        data = isQQPlayback
-          ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam2)
-          : await apiJson('/api/song/url?id=' + song.id + qualityParam2);
-        noteOfficialSourceResult(currentProvider, !!(data && data.url));
-      }
-    }
-    if (data && data.url) {
-      startupPreparsedAudio = { key: queueItemKey(song), data: data, at: Date.now(), quality: requestedQuality };
+    await waitForStartupLoginStatus(3000);  // 会员态路由固化：等登录态就绪再决策（最多 3s）
+    var resolved = await resolveSongSourceQuietly(song);
+    if (resolved) {
+      putPreparsedSongSource(song, resolved.data, resolved.quality);
       console.log('[StartupPreparse] 音源预解析完成（点播放可秒出声）:', song.name || '');
     }
   } catch (e) {
     console.warn('[StartupPreparse] 预解析失败（点播放时将正常解析）:', e);
   }
+}
+
+// ---- 下一首预取（提案 3）：当前歌播放中后台解析队列下一首，切歌零解析等待 ----
+var prenextTimer = null;
+function computeNextQueueIndex(forIdx) {
+  if (!Array.isArray(playQueue) || !playQueue.length) return -1;
+  if (playMode === 'shuffle') return -1;   // 随机模式下一首不可预知
+  if (playMode === 'single') return forIdx;
+  return (forIdx + 1) % playQueue.length;
+}
+function clearNextSongPreparseTimer() {
+  if (prenextTimer) { clearTimeout(prenextTimer); prenextTimer = null; }
+}
+async function preparseQueueSong(idx) {
+  try {
+    if (idx < 0 || idx >= playQueue.length) return;
+    var song = playQueue[idx];
+    if (!song || song.type === 'local' || song.type === 'podcast') return;
+    var requestedQuality = normalizePlaybackQuality(playbackQuality);
+    if (hasFreshPreparseFor(song, requestedQuality)) return;  // 已有新鲜缓存
+    var resolved = await resolveSongSourceQuietly(song);
+    if (resolved) {
+      putPreparsedSongSource(song, resolved.data, resolved.quality);
+      console.log('[PrepNext] 下一首预解析完成:', song.name || '');
+    }
+  } catch (e) {
+    console.warn('[PrepNext] 下一首预解析失败（切歌时将正常解析）:', e);
+  }
+}
+function scheduleNextSongPreparse() {
+  clearNextSongPreparseTimer();
+  if (!playing || !audio || currentIdx < 0) return;
+  var nextIdx = computeNextQueueIndex(currentIdx);
+  if (nextIdx < 0) return;
+  var duration = getPlaybackDurationSeconds();
+  var remain = duration > 0 ? Math.max(0, duration - (audio.currentTime || 0)) : 0;
+  // 触发时机：播过半 或 剩 30s，取先到者；至少 5s 后（避免刚切歌就抢网络）
+  var delay = Math.max(5000, Math.min(duration > 0 ? duration * 500 : 15000, remain > 30000 ? remain - 30000 : remain * 500));
+  prenextTimer = setTimeout(function () {
+    prenextTimer = null;
+    preparseQueueSong(nextIdx);
+  }, delay);
 }
 
 // ============================================================
