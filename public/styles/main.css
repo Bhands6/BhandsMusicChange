@@ -641,6 +641,25 @@ body.home-controls-locked #bottom-bar{opacity:0!important;pointer-events:none!im
 #lyrics-toggle-btn .lyrics-word-icon{position:relative}
 #lyrics-toggle-btn.multi .lyrics-word-icon::after{content:'';position:absolute;top:-3px;right:-7px;width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.9;box-shadow:0 0 8px rgba(0,245,212,.5)}
 #lyrics-toggle-btn:not(.active){opacity:.62}
+/* 歌词校准（对齐上游）：词按钮 hover 展开偏移面板，有偏移时按钮变金色 */
+.lyric-timing-control{position:relative;display:flex;align-items:center;justify-content:center}
+.lyric-timing-control::before{content:'';position:absolute;left:-34px;right:-34px;bottom:18px;height:132px;display:none;z-index:0}
+.lyric-timing-control:hover::before,.lyric-timing-control:focus-within::before{display:block}
+.lyric-timing-control.has-offset .lyrics-toggle-btn{color:#fff6c8;box-shadow:inset 0 0 2px 1px rgba(255,255,255,.32),inset 0 0 12px rgba(255,220,128,.18),0 0 18px rgba(255,220,128,.12)}
+.lyric-timing-control .ctrl-btn{position:relative;z-index:2}
+.lyric-timing-control:hover .lyric-timing-popover,.lyric-timing-control:focus-within .lyric-timing-popover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}
+.lyric-timing-popover{position:absolute;left:50%;bottom:46px;transform:translateX(-50%) translateY(8px);width:226px;padding:10px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(10,10,14,.82);backdrop-filter:blur(24px) saturate(1.16);-webkit-backdrop-filter:blur(24px) saturate(1.16);box-shadow:0 18px 48px rgba(0,0,0,.40),inset 0 1px 0 rgba(255,255,255,.08);display:grid;grid-template-columns:1fr;gap:8px;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:8}
+#bottom-bar.soft-hidden .lyric-timing-popover,body:not(.controls-visible) .lyric-timing-popover,.lyric-timing-control.closing .lyric-timing-popover{opacity:0!important;pointer-events:none!important;transform:translateX(-50%) translateY(8px) scale(.98)!important}
+#bottom-bar.soft-hidden .lyric-timing-control::before,body:not(.controls-visible) .lyric-timing-control::before,.lyric-timing-control.closing::before{display:none!important}
+.lyric-timing-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.lyric-timing-head span{font-size:11px;font-weight:850;color:rgba(255,255,255,.72);white-space:nowrap}
+.lyric-timing-head strong{min-width:48px;text-align:right;font-size:12px;color:rgba(255,246,200,.94);font-variant-numeric:tabular-nums;white-space:nowrap}
+.lyric-timing-song{min-height:16px;font-size:10.5px;color:rgba(255,255,255,.44);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyric-timing-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.lyric-timing-actions button{height:30px;border-radius:9px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.045);color:rgba(255,255,255,.72);font-family:inherit;font-size:11px;font-weight:850;font-variant-numeric:tabular-nums;cursor:pointer;transition:background .18s,border-color .18s,color .18s,transform .18s}
+.lyric-timing-actions button:hover{transform:translateY(-1px);color:#fff;border-color:rgba(255,246,200,.34);background:rgba(255,246,200,.10)}
+.lyric-timing-actions button:active{transform:translateY(0) scale(.98)}
+.lyric-timing-actions button:disabled{opacity:.38;cursor:not-allowed;transform:none}
 .ctrl-btn.liked{color:#ff7a90;text-shadow:0 0 18px rgba(255,122,144,.36)}
 .ctrl-btn.busy{opacity:.55;pointer-events:none}
 #play-mode-btn[data-mode="loop"]{color:rgba(255,255,255,.70)}
