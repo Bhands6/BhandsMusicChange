@@ -236,7 +236,7 @@ const gdmusicStrategy = {
       name: params.name,
       artists: params.artists,
       quality: '999',
-      timeout: 15000
+      timeout: 6000  // 整体竞速超时：上游挂掉时不让后续策略久等（原 15s 太长）
     });
 
     if (result && result.url) {
@@ -282,6 +282,45 @@ const unblockMusicStrategy = {
 const ALL_STRATEGIES = [lxMusicStrategy, customApiStrategy, kugouStrategy, gdmusicStrategy, unblockMusicStrategy];
 
 // ============================================================
+// 策略健康记忆：连败冷却（策略级、跨歌曲）
+// 某策略连续失败达到阈值后，冷却期内把该策略排到队尾——
+// 上游源临时挂掉（如 GD音乐台 503）时不再让每首歌都白等它超时，
+// 但不彻底跳过：冷却结束自动恢复原优先级，恢复后成功会清零。
+// ============================================================
+
+/** 连败多少次进入冷却 */
+const STRATEGY_COOLDOWN_THRESHOLD = 2;
+
+/** 冷却时长：5 分钟 */
+const STRATEGY_COOLDOWN_MS = 5 * 60 * 1000;
+
+/** 冷却期排序惩罚值：大于任何优先级差，确保排到队尾 */
+const STRATEGY_COOLDOWN_PENALTY = 100;
+
+/** name -> { count, cooldownUntil } */
+const strategyFailStreak = new Map();
+
+function noteStrategyResult(name, ok) {
+  if (ok) {
+    strategyFailStreak.delete(name);
+    return;
+  }
+  const cur = strategyFailStreak.get(name) || { count: 0, cooldownUntil: 0 };
+  cur.count += 1;
+  if (cur.count >= STRATEGY_COOLDOWN_THRESHOLD) {
+    cur.cooldownUntil = Date.now() + STRATEGY_COOLDOWN_MS;
+    cur.count = 0;  // 冷却结束后重新计数
+    console.log('[MusicParser] 策略 ' + name + ' 连续失败，进入冷却 ' + (STRATEGY_COOLDOWN_MS / 60000) + ' 分钟（期间排到队尾）');
+  }
+  strategyFailStreak.set(name, cur);
+}
+
+function strategyCooldownPenalty(name) {
+  const cur = strategyFailStreak.get(name);
+  return cur && cur.cooldownUntil > Date.now() ? STRATEGY_COOLDOWN_PENALTY : 0;
+}
+
+// ============================================================
 // 主解析函数
 // ============================================================
 
@@ -312,10 +351,12 @@ async function parseMusic(params) {
     return cached;
   }
 
-  // 获取可用策略并按优先级排序
+  // 获取可用策略并按优先级排序（冷却期策略加惩罚值排到队尾）
   const availableStrategies = ALL_STRATEGIES
     .filter(function (s) { return s.canHandle(params); })
-    .sort(function (a, b) { return a.priority - b.priority; });
+    .map(function (s) { return { strategy: s, penalty: strategyCooldownPenalty(s.name) }; })
+    .sort(function (a, b) { return (a.strategy.priority + a.penalty) - (b.strategy.priority + b.penalty); })
+    .map(function (x) { return x.strategy; });
 
   if (availableStrategies.length === 0) {
     console.log('[MusicParser] 没有可用的解析策略');
@@ -327,10 +368,11 @@ async function parseMusic(params) {
     availableStrategies.map(function (s) { return s.name; }).join(', ')
   );
 
-  // 按优先级依次尝试
+  // 按优先级依次尝试（记录策略健康度：冷却机制的依据）
   for (const strategy of availableStrategies) {
     try {
       const result = await strategy.parse(params);
+      noteStrategyResult(strategy.name, !!(result && result.url));
       if (result && result.url) {
         const elapsed = Date.now() - startTime;
         console.log(
@@ -345,6 +387,7 @@ async function parseMusic(params) {
       }
       console.log('[MusicParser] 策略 ' + strategy.name + ' 未返回有效 URL');
     } catch (error) {
+      noteStrategyResult(strategy.name, false);
       console.error('[MusicParser] 策略 ' + strategy.name + ' 异常:', error.message);
     }
   }

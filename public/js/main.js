@@ -16581,9 +16581,10 @@ async function tryThirdPartyParse(song, quality, opts) {
     var silentParse = !!(opts && opts.silent);
     if (!silentParse) showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
 
-    // 8s 超时：第三方源卡死时快速失败进下一链，不拖全程
+    // 10s 超时：覆盖 server 端策略链（冷却后 gdmusic 6s + kugou ~2s）+ 网络往返；
+    // server 端有策略健康记忆，正常情况远快于此上限
     var parseController = (window.AbortController ? new AbortController() : null);
-    var parseTimer = parseController ? setTimeout(function () { parseController.abort(); }, 8000) : null;
+    var parseTimer = parseController ? setTimeout(function () { parseController.abort(); }, 10000) : null;
     var response = await fetch('/api/parse/music', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
