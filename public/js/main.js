@@ -7341,6 +7341,22 @@ function tickLyricsParticles() {
       unparkAllLyricLines();
       clearUpcomingLyricLines();
       clearCurrentLyricLineToOutgoing();
+      return;
+    }
+    // 恢复态（重启后未点播）：歌词预取完成后按保存进度定位显示，延续"暂停保留歌词"体验
+    if (restoredIdleSession && pendingResumeAt && pendingResumeAt.position > 0 && lyricsLines.length && stageLyrics.currentIdx < 0) {
+      var resumeTime = getAdjustedLyricPlaybackTime(pendingResumeAt.position);
+      var resumeIdx = -1;
+      for (var ri = 0; ri < lyricsLines.length; ri++) {
+        if (lyricsLines[ri].t <= resumeTime + 0.05) resumeIdx = ri; else break;
+      }
+      if (resumeIdx >= 0) {
+        stageLyrics.currentIdx = resumeIdx;
+        showStageLine(lyricsLines[resumeIdx].text || '');
+      }
+    }
+    if (stageLyrics.current && stageLyricUpcomingCount() > 0 && stageLyrics.currentIdx >= 0) {
+      syncUpcomingLyricLines(stageLyrics.currentIdx);
     }
     // lyricPauseHold（暂停保留歌词，上游同款开关）：整体冻结——当前行/停驻行/预告行原样保留，
     // 恢复播放后由主分支继续推进（seek 错位时预告行自动重建）
@@ -18362,7 +18378,10 @@ function getPlaybackDurationSeconds() {
   return playbackDurationFromSong(currentCoverSong());
 }
 function getPlaybackCurrentSeconds() {
-  return audio && isFinite(audio.currentTime) && audio.currentTime > 0 ? audio.currentTime : 0;
+  if (audio && isFinite(audio.currentTime) && audio.currentTime > 0) return audio.currentTime;
+  // 恢复态（重启后未点播）：显示上次保存的播放进度，而不是 0:00
+  if (restoredIdleSession && pendingResumeAt && pendingResumeAt.position > 0) return pendingResumeAt.position;
+  return 0;
 }
 function setProgressVisual(percent) {
   percent = clampRange(percent || 0, 0, 100);
@@ -25799,6 +25818,12 @@ async function restoreLastPlaybackSession() {
 
     try { updateEmptyHomeVisibility({ forceLoad: false }); } catch (e) {}
     safeRenderQueuePanel('session-restore', { scrollCurrent: false });
+    // 恢复态完整还原：预取当前曲歌词（完成后由恢复态定位显示）+ 进度条/时间显示保存的位置
+    try {
+      var restoreLyricSong = currentCoverSong();
+      if (restoreLyricSong && typeof fetchLyric === 'function') fetchLyric(restoreLyricSong, trackSwitchToken);
+    } catch (e) {}
+    try { updatePlaybackProgressUi(); } catch (e) {}
     console.log('[SessionRestore] 已恢复上次播放列表: ' + rebuilt.length + ' 首, 当前: ' + (current.name || ''));
     return true;
   } catch (e) {
