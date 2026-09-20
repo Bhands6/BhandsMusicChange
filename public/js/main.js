@@ -6801,6 +6801,7 @@ function updateStageLyrics3D(dt) {
     var data = mesh.userData.lyric || {};
     var followMix = isCurrent ? 1.0 : 0.64;
     // 歌词动画：故障态时间触发的抖动/闪烁（shader 级切片/色散预留后续批次）
+    // 位置抖动仅当前行（停驻/退场行 position.y 是驻留位/演进位，绝不可绝对覆写）
     var glitchPulse = 0;
     if (lyricMotion.glitch > 0 && !mesh.userData.upcoming) {
       var gT = uniforms.uTime.value * lyricMotion.glitchRate * 2.4;
@@ -6808,13 +6809,12 @@ function updateStageLyrics3D(dt) {
       var gGate = 0.92 - lyricMotion.glitch * 0.24 - (lyricMotion.glitchCameraBind ? beatPulse * 0.10 : 0);
       if (gPhase > gGate) glitchPulse = (gPhase - gGate) / Math.max(0.02, 1 - gGate);
     }
-    if (glitchPulse > 0) {
-      var gAmp = lyricMotion.glitch * lyricMotion.glitchJitter * 0.020 * (0.55 + beatPulse * 0.8) * glitchPulse;
-      mesh.position.x = Math.sin(gT * 41.7) * gAmp;
-      mesh.position.y = Math.cos(gT * 37.3) * gAmp * 0.6;
-    } else if (mesh.position.x || mesh.position.y) {
-      mesh.position.x = 0;
-      mesh.position.y = 0;
+    if (isCurrent) {
+      if (glitchPulse > 0) {
+        mesh.position.x = Math.sin(gT * 41.7) * lyricMotion.glitch * lyricMotion.glitchJitter * 0.024 * (0.55 + beatPulse * 0.8) * glitchPulse;
+      } else if (mesh.position.x) {
+        mesh.position.x = 0;
+      }
     }
     var glowX = stageLyrics.glowFollowX * followMix;
     var glowY = stageLyrics.glowFollowY * followMix;
@@ -6933,19 +6933,20 @@ function updateStageLyrics3D(dt) {
         if (pm && pm.userData && pm.userData.parked) parkRank++;
       }
       var ps = parkLyricStyleFor(parkRank);
-      if (data.textMat) data.textMat.uniforms.uOpacity.value = ps.opacity * pa * shelfDetailLyricProfile.outgoing;
+      if (data.textMat) data.textMat.uniforms.uOpacity.value = ps.opacity * pa * shelfDetailLyricProfile.outgoing * (1 - lyricMotion.glitch * 0.28 * glitchPulse);
       if (data.readabilityMat) data.readabilityMat.opacity = ps.readability * pa * (shelfDetailOpen ? shelfDetailLyricProfile.readability : 0.62);
       if (data.textMat && data.textMat.uniforms.uSolar) data.textMat.uniforms.uSolar.value *= 0.80;
       if (data.glowMat) data.glowMat.opacity = 0;
       if (data.sparkMat) setLyricSparkOpacity(data, 0);
       if (data.sunMat) data.sunMat.opacity = 0;
       if (data.sparks) data.sparks.visible = false;
+      mesh.position.x += (0 - mesh.position.x) * 0.2;
       mesh.position.y += (ps.y - mesh.position.y) * 0.10;
       mesh.position.z += (ps.z - mesh.position.z) * 0.08;
       mesh.scale.setScalar(mesh.scale.x + (ps.scale - mesh.scale.x) * 0.12);
       return true;
     }
-    opacity = (1 - a) * 0.72 * shelfDetailLyricProfile.outgoing;
+    opacity = (1 - a) * 0.72 * shelfDetailLyricProfile.outgoing * (1 - lyricMotion.glitch * 0.28 * glitchPulse);
     if (data.textMat) data.textMat.uniforms.uOpacity.value = opacity;
     if (data.readabilityMat) data.readabilityMat.opacity = opacity * (shelfDetailOpen ? shelfDetailLyricProfile.readability : 0.58);
     if (data.textMat && data.textMat.uniforms.uSolar) data.textMat.uniforms.uSolar.value *= shelfDetailOpen ? 0.72 : 0.86;
