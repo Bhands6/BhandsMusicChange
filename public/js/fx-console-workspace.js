@@ -260,7 +260,8 @@ var FX_CONSOLE_LAYOUT = [
       ] },
       { key: 'bhands-advanced', title: 'BhandsMusic 专属', hint: '高级参数、系统设置与第三方音源', items: [
         fxConsoleItem({ selector: '#fx-advanced' }, '高级参数', '直播后台 画质档位 内存压缩 Mem Reduct 粒子尺寸 流速 扭曲 色彩张力 溢光 离散 背景压缩'),
-        fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本')
+        fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
+        fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
       ] },
       { key: 'experimental', title: '实验功能', hint: '尚未开放或需要谨慎使用的能力', items: [
         fxConsoleItem('t-wallpaperMode', '完整桌面模式', '完整 Mineradio 进入桌面层 Ctrl Shift M 切换操作层 本次启动有效', false)

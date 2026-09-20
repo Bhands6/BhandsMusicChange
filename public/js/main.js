@@ -16808,6 +16808,8 @@ async function playQueueAt(idx, opts) {
     var currentProvider = isQQPlayback ? 'qq' : 'netease';
     var currentStatus = isQQPlayback ? qqLoginStatus : loginStatus;
     var hasVip = hasProviderVip(currentProvider, currentStatus);
+    // 解析顺序决策：设置强制 / auto 下官方近期失败自动降级（见 shouldPreferThirdPartyParse）
+    var preferThirdParty = shouldPreferThirdPartyParse(currentProvider, hasVip);
 
     var data = null;
 
@@ -16823,23 +16825,8 @@ async function playQueueAt(idx, opts) {
     if (!data && isLocalPlayback) {
       // 本地曲目：直接使用库的流播地址（bhandsmusic-local:// 或 objectURL），不走在线解析
       data = { url: song.localUrl, trial: false, playable: true, source: 'local' };
-    } else if (!data && hasVip) {
-      // VIP 用户：① 官方 API 优先 → ② 第三方 → ③ 跨平台换源
-      var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
-      data = isQQPlayback
-        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
-        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
-      if (token !== trackSwitchToken) return;
-
-      if (!data.url) {
-        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
-        if (token !== trackSwitchToken) return;
-        if (thirdPartyUrl) {
-          data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
-        }
-      }
-    } else if (!data) {
-      // 非 VIP：① 第三方优先 → ② 官方 API → ③ 跨平台换源（预解析命中时 data 已就绪，整段跳过）
+    } else if (!data && (preferThirdParty || !hasVip)) {
+      // 第三方优先：① 第三方 → ② 官方 API → ③ 跨平台换源
       var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
       if (token !== trackSwitchToken) return;
       if (thirdPartyUrl) {
@@ -16851,7 +16838,24 @@ async function playQueueAt(idx, opts) {
         data = isQQPlayback
           ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
           : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+        noteOfficialSourceResult(currentProvider, !!(data && data.url));
         if (token !== trackSwitchToken) return;
+      }
+    } else if (!data) {
+      // 官方优先（VIP + 未触发降级）：① 官方 API → ② 第三方 → ③ 跨平台换源
+      var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
+      data = isQQPlayback
+        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+      noteOfficialSourceResult(currentProvider, !!(data && data.url));
+      if (token !== trackSwitchToken) return;
+
+      if (!data.url) {
+        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
+        if (token !== trackSwitchToken) return;
+        if (thirdPartyUrl) {
+          data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+        }
       }
     }
 
@@ -26003,19 +26007,21 @@ async function preparseRestoredSongSource() {
       requestedQuality = qqPlaybackQualityCeiling;
     }
     var hasVip = hasProviderVip(currentProvider, currentStatus);
+    var preferThirdPartyPreparse = shouldPreferThirdPartyParse(currentProvider, hasVip);
     var data = null;
-    if (hasVip) {
-      // VIP：① 官方 API → ② 第三方（静默）
+    if (!preferThirdPartyPreparse) {
+      // 官方优先：① 官方 API → ② 第三方（静默）
       var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
       data = isQQPlayback
         ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
         : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+      noteOfficialSourceResult(currentProvider, !!(data && data.url));
       if (!data || !data.url) {
         var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality, { silent: true });
         if (thirdPartyUrl) data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
       }
     } else {
-      // 非 VIP：① 第三方（静默）→ ② 官方 API
+      // 第三方优先：① 第三方（静默）→ ② 官方 API
       var thirdPartyUrl2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
       if (thirdPartyUrl2) {
         data = { url: thirdPartyUrl2, trial: false, playable: true, source: 'third-party' };
@@ -26024,6 +26030,7 @@ async function preparseRestoredSongSource() {
         data = isQQPlayback
           ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam2)
           : await apiJson('/api/song/url?id=' + song.id + qualityParam2);
+        noteOfficialSourceResult(currentProvider, !!(data && data.url));
       }
     }
     if (data && data.url) {
@@ -26034,6 +26041,50 @@ async function preparseRestoredSongSource() {
     console.warn('[StartupPreparse] 预解析失败（点播放时将正常解析）:', e);
   }
 }
+
+// ============================================================
+// 音源解析顺序：auto（默认，VIP 走官方）/ official（官方优先）/ third-party（第三方优先）
+//  - 会员源解析经常失败/降级浪费时间时，可切"第三方优先"直接跳过官方请求；
+//  - auto 模式带会话级自动降级：官方解析失败 1 次后，本会话内该平台改走第三方优先
+// ============================================================
+var SOURCE_PARSE_ORDER_STORE_KEY = 'bhandsmusic_source_parse_order_v1';
+var sourceParseOrder = (function () {
+  try {
+    var raw = String(localStorage.getItem(SOURCE_PARSE_ORDER_STORE_KEY) || '').toLowerCase();
+    return (raw === 'official' || raw === 'third-party') ? raw : 'auto';
+  } catch (e) { return 'auto'; }
+})();
+var officialSourceFailStreak = {};  // 会话级：官方解析连续失败次数（按平台，成功清零）
+
+function noteOfficialSourceResult(provider, ok) {
+  officialSourceFailStreak[provider] = ok ? 0 : (officialSourceFailStreak[provider] || 0) + 1;
+}
+function shouldPreferThirdPartyParse(provider, hasVip) {
+  if (sourceParseOrder === 'third-party') return true;
+  if (sourceParseOrder === 'official') return !hasVip;  // 官方优先仍尊重非 VIP 缺省（无会员官方大概率拿不到）
+  // auto：VIP 但官方刚失败过 → 本会话切第三方优先，不再重复浪费官方请求
+  if (hasVip && (officialSourceFailStreak[provider] || 0) >= 1) return true;
+  return !hasVip;
+}
+function setSourceParseOrder(order) {
+  sourceParseOrder = order === 'official' || order === 'third-party' ? order : 'auto';
+  try { localStorage.setItem(SOURCE_PARSE_ORDER_STORE_KEY, sourceParseOrder); } catch (e) {}
+  syncSourceParseOrderSeg();
+  showToast(sourceParseOrder === 'third-party'
+    ? '音源解析：第三方优先（跳过会员源等待）'
+    : sourceParseOrder === 'official'
+      ? '音源解析：官方优先'
+      : '音源解析：自动（VIP 走官方，失败自动切第三方）');
+}
+function syncSourceParseOrderSeg() {
+  var seg = document.getElementById('source-parse-order-seg');
+  if (!seg) return;
+  var buttons = seg.querySelectorAll('button[data-parse-order]');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-parse-order') === sourceParseOrder);
+  }
+}
+syncSourceParseOrderSeg();
 
 window.addEventListener('beforeunload', function () {
   try {

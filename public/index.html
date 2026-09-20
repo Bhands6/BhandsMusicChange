@@ -569,6 +569,12 @@ try {
       <span>第三方音源</span><span class="arrow">▶</span>
     </div>
     <div class="fx-advanced-body">
+      <div class="fx-section-label">音源解析顺序</div>
+      <div class="fx-seg" id="source-parse-order-seg" title="会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级">
+        <button data-parse-order="auto" type="button" class="active" onclick="setSourceParseOrder('auto')">自动</button>
+        <button data-parse-order="official" type="button" onclick="setSourceParseOrder('official')">官方优先</button>
+        <button data-parse-order="third-party" type="button" onclick="setSourceParseOrder('third-party')">第三方优先</button>
+      </div>
       <div class="fx-section-label">音源开关</div>
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 joox/tidal/netease 搜索匹配"><span>GD音乐台</span><span class="dot"></span></div>
