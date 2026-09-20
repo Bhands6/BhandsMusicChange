@@ -1284,6 +1284,12 @@ body.sonic-workshop-active #album-bg,body.sonic-workshop-active #album-bg-next,b
 
 /* --- 三态分段 --- */
 .fx-seg{display:flex;border-radius:11px;border:1px solid rgba(255,255,255,.08);overflow:hidden;background:rgba(255,255,255,.026);margin-bottom:10px}
+/* 歌词故障细节容器（对齐上游）：仅 glitch 模式显示 */
+.lyric-glitch-controls{display:none;margin:8px 0 12px;padding:10px;border-radius:13px;border:1px solid rgba(255,80,120,.16);background:linear-gradient(145deg,rgba(255,70,110,.065),rgba(0,245,212,.030) 52%,rgba(126,90,255,.055));box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.lyric-glitch-controls.show{display:block}
+.lyric-glitch-controls .fx-slider{margin-bottom:8px}
+.lyric-glitch-bind{width:100%;margin:0 0 9px;min-height:30px}
+.lyric-glitch-bind.active{border-color:rgba(255,80,120,.42)!important;background:linear-gradient(135deg,rgba(255,70,110,.18),rgba(0,245,212,.10))!important;color:#fff!important;text-shadow:-1px 0 rgba(255,70,110,.55),1px 0 rgba(0,245,212,.48)}
 .fx-seg button{flex:1;padding:8px 4px;background:none;border:none;color:rgba(255,255,255,.55);cursor:pointer;font-size:11.5px;font-family:inherit;transition:all .2s;letter-spacing:.4px;border-right:1px solid rgba(255,255,255,.05)}
 .fx-seg button:last-child{border-right:none}
 .fx-seg button:hover{background:rgba(255,255,255,.05);color:#fff}

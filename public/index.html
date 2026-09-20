@@ -351,6 +351,27 @@ try {
         <button type="button" data-mode="custom" onclick="setLyricDisplayMode('custom')">自定</button>
       </div>
       <div class="fx-slider"><label>显示行数</label><input id="fx-lyriccustomlines" type="range" min="1" max="10" step="1"><output></output></div>
+      <div class="fx-section-label">歌词动画</div>
+      <div class="fx-seg lyric-motion-style-seg" id="lyric-motion-style-seg">
+        <button type="button" data-motion="float" onclick="setLyricMotionStyle('float')">漂浮</button>
+        <button type="button" data-motion="smooth" onclick="setLyricMotionStyle('smooth')">柔滑</button>
+        <button type="button" data-motion="glass" onclick="setLyricMotionStyle('glass')">玻璃</button>
+        <button type="button" data-motion="shine" onclick="setLyricMotionStyle('shine')">线光</button>
+        <button type="button" data-motion="glitch" onclick="setLyricMotionStyle('glitch')">故障</button>
+      </div>
+      <div class="lyric-glitch-controls" id="lyric-glitch-controls">
+        <button id="lyric-glitch-camera-bind" class="fx-mini-btn ghost lyric-glitch-bind" type="button" onclick="toggleFx('lyricGlitchCameraBind')">跟随鼓点故障</button>
+        <div class="fx-slider"><label>故障强度</label><input id="fx-lyricglitchintensity" type="range" min="0" max="1.5" step="0.01"><output></output></div>
+        <div class="fx-slider"><label>切片幅度</label><input id="fx-lyricglitchslice" type="range" min="0" max="1.4" step="0.01"><output></output></div>
+        <div class="fx-slider"><label>色散强度</label><input id="fx-lyricglitchchroma" type="range" min="0" max="1.6" step="0.01"><output></output></div>
+        <div class="fx-slider"><label>触发速度</label><input id="fx-lyricglitchrate" type="range" min="0.45" max="2.2" step="0.01"><output></output></div>
+        <div class="fx-slider"><label>抖动幅度</label><input id="fx-lyricglitchjitter" type="range" min="0" max="1.8" step="0.01"><output></output></div>
+      </div>
+      <div class="fx-slider"><label>上下句清晰</label><input id="fx-lyriccontextopacity" type="range" min="0.25" max="1" step="0.01"><output></output></div>
+      <div class="fx-slider"><label>上下句间距</label><input id="fx-lyriccontextspread" type="range" min="0.60" max="2.40" step="0.01"><output></output></div>
+      <div class="fx-slider"><label>边缘渐隐</label><input id="fx-lyricedgefade" type="range" min="0" max="1" step="0.01"><output></output></div>
+      <div class="fx-slider"><label>动画柔顺</label><input id="fx-lyricmotionsoftness" type="range" min="0.15" max="1.2" step="0.01"><output></output></div>
+      <div class="fx-toggle" id="t-lyricVerticalFloat" onclick="toggleFx('lyricVerticalFloat')"><span>歌词上下浮动</span><span class="dot"></span></div>
       <div class="fx-section-label">歌词字体</div>
       <div class="fx-font-grid expanded" id="lyric-font-grid">
         <button type="button" data-font="sans" onclick="setLyricFont('sans')">默认</button>
