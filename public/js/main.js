@@ -16747,7 +16747,6 @@ async function playQueueAt(idx, opts) {
       opts.cuefieldAutoMix ? { preserveExecution: true, preservePreparedAudio: true } : undefined);
   }
   markPlayPhase('cancel-previous-track');
-  clearNextSongPreparseTimer();  // 切歌：旧的下首预取调度作废（成功后按新当前曲重新调度）
   cancelBeatAnalysisTimer();
   cancelBeatPrefetchTimer();
   if (localBeatAnalysis.active) cancelLocalBeatAnalysis();
@@ -16934,7 +16933,7 @@ async function playQueueAt(idx, opts) {
     var proxyAudioUrl = isLocalPlayback ? data.url : ('/api/audio?url=' + encodeURIComponent(data.url));
     audio.src = proxyAudioUrl;
     updatePlaybackProgressUi();
-    scheduleNextSongPreparse();  // 下一首预取：当前歌播放中后台解析队列下一首（提案 3）
+    scheduleNextSongPreparse();  // 下一首预取：本首解析完开始播放时立即解析队列下一首
     audio.onended = function(){
       if (token !== trackSwitchToken) return;
       // cuefield：自动过渡进行中 A deck 自然播完时，不立即切歌——
@@ -26099,16 +26098,12 @@ async function preparseRestoredSongSource() {
   }
 }
 
-// ---- 下一首预取（提案 3）：当前歌播放中后台解析队列下一首，切歌零解析等待 ----
-var prenextTimer = null;
+// ---- 下一首预取（提案 3）：上一首解析完开始播放时，立即后台解析队列下一首 ----
 function computeNextQueueIndex(forIdx) {
   if (!Array.isArray(playQueue) || !playQueue.length) return -1;
   if (playMode === 'shuffle') return -1;   // 随机模式下一首不可预知
   if (playMode === 'single') return forIdx;
   return (forIdx + 1) % playQueue.length;
-}
-function clearNextSongPreparseTimer() {
-  if (prenextTimer) { clearTimeout(prenextTimer); prenextTimer = null; }
 }
 async function preparseQueueSong(idx) {
   try {
@@ -26127,18 +26122,13 @@ async function preparseQueueSong(idx) {
   }
 }
 function scheduleNextSongPreparse() {
-  clearNextSongPreparseTimer();
-  if (!playing || !audio || currentIdx < 0) return;
+  // 调用点 = playQueueAt 解析完成设置 src 之后（即当前首"解析完开始播放"时刻）：
+  // 立即预取下一首，不等播放进度。解析 API 是轻量 JSON 请求，与音频流加载无争抢；
+  // 当前首播放失败跳曲时，预取结果恰好可被下一首直接命中。
+  if (!audio || currentIdx < 0) return;
   var nextIdx = computeNextQueueIndex(currentIdx);
   if (nextIdx < 0) return;
-  var duration = getPlaybackDurationSeconds();
-  var remain = duration > 0 ? Math.max(0, duration - (audio.currentTime || 0)) : 0;
-  // 触发时机：播过半 或 剩 30s，取先到者；至少 5s 后（避免刚切歌就抢网络）
-  var delay = Math.max(5000, Math.min(duration > 0 ? duration * 500 : 15000, remain > 30000 ? remain - 30000 : remain * 500));
-  prenextTimer = setTimeout(function () {
-    prenextTimer = null;
-    preparseQueueSong(nextIdx);
-  }, delay);
+  preparseQueueSong(nextIdx);
 }
 
 // ============================================================
