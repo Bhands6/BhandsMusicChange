@@ -26,9 +26,6 @@ var FX_CONSOLE_LAYOUT = [
       { key: 'presets', title: '视觉预设', hint: '先选整体风格，再进入细节调整', open: true, items: [
         fxConsoleItem('preset-grid', '视觉预设', '风格 场景 Emily 安魂 音域 星河 唱片 星球 滚筒 虚空 月蚀圣环 雨幕霓虹 折光蝶群 深海绽放 Eclipse Halo Neon Drizzle Prism Flock Abyssal Bloom')
       ] },
-      { key: 'archives', title: '用户存档', hint: '保存、应用和分享整套视觉参数', items: [
-        fxConsoleItem('user-archive-grid', '用户存档', '方案 快照 预设码 应用 回退')
-      ] },
       { key: 'reset', title: '恢复与整理', hint: '恢复全部默认参数', items: [
         fxConsoleItem({ selector: '.fx-actions' }, '恢复默认', '重置 全部默认')
       ] }
