@@ -6268,6 +6268,7 @@ function buildLyricMesh(text) {
   group.userData.state = 'in';
   group.userData.lastLyricProgress = -1;
   group.userData.floatSeed = Math.random() * 100;
+  group.userData.text = text;
 
   var sunMat = new THREE.MeshBasicMaterial({
     map:getLyricSunBloomTexture(), transparent:true, opacity:0,
@@ -6580,6 +6581,37 @@ function refreshCurrentLyricStyle() {
   showStageLine(stageLyrics.currentText, true);
   updateLyricMeshProgress(stageLyrics.current, progress);
   if (stageLyrics.current && stageLyrics.current.userData) stageLyrics.current.userData.age = 0.48;
+}
+// 字体/排版类设置变化时重建全部活跃行（旧版只换当前行，停驻/预告行要等行滚动才逐行替换，被感知为"没全变"）
+function refreshAllLyricLineFonts() {
+  refreshCurrentLyricStyle();
+  // 停驻行：按原文本与档位重建，渐显直接置满（不重播入场动画）、位置给目标值
+  var out = stageLyrics.outgoing;
+  if (Array.isArray(out)) {
+    for (var i = 0; i < out.length; i++) {
+      var m = out[i];
+      if (!m || !m.userData || !m.userData.parked || !m.userData.text) continue;
+      var parkRank = 1;
+      for (var pi = out.length - 1; pi >= 0; pi--) {
+        if (out[pi] === m) break;
+        if (out[pi] && out[pi].userData && out[pi].userData.parked) parkRank++;
+      }
+      var ps = parkLyricStyleFor(parkRank);
+      disposeLyricMesh(m);
+      var nm = buildLyricMesh(m.userData.text);
+      nm.userData.parked = true;
+      nm.userData.age = 0.42;                       // 渐显置满
+      nm.position.set(0, ps.y, ps.z);
+      nm.scale.setScalar(ps.scale);
+      out[i] = nm;
+      if (stageLyrics.group) stageLyrics.group.add(nm);
+    }
+  }
+  // 预告行：清掉后按槽位重建（播放中由 tick 主分支驱动，暂停中由下方 sync 直接重建）
+  clearUpcomingLyricLines();
+  if (stageLyricUpcomingCount() > 0 && stageLyrics.currentIdx >= 0 && lyricsLines.length) {
+    syncUpcomingLyricLines(stageLyrics.currentIdx);
+  }
 }
 
 // 下方预告行维护：槽位数由显示模式决定；行号对不上（自然推进/seek）就重建对应槽位
@@ -18540,7 +18572,7 @@ function applyFxArchiveSnapshot(snapshot) {
     });
   }
   applySavedLyricPaletteState();
-  refreshCurrentLyricStyle();
+  refreshAllLyricLineFonts();
   applyDesktopLyricsState(true);
   applyWallpaperModeState(true);
   updateRenderPowerClasses();
@@ -19339,7 +19371,7 @@ function updateLyricFontControls() {
 function setLyricFont(key) {
   fx.lyricFont = normalizeLyricFontKey(key);
   updateLyricFontControls();
-  refreshCurrentLyricStyle();
+  refreshAllLyricLineFonts();
   saveLyricLayout();
   pushDesktopLyricsState(true);
   showToast('歌词字体已切换');
@@ -20036,7 +20068,7 @@ function resetFxSliderValue(id, key, btn) {
   if (key === 'coverResolution') applyCoverParticleResolution(fx[key], { reload: true });
   if (key === 'controlGlassChromaticOffset') applyControlGlassChromaticOffset();
   syncFxUniforms();
-  if (key === 'lyricLetterSpacing' || key === 'lyricLineHeight' || key === 'lyricWeight') refreshCurrentLyricStyle();
+  if (key === 'lyricLetterSpacing' || key === 'lyricLineHeight' || key === 'lyricWeight') refreshAllLyricLineFonts();
   saveLyricLayout();
   animateFxResetButton(btn);
   showToast('已恢复默认数值');
@@ -20712,13 +20744,13 @@ function bindFxPanel() {
         fx.lyricCustomLineCount = clampRange(Math.round(fx.lyricCustomLineCount), 1, 10);
         refreshStageLyricDisplayMode();
       }
-      if (pair[1] === 'lyricEdgeFade') refreshCurrentLyricStyle();
+      if (pair[1] === 'lyricEdgeFade') refreshAllLyricLineFonts();
       if (out) out.textContent = pair[1] === 'coverResolution'
         ? coverParticleCountLabel(fx.coverResolution)
         : (pair[1] === 'lyricWeight' || pair[1] === 'controlGlassChromaticOffset' || pair[1] === 'lyricTiltX' || pair[1] === 'lyricTiltY' || pair[1] === 'shelfAngleY' || pair[1] === 'lyricCustomLineCount' ? String(Math.round(fx[pair[1]])) : Number(el.value).toFixed(pair[1] === 'lyricLetterSpacing' ? 3 : 2));
       syncFxUniforms();
       if (/^shelf(Size|OffsetX|OffsetY|OffsetZ|AngleY|Opacity|BgOpacity)$/.test(pair[1]) && shelfManager && shelfManager.refreshTheme) shelfManager.refreshTheme();
-      if (pair[1] === 'lyricLetterSpacing' || pair[1] === 'lyricLineHeight' || pair[1] === 'lyricWeight') refreshCurrentLyricStyle();
+      if (pair[1] === 'lyricLetterSpacing' || pair[1] === 'lyricLineHeight' || pair[1] === 'lyricWeight') refreshAllLyricLineFonts();
       if (pair[1] === 'lyricLetterSpacing' || pair[1] === 'lyricLineHeight' || pair[1] === 'lyricWeight' || pair[1] === 'lyricScale' || pair[1] === 'lyricGlowStrength') pushDesktopLyricsState(true);
       if (/^(desktopLyricsSize|desktopLyricsOpacity|desktopLyricsY)$/.test(pair[1])) pushDesktopLyricsState(true);
       if (pair[1] === 'wallpaperOpacity') pushWallpaperState(true);
