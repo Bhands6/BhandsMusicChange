@@ -343,16 +343,14 @@ try {
         </div>
       </div>
       <div class="fx-section-label">歌词行数</div>
-      <div class="fx-seg" id="lyric-display-mode-seg">
-        <button data-lyric-lines="1" type="button" class="active" onclick="setLyricConsoleLines(1)">单行</button>
-        <button data-lyric-lines="5" type="button" onclick="setLyricConsoleLines(5)">五行</button>
-        <button data-lyric-lines="0" type="button" onclick="setLyricConsoleLines(0)">隐藏</button>
+      <div class="fx-seg lyric-display-mode-seg" id="lyric-display-mode-seg">
+        <button type="button" data-mode="single" onclick="setLyricDisplayMode('single')">单行</button>
+        <button type="button" data-mode="dual" onclick="setLyricDisplayMode('dual')">双行</button>
+        <button type="button" data-mode="triple" onclick="setLyricDisplayMode('triple')">三行</button>
+        <button type="button" data-mode="cinema" onclick="setLyricDisplayMode('cinema')">沉浸</button>
+        <button type="button" data-mode="custom" onclick="setLyricDisplayMode('custom')">自定</button>
       </div>
-      <div class="fx-section-label">暂停时歌词</div>
-      <div class="fx-seg" id="lyric-pause-display-seg">
-        <button data-lyric-pause="show" type="button" class="active" onclick="setLyricPauseDisplay(true)">显示</button>
-        <button data-lyric-pause="hide" type="button" onclick="setLyricPauseDisplay(false)">隐藏</button>
-      </div>
+      <div class="fx-slider"><label>显示行数</label><input id="fx-lyriccustomlines" type="range" min="1" max="10" step="1"><output></output></div>
       <div class="fx-section-label">歌词字体</div>
       <div class="fx-font-grid expanded" id="lyric-font-grid">
         <button type="button" data-font="sans" onclick="setLyricFont('sans')">默认</button>
@@ -393,6 +391,7 @@ try {
         <div class="fx-toggle" id="t-lyricGlowBeat" onclick="toggleFx('lyricGlowBeat')"><span>鼓点溢光</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricGlowParticles" onclick="toggleFx('lyricGlowParticles')"><span>歌词光粒</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricCameraLock" onclick="toggleFx('lyricCameraLock')"><span>歌词镜头绑定</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-lyricPauseHold" onclick="toggleFx('lyricPauseHold')" title="暂停时保留歌词显示"><span>暂停保留歌词</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-bloom" onclick="toggleFx('bloom')"><span>粒子溢光</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-edge" onclick="toggleFx('edge')"><span>轮廓高亮</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-desktopLyrics" onclick="toggleFx('desktopLyrics')" title="全屏幕置顶歌词"><span>桌面歌词</span><span class="dot"></span></div>
@@ -767,7 +766,7 @@ try {
     <button id="mini-queue-btn" class="ctrl-btn" onclick="toggleMiniQueue(event)" title="当前队列"><svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></button>
     </div>
     <div class="control-cluster modes">
-    <button id="lyrics-toggle-btn" class="ctrl-btn lyrics-toggle-btn" onclick="toggleLyricsPanel()" title="歌词：单行（点击切换多行）" aria-pressed="true"><span class="lyrics-word-icon">词</span></button>
+    <button id="lyrics-toggle-btn" class="ctrl-btn lyrics-toggle-btn" onclick="toggleLyricsPanel()" title="歌词"><span class="lyrics-word-icon">词</span></button>
     <div id="volume-control" class="volume-control">
       <button id="volume-btn" class="ctrl-btn" onclick="toggleVolumePanel(event)" title="音量 / 静音"><svg id="volume-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15 9.5a4 4 0 0 1 0 5"/></svg></button>
       <div class="volume-popover" onclick="event.stopPropagation()">
