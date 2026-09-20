@@ -2,7 +2,6 @@
 
 var FX_CONSOLE_TABS = [
   { key: 'home', label: '常用' },
-  { key: 'interface', label: '界面' },
   { key: 'lyrics', label: '歌词' },
   { key: 'motion', label: '动效' },
   { key: 'shelf', label: '歌单架' },
@@ -28,36 +27,6 @@ var FX_CONSOLE_LAYOUT = [
       ] },
       { key: 'reset', title: '恢复与整理', hint: '恢复全部默认参数', items: [
         fxConsoleItem({ selector: '.fx-actions' }, '恢复默认', '重置 全部默认')
-      ] }
-    ]
-  },
-  {
-    key: 'interface',
-    groups: [
-      { key: 'background', title: '背景媒体', hint: '颜色、封面、图片、视频与 Wallpaper Engine', open: true, items: [
-        fxConsoleItem('bg-color-picker', '背景颜色', '纯色 封面取色'),
-        fxConsoleItem('bg-media-preview', '背景媒体', '封面 图片 视频 上传 裁切 清除', false),
-        fxConsoleItem('wallpaper-engine-value', 'Wallpaper Engine', '壁纸库 识别 导入 恢复原背景', false),
-        fxConsoleItem('fx-bgopacity', '背景透明度', '背景强度'),
-        fxConsoleItem('fx-bgcropx', '裁切左右', '背景水平 位置'),
-        fxConsoleItem('fx-bgcropy', '裁切上下', '背景垂直 位置'),
-        fxConsoleItem('fx-bgzoom', '裁切缩放', '背景放大 缩小')
-      ] },
-      { key: 'colors', title: '界面配色', hint: '界面高亮、视觉主色与图标颜色', items: [
-        fxConsoleItem('ui-accent-picker', '界面高亮', '主题色 强调色'),
-        fxConsoleItem('visual-tint-picker', '视觉主色', '粒子主色 封面取色'),
-        fxConsoleItem('home-accent-picker', 'Home 填充', '主页颜色'),
-        fxConsoleItem('home-icon-picker', '主页图标', 'Home 图标颜色'),
-        fxConsoleItem('visual-icon-picker', '视觉图标', '控制台图标颜色')
-      ] },
-      { key: 'glass', title: '玻璃与左栏', hint: '窗口玻璃质感和歌单栏唤出手感', items: [
-        fxConsoleItem('fx-windowbgopacity', '窗口背景透明', '窗口透明度'),
-        fxConsoleItem('fx-bgglassopacity', '毛玻璃透明', '玻璃 背景模糊'),
-        fxConsoleItem('fx-glassaberration', '控制台玻璃色差', 'RGB 色散 玻璃质感'),
-        fxConsoleItem('fx-playlistblur', '左栏雾面', '歌单栏 模糊'),
-        fxConsoleItem('fx-playlistdensity', '左栏遮挡', '歌单栏 密度 透明'),
-        fxConsoleItem('fx-playlistopen', '左栏唤出', '打开速度 秒数'),
-        fxConsoleItem('fx-playlistclose', '左栏收起', '关闭速度 秒数')
       ] }
     ]
   },
@@ -303,6 +272,14 @@ var FX_CONSOLE_LAYOUT = [
 
 var fxConsoleRegistry = [];
 var fxConsoleGroups = {};
+// "界面"页已下线：这批控件 DOM 保留（main.js 仍有读写引用），重组时移入隐藏容器，
+// 不参与分组也不进兜底收集。清单含部分本就不存在于 DOM 的 id（历史 layout 遗留），找不到自动跳过。
+var FX_CONSOLE_REMOVED_BLOCK_IDS = [
+  'bg-color-picker', 'fx-bgopacity', 'fx-glassaberration',
+  'bg-media-preview', 'wallpaper-engine-value', 'fx-bgcropx', 'fx-bgcropy', 'fx-bgzoom',
+  'ui-accent-picker', 'visual-tint-picker', 'home-accent-picker', 'home-icon-picker', 'visual-icon-picker',
+  'fx-windowbgopacity', 'fx-bgglassopacity', 'fx-playlistblur', 'fx-playlistdensity', 'fx-playlistopen', 'fx-playlistclose'
+];
 
 function fxConsoleResolveBlock(ref) {
   var el = null;
@@ -473,6 +450,19 @@ function organizeFxConsoleWorkspace() {
   var oldTabs = document.getElementById('fx-panel-tabs');
   if (oldTabs && oldTabs.parentNode) oldTabs.parentNode.removeChild(oldTabs);
   var toolbar = fxConsoleMakeToolbar(panel);
+  // "界面"页下线控件收纳：从旧根摘出（避免被末尾清理删除），藏起（不显示），
+  // DOM 保留使 main.js 的读写引用继续有效
+  var removedStore = document.createElement('div');
+  removedStore.id = 'fx-console-removed-controls';
+  removedStore.hidden = true;
+  removedStore.style.display = 'none';
+  panel.appendChild(removedStore);
+  FX_CONSOLE_REMOVED_BLOCK_IDS.forEach(function (blockId) {
+    var el = document.getElementById(blockId);
+    if (!el) return;
+    var block = fxConsoleResolveBlock(el) || el;
+    removedStore.appendChild(block);
+  });
   var pages = {};
   FX_CONSOLE_TABS.forEach(function (meta) {
     var page = document.createElement('div');
@@ -515,7 +505,7 @@ function organizeFxConsoleWorkspace() {
     console.warn('[FxConsole] residual controls:', residual.length);
   }
   oldRoots.forEach(function (node) {
-    if (node && node.isConnected && node.parentNode === panel && node !== toolbar && !node.classList.contains('fx-tab-page')) node.remove();
+    if (node && node.isConnected && node.parentNode === panel && node !== toolbar && node !== removedStore && !node.classList.contains('fx-tab-page')) node.remove();
   });
   toolbar.querySelector('#fx-panel-tabs').addEventListener('click', function (e) {
     var btn = e.target && e.target.closest ? e.target.closest('[data-fx-tab]') : null;
