@@ -603,11 +603,11 @@ var fxDefaults = {
   lyricContextOpacity: 1.0,     // 上下句清晰乘数（1.0=fork 现状；上游默认 0.54）
   lyricContextSpread: 1.0,      // 上下句间距乘数（1.0=fork 现状；上游默认 1.96）
   lyricEdgeFade: 0,             // 边缘渐隐（0=fork 现状；上游默认 0.32）
-  lyricGlitchIntensity: 0,      // 故障强度（上游默认 1.0）
-  lyricGlitchSlice: 0,          // 切片幅度（参数预留，shader 批次接入）
-  lyricGlitchChroma: 0,         // 色散强度（参数预留，shader 批次接入）
+  lyricGlitchIntensity: 1.0,    // 故障强度（上游同款默认：切故障态即有效果）
+  lyricGlitchSlice: 0.72,       // 切片幅度（参数预留，shader 批次接入）
+  lyricGlitchChroma: 0.86,      // 色散强度（参数预留，shader 批次接入）
   lyricGlitchRate: 1.0,         // 故障触发速度
-  lyricGlitchJitter: 0,         // 抖动幅度
+  lyricGlitchJitter: 0.72,      // 抖动幅度
   lyricGlitchCameraBind: false, // 跟随鼓点故障（上游默认 true）
   lyricVerticalFloat: true,     // 歌词上下浮动（上游同款）
   backCover: false,        // 旧的封面背面粒子层关闭；浮空粒子层会跟随封面翻转
@@ -712,11 +712,11 @@ var PACKAGED_DEFAULT_FX_SNAPSHOT = Object.freeze({
   lyricContextOpacity: 1.0,
   lyricContextSpread: 1.0,
   lyricEdgeFade: 0,
-  lyricGlitchIntensity: 0,
-  lyricGlitchSlice: 0,
-  lyricGlitchChroma: 0,
+  lyricGlitchIntensity: 1.0,
+  lyricGlitchSlice: 0.72,
+  lyricGlitchChroma: 0.86,
   lyricGlitchRate: 1.0,
-  lyricGlitchJitter: 0,
+  lyricGlitchJitter: 0.72,
   lyricGlitchCameraBind: false,
   lyricVerticalFloat: true,
   backCover: false,
@@ -17287,6 +17287,15 @@ function setLyricDisplayMode(mode) {
 // 控制台"歌词动画"五态切换（对齐上游 setLyricMotionStyle）
 function setLyricMotionStyle(style) {
   fx.lyricMotionStyle = normalizeLyricMotionStyle(style);
+  if (fx.lyricMotionStyle === 'glitch' && lyricGlitchIntensityValue() <= 0 && lyricGlitchJitterValue() <= 0) {
+    // 故障参数从未调过（全 0）：切到故障态自动填入上游默认，保证立即可见
+    fx.lyricGlitchIntensity = 1.0;
+    fx.lyricGlitchSlice = 0.72;
+    fx.lyricGlitchChroma = 0.86;
+    fx.lyricGlitchRate = 1.0;
+    fx.lyricGlitchJitter = 0.72;
+    updateFxInputs();
+  }
   syncLyricMotionStyleSeg();
   saveLyricLayout();
   showToast('歌词动画已切换');
@@ -25541,6 +25550,14 @@ if (fx.floatLayer) createFloatLayer();
 if (fx.particleLyrics) createLyricsParticles();
 updateLyricsToggleButton();
 syncLyricDisplayModeSeg();
+// 启动自愈：处于故障态但参数全 0（旧版默认写入）→ 补上游默认，避免故障态无效果
+if (normalizeLyricMotionStyle(fx.lyricMotionStyle) === 'glitch' && lyricGlitchIntensityValue() <= 0 && lyricGlitchJitterValue() <= 0) {
+  fx.lyricGlitchIntensity = 1.0;
+  fx.lyricGlitchSlice = 0.72;
+  fx.lyricGlitchChroma = 0.86;
+  fx.lyricGlitchRate = 1.0;
+  fx.lyricGlitchJitter = 0.72;
+}
 if (fx.backCover) createBackCoverLayer();
 initIdleGuideCanvas();
 var startupLoginStatusPromise = Promise.all([refreshLoginStatus(), refreshQQLoginStatus()]);
