@@ -10,6 +10,7 @@ const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
 const { parseFromCustomApi } = require('./customApi');
 const { parseFromKugou } = require('./kugou');
+const { probeAudio, acceptProbe } = require('./durationProbe');
 
 // ============================================================
 // 缓存配置
@@ -369,33 +370,75 @@ async function parseMusic(params) {
     availableStrategies.map(function (s) { return s.name; }).join(', ')
   );
 
-  // 按优先级依次尝试（记录策略健康度：冷却机制的依据）
-  for (const strategy of availableStrategies) {
-    try {
-      const result = await strategy.parse(params);
-      noteStrategyResult(strategy.name, !!(result && result.url));
-      if (result && result.url) {
-        const elapsed = Date.now() - startTime;
-        console.log(
-          '[MusicParser] 解析成功! 策略: ' + strategy.name +
-          ', 耗时: ' + elapsed + 'ms'
-        );
+  // 竞速版（移植自 Bhands_Web）：全部策略并发启动，第一个「成功 + 通过时长/类型
+  // 探测校验」的胜出即返回——单源挂死/超时不再拖慢整条链（串行版在 gdmusic
+  // 上游挂掉时每首歌白等 6~15s）。全部完成仍无校验通过者 → 宽容回落第一个
+  // 成功候选（duration 缺失时校验恒过，行为同旧版串行）。
+  // 冷却惩罚（strategyCooldownPenalty）在并发下不影响启动顺序，保留记录供日志观测。
+  const expectedMs = Number(params.duration) || 0;
+  return new Promise(function (resolve) {
+    let settled = false;
+    let pending = availableStrategies.length;
+    let fallback = null;
 
-        // 缓存成功结果
-        setSuccessCache(params.id, result, enabledSources);
-
-        return result;
-      }
-      console.log('[MusicParser] 策略 ' + strategy.name + ' 未返回有效 URL');
-    } catch (error) {
-      noteStrategyResult(strategy.name, false);
-      console.error('[MusicParser] 策略 ' + strategy.name + ' 异常:', error.message);
+    function settleWith(result, strategyName) {
+      if (settled) return;
+      settled = true;
+      const elapsed = Date.now() - startTime;
+      console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms');
+      setSuccessCache(params.id, result, enabledSources);
+      resolve(result);
     }
-  }
+    function settleFallback() {
+      if (settled) return;
+      settled = true;
+      const elapsed = Date.now() - startTime;
+      if (fallback) {
+        console.log('[MusicParser] 无候选通过时长校验，宽容回落首个成功候选（' + fallback.source + '），耗时: ' + elapsed + 'ms');
+      } else {
+        console.log('[MusicParser] 所有策略均失败, 耗时: ' + elapsed + 'ms');
+      }
+      resolve(fallback);
+    }
+    function onPendingDone() {
+      pending--;
+      if (pending === 0 && !settled) settleFallback();
+    }
 
-  const elapsed = Date.now() - startTime;
-  console.log('[MusicParser] 所有策略均失败, 耗时: ' + elapsed + 'ms');
-  return null;
+    availableStrategies.forEach(function (strategy) {
+      strategy.parse(params).then(function (result) {
+        noteStrategyResult(strategy.name, !!(result && result.url));
+        if (!result || !result.url) {
+          console.log('[MusicParser] 策略 ' + strategy.name + ' 未返回有效 URL');
+          onPendingDone();
+          return;
+        }
+        // 候选探测校验（真实音频 + 时长可信），通过即胜出
+        probeAudio(result.url).then(function (probe) {
+          if (settled) return;
+          if (acceptProbe(probe, expectedMs)) {
+            settleWith(result, strategy.name);
+            return;
+          }
+          console.warn(
+            '[MusicParser] 候选音源 ' + strategy.name + ' 未通过校验丢弃' +
+            (probe.status === 'not-audio' ? '（返回的不是音频）' :
+              probe.durationSec ? '（实际 ' + Math.round(probe.durationSec) + 's vs 期望 ' + Math.round(expectedMs / 1000) + 's）' : '')
+          );
+          if (!fallback) fallback = result;
+          onPendingDone();
+        }).catch(function () {
+          // 探测自身异常：fail-open 放行（与 unreachable 同语义）
+          if (!settled) settleWith(result, strategy.name);
+          else onPendingDone();
+        });
+      }).catch(function (error) {
+        noteStrategyResult(strategy.name, false);
+        console.error('[MusicParser] 策略 ' + strategy.name + ' 异常:', error.message);
+        onPendingDone();
+      });
+    });
+  });
 }
 
 // ============================================================
