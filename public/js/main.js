@@ -16555,7 +16555,7 @@ function skipFailedQueueItem(idx, token, message) {
  * @param {string} quality - 请求的音质
  * @returns {Promise<string|null>} 解析到的 URL，失败返回 null
  */
-async function tryThirdPartyParse(song, quality) {
+async function tryThirdPartyParse(song, quality, opts) {
   try {
     var artists = [];
     if (song.ar && Array.isArray(song.ar)) {
@@ -16567,7 +16567,8 @@ async function tryThirdPartyParse(song, quality) {
     if (song.al && song.al.name) albumName = song.al.name;
     else if (song.album && song.album.name) albumName = song.album.name;
 
-    showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
+    // silent（恢复态预解析/启动自动播放）：后台请求不打扰用户
+    if (!opts || !opts.silent) showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
 
     var response = await fetch('/api/parse/music', {
       method: 'POST',
@@ -16810,10 +16811,19 @@ async function playQueueAt(idx, opts) {
 
     var data = null;
 
-    if (isLocalPlayback) {
+    // 启动预解析命中（恢复态后台已解析同曲同音质且未过期）：跳过整段解析链，点播放即秒出声
+    if (!isLocalPlayback) {
+      var preparsedData = takePreparsedSongSource(song, requestedQuality);
+      if (preparsedData) {
+        data = preparsedData;
+        console.log('[StartupPreparse] 命中预解析，跳过音源解析:', song.name || '');
+      }
+    }
+
+    if (!data && isLocalPlayback) {
       // 本地曲目：直接使用库的流播地址（bhandsmusic-local:// 或 objectURL），不走在线解析
       data = { url: song.localUrl, trial: false, playable: true, source: 'local' };
-    } else if (hasVip) {
+    } else if (!data && hasVip) {
       // VIP 用户：① 官方 API 优先 → ② 第三方 → ③ 跨平台换源
       var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
       data = isQQPlayback
@@ -16828,8 +16838,8 @@ async function playQueueAt(idx, opts) {
           data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
         }
       }
-    } else {
-      // 非 VIP：① 第三方优先 → ② 官方 API → ③ 跨平台换源
+    } else if (!data) {
+      // 非 VIP：① 第三方优先 → ② 官方 API → ③ 跨平台换源（预解析命中时 data 已就绪，整段跳过）
       var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
       if (token !== trackSwitchToken) return;
       if (thirdPartyUrl) {
@@ -25838,6 +25848,8 @@ async function restoreLastPlaybackSession() {
     console.log('[SessionRestore] 已恢复上次播放列表: ' + rebuilt.length + ' 首, 当前: ' + (current.name || ''));
     // 启动自动播放：恢复完成即排队（splash 期间挂起，dismissSplash 时自动发起静默续播）
     scheduleStartupAutoplayFromSnapshot('startup');
+    // 恢复态音源预解析：后台请求不播放，点播放时跳过解析等待（延迟避开启动加载高峰）
+    setTimeout(function () { preparseRestoredSongSource(); }, 900);
     return true;
   } catch (e) {
     console.warn('[SessionRestore] 恢复失败:', e);
@@ -25955,6 +25967,73 @@ function flushStartupAutoplayAfterSplash() {
   scheduleStartupAutoplayFromSnapshot(reason);
 }
 syncStartupAutoplayToggle();
+
+// ============================================================
+// 恢复态音源预解析：启动后台请求音源 URL（不创建 audio、不播放），
+// 点播放时消费结果跳过解析等待——消除"点播放后几秒解析空白"。
+//  - 只复刻主链（官方/第三方两级），跨平台换源/试听兜底仍由正式链处理
+//  - 一次性消费；TTL 内有效（音源 URL 有时效），过期自动作废
+//  - 同曲同音质才命中；点其他歌后缓存留存（切回同曲且未过期可复用）
+// ============================================================
+var STARTUP_PREPARSE_TTL = 10 * 60 * 1000;
+var startupPreparsedAudio = null;
+
+function takePreparsedSongSource(song, requestedQuality) {
+  if (!startupPreparsedAudio) return null;
+  var hit = startupPreparsedAudio;
+  startupPreparsedAudio = null;  // 一次性消费
+  if (!hit.data || !hit.data.url) return null;
+  if (hit.key !== queueItemKey(song)) return null;
+  if (hit.quality !== requestedQuality) return null;
+  if (Date.now() - hit.at > STARTUP_PREPARSE_TTL) return null;
+  return hit.data;
+}
+
+async function preparseRestoredSongSource() {
+  try {
+    if (startupPreparsedAudio) return;
+    if (!(Array.isArray(playQueue) && currentIdx >= 0 && playQueue[currentIdx])) return;
+    var song = playQueue[currentIdx];
+    if (!song || song.type === 'local' || song.type === 'podcast') return;
+    var isQQPlayback = songProviderKey(song) === 'qq';
+    var currentProvider = isQQPlayback ? 'qq' : 'netease';
+    var currentStatus = isQQPlayback ? qqLoginStatus : loginStatus;
+    var requestedQuality = normalizePlaybackQuality(playbackQuality);
+    if (isQQPlayback && qqPlaybackQualityCeiling && (requestedQuality === 'jymaster' || requestedQuality === 'hires' || requestedQuality === 'lossless')) {
+      requestedQuality = qqPlaybackQualityCeiling;
+    }
+    var hasVip = hasProviderVip(currentProvider, currentStatus);
+    var data = null;
+    if (hasVip) {
+      // VIP：① 官方 API → ② 第三方（静默）
+      var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
+      data = isQQPlayback
+        ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
+        : await apiJson('/api/song/url?id=' + song.id + qualityParam);
+      if (!data || !data.url) {
+        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+        if (thirdPartyUrl) data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+      }
+    } else {
+      // 非 VIP：① 第三方（静默）→ ② 官方 API
+      var thirdPartyUrl2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+      if (thirdPartyUrl2) {
+        data = { url: thirdPartyUrl2, trial: false, playable: true, source: 'third-party' };
+      } else {
+        var qualityParam2 = '&quality=' + encodeURIComponent(requestedQuality);
+        data = isQQPlayback
+          ? await apiJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam2)
+          : await apiJson('/api/song/url?id=' + song.id + qualityParam2);
+      }
+    }
+    if (data && data.url) {
+      startupPreparsedAudio = { key: queueItemKey(song), data: data, at: Date.now(), quality: requestedQuality };
+      console.log('[StartupPreparse] 音源预解析完成（点播放可秒出声）:', song.name || '');
+    }
+  } catch (e) {
+    console.warn('[StartupPreparse] 预解析失败（点播放时将正常解析）:', e);
+  }
+}
 
 window.addEventListener('beforeunload', function () {
   try {
