@@ -43,7 +43,11 @@ function isNameMatched(expectedName, candidateName) {
   const expected = normalizeText(expectedName);
   const candidate = normalizeText(candidateName);
   if (!expected || !candidate) return false;
-  return expected === candidate || candidate.includes(expected) || expected.includes(candidate);
+  if (expected === candidate) return true;
+  // 包含式匹配仅限较长歌名（≥5 字）：短歌名同名前缀歌太多，防货不对版
+  if (expected.length >= 5 && candidate.includes(expected)) return true;
+  if (candidate.length >= 5 && expected.includes(candidate)) return true;
+  return false;
 }
 
 /**
@@ -59,6 +63,15 @@ function pickBestCandidate(candidates, expected) {
     const item = candidates[i];
     if (!item || !item.id) continue;
     if (!isNameMatched(expected.name, item.name || '')) continue;
+
+    // 时长硬校验：偏差超过 max(10s, 12%) 直接拒绝（不同版本歌词时间轴必然对不上）
+    if (expected.durationMs > 0) {
+      const itemDurationMs = (Number(item.duration) || 0) * 1000;
+      if (itemDurationMs > 0) {
+        const durationDiff = Math.abs(expected.durationMs - itemDurationMs);
+        if (durationDiff > Math.max(10000, expected.durationMs * 0.12)) continue;
+      }
+    }
 
     const candidateArtist = normalizeText(getCandidateArtistText(item.artist));
     let score;
@@ -177,7 +190,8 @@ async function parseFromGDMusic(params) {
 
   const expected = {
     name: name || '',
-    artists: artists || []
+    artists: artists || [],
+    durationMs: Number(params.duration) || 0  // 时长硬校验用（候选偏差过大即拒绝）
   };
 
   // 超时兜底（主流程完成时清 timer，避免成功后仍残留"超时"假日志）

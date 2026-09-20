@@ -235,6 +235,7 @@ const gdmusicStrategy = {
       id: params.id,
       name: params.name,
       artists: params.artists,
+      duration: params.duration,
       quality: '999',
       timeout: 6000  // 整体竞速超时：上游挂掉时不让后续策略久等（原 15s 太长）
     });
