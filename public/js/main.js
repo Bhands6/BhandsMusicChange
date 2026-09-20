@@ -14014,7 +14014,7 @@ function shouldShowEmptyHomeCore(ignoreSplash) {
   if (shelfPinnedOpen) return false;
   if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return false;
   // 启动恢复了上次列表但还没点播：恢复态不顶掉主页；一点播（audio 创建）恢复既有语义
-  var restoredIdle = restoredIdleSession && !audio && !playing;
+  var restoredIdle = restoredIdleSession && !restoredHomeExemptUsed && !audio && !playing;
   if (!restoredIdle && playQueue && playQueue.length) return false;
   if (!restoredIdle && currentIdx >= 0 && playQueue[currentIdx]) return false;
   if (playing) return false;
@@ -14031,7 +14031,7 @@ function shouldForceEmptyHomeAfterSplash() {
   if (shelfPinnedOpen) return false;
   if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return false;
   // 与 shouldShowEmptyHomeCore 同款豁免：恢复态未点播时 splash 结束应强制进主页
-  var restoredIdle = restoredIdleSession && !audio && !playing;
+  var restoredIdle = restoredIdleSession && !restoredHomeExemptUsed && !audio && !playing;
   if (!restoredIdle && playQueue && playQueue.length) return false;
   if (!restoredIdle && currentIdx >= 0 && playQueue[currentIdx]) return false;
   if (playing) return false;
@@ -16709,9 +16709,10 @@ function scheduleAudioResumePosition(media, seconds, token) {
 async function playQueueAt(idx, opts) {
   opts = opts || {};
   if (idx < 0 || idx >= playQueue.length) return;
-  // 首次点播即结束"启动恢复态"豁免：恢复会话后第一次点歌时 audio 尚未创建（16337 行才 new Audio），
-  // 若不清标志，下方 updateEmptyHomeVisibility 仍按 restoredIdle 豁免把主页留在播放页上，第二次点播才恢复
-  restoredIdleSession = false;
+  // 首次点播即消费"主页豁免"：恢复会话后第一次点歌时 audio 尚未创建，
+  // 若豁免仍有效，updateEmptyHomeVisibility 会把主页留在播放页上，第二次点播才恢复。
+  // 只消费豁免标志，不清 restoredIdleSession——音源解析期间恢复态歌词/进度保持显示
+  restoredHomeExemptUsed = true;
   markRenderInteraction('track-switch', 1500);
   var playPhase = 'start';
   function markPlayPhase(name) { playPhase = name; }
@@ -16763,6 +16764,11 @@ async function playQueueAt(idx, opts) {
   });
   markPlayPhase('lyric-prep');
   safePlaybackStep('lyric-prep', function(){
+    // 恢复态点播同一首：歌词已预取并定位显示中，跳过 fallback 重置——
+    // 音源解析期间画面保持，播放开始后时间轴从续播位置自然推进
+    var resumeSameSong = restoredIdleSession && pendingResumeAt
+      && pendingResumeAt.key === queueItemKey(song) && lyricsLines.length > 0;
+    if (resumeSameSong) return;
     var initialLyricLines = withLyricFallback([]);
     setOriginalLyricsState(initialLyricLines, false, 'fallback');
     applyPreferredLyricsForCurrent(true);
@@ -25646,6 +25652,9 @@ var LAST_SESSION_QUEUE_MAX = 200;
 var lastSessionSaveTimer = null;
 var lastSessionPosSaveAt = 0;
 var pendingResumeAt = null;
+// 恢复态"主页豁免"独立开关：点播即消费（主页让位），不影响 restoredIdleSession 的
+// 恢复态展示（歌词定位/进度显示）——解析音源期间歌词与进度保持，播放开始后自然接管
+var restoredHomeExemptUsed = false;
 
 function lastSessionSongSnapshot(song) {
   if (!song) return null;
