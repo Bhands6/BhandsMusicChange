@@ -16466,6 +16466,7 @@ function closeSourceFallbackNotice() {
   if (notice) notice.classList.remove('show');
 }
 function showSourceFallbackNotice(title, body) {
+  if (startupAutoplaySilent) return;  // 启动自动播放尝试期间静默（对齐上游 opts.startupAutoplay 的 silent 语义）
   var notice = document.getElementById('source-fallback-notice');
   var titleEl = document.getElementById('source-fallback-title');
   var bodyEl = document.getElementById('source-fallback-body');
@@ -25218,6 +25219,7 @@ function dismissSplash() {
     splashAnimating = false;
     document.body.classList.remove('splash-active');
     document.body.classList.remove('splash-revealing');
+    flushStartupAutoplayAfterSplash();  // 启动自动播放：splash 结束即发起（恢复态已在 restore 时排队）
     markAppPerf('home-revealed');
     if (s && s.parentNode) s.style.display = 'none';
     requestAnimationFrame(function(){
@@ -25834,12 +25836,125 @@ async function restoreLastPlaybackSession() {
     } catch (e) {}
     try { updatePlaybackProgressUi(); } catch (e) {}
     console.log('[SessionRestore] 已恢复上次播放列表: ' + rebuilt.length + ' 首, 当前: ' + (current.name || ''));
+    // 启动自动播放：恢复完成即排队（splash 期间挂起，dismissSplash 时自动发起静默续播）
+    scheduleStartupAutoplayFromSnapshot('startup');
     return true;
   } catch (e) {
     console.warn('[SessionRestore] 恢复失败:', e);
     return false;
   }
 }
+
+// ============================================================
+// 启动自动播放（对齐上游 startupAutoplay 核心版）
+//  - 开启后：启动恢复上次播放快照 → splash 结束 → 自动静默续播（含上次进度）
+//  - 解析/换源全程静默（showSourceFallbackNotice 抑制）；失败指数退避重试，
+//    同曲连败自动跳下一首；放弃后恢复态展示保持，可手动点播放
+// ============================================================
+var STARTUP_AUTOPLAY_STORE_KEY = 'bhandsmusic_startup_autoplay_v1';
+var startupAutoplayPreference = readBooleanPreference(STARTUP_AUTOPLAY_STORE_KEY, false);
+var startupAutoplayJobId = 0;
+var startupAutoplayAttempted = false;
+var startupAutoplayAttemptCount = 0;
+var startupAutoplayRetryTimer = null;
+var startupAutoplaySilent = false;   // 自动播放尝试期间抑制音源提示（showSourceFallbackNotice 检查）
+var startupAutoplayQueuedReason = '';
+
+function isStartupAutoplayPlaying() {
+  return !!(audio && audio.src && !audio.paused && !audio.ended);
+}
+function canStartupAutoplay() {
+  if (!startupAutoplayPreference || startupAutoplayAttempted) return false;
+  return !!(Array.isArray(playQueue) && playQueue.length && currentIdx >= 0 && playQueue[currentIdx]);
+}
+function clearStartupAutoplayRetryTimer() {
+  if (startupAutoplayRetryTimer) { clearTimeout(startupAutoplayRetryTimer); startupAutoplayRetryTimer = null; }
+}
+function startupAutoplayRetryDelay(attempt) {
+  var delays = [80, 260, 620, 1100, 1800, 2800, 4200, 6200];
+  return delays[Math.min(delays.length - 1, Math.max(0, attempt))];
+}
+function syncStartupAutoplayToggle() {
+  var btn = document.getElementById('t-startupAutoplay');
+  if (btn) btn.classList.toggle('on', !!startupAutoplayPreference);
+}
+function toggleStartupAutoplay() {
+  startupAutoplayPreference = !startupAutoplayPreference;
+  saveBooleanPreference(STARTUP_AUTOPLAY_STORE_KEY, startupAutoplayPreference);
+  syncStartupAutoplayToggle();
+  showToast(startupAutoplayPreference ? '启动自动播放已开启：下次打开软件自动续播' : '启动自动播放已关闭');
+  // 当次会话即时生效：恢复态仍在且尚未尝试过 → 立即发起
+  if (startupAutoplayPreference && !startupAutoplayAttempted) scheduleStartupAutoplayFromSnapshot('setting-toggle');
+}
+function finishStartupAutoplayJob(success) {
+  clearStartupAutoplayRetryTimer();
+  startupAutoplaySilent = false;
+  startupAutoplayAttemptCount = 0;
+  if (success) {
+    // 播放已接管：恢复态历史使命完成（同曲续播时 pendingResumeAt 已被 playQueueAt 消费）
+    restoredIdleSession = false;
+    pendingResumeAt = null;
+    restoredHomeExemptUsed = true;
+  }
+  // 放弃（success=false）：恢复态展示保持（歌词/进度还在），用户可手动点播放
+}
+function runStartupAutoplayAttempt(jobId, reason) {
+  if (!startupAutoplayPreference || jobId !== startupAutoplayJobId) return false;
+  if (isStartupAutoplayPlaying()) { finishStartupAutoplayJob(true); return true; }
+  if (!(Array.isArray(playQueue) && playQueue.length && currentIdx >= 0 && playQueue[currentIdx])) {
+    finishStartupAutoplayJob(false);
+    return false;
+  }
+  // 同曲连败 2 次后跳到下一个未被失败标记阻塞的曲目（playQueueAt 内部的换源/跳曲链照常工作）
+  if (startupAutoplayAttemptCount >= 2 && playQueue.length > 1) {
+    var failedAt = Number(playQueue[currentIdx] && playQueue[currentIdx]._lastPlaybackFailAt) || 0;
+    if (failedAt && Date.now() - failedAt < 18000) {
+      var nextIdx = nextUnblockedQueueIndex(currentIdx);
+      if (nextIdx >= 0 && nextIdx !== currentIdx) currentIdx = nextIdx;
+    }
+  }
+  startupAutoplayAttemptCount += 1;
+  startupAutoplaySilent = true;
+  Promise.resolve(playQueueAt(currentIdx, { manual: false, startupAutoplay: true }))
+    .catch(function (e) { console.warn('[StartupAutoplay]', reason || 'startup', e); })
+    .finally(function () {
+      if (jobId !== startupAutoplayJobId || !startupAutoplayPreference) { startupAutoplaySilent = false; return; }
+      setTimeout(function () {
+        if (jobId !== startupAutoplayJobId || !startupAutoplayPreference) { startupAutoplaySilent = false; return; }
+        if (isStartupAutoplayPlaying()) { finishStartupAutoplayJob(true); return; }
+        if (startupAutoplayAttemptCount >= 6) { finishStartupAutoplayJob(false); return; }
+        clearStartupAutoplayRetryTimer();
+        startupAutoplayRetryTimer = setTimeout(function () {
+          startupAutoplayRetryTimer = null;
+          runStartupAutoplayAttempt(jobId, 'retry');
+        }, startupAutoplayRetryDelay(startupAutoplayAttemptCount));
+      }, 260);
+    });
+  return true;
+}
+function scheduleStartupAutoplayFromSnapshot(reason) {
+  if (!startupAutoplayPreference || startupAutoplayAttempted) return false;
+  if (!canStartupAutoplay()) return false;
+  // splash 未结束先排队，dismissSplash 时 flush（对齐上游：界面可见后才发起）
+  if (document.body.classList.contains('splash-active')) {
+    startupAutoplayQueuedReason = reason || 'startup';
+    return true;
+  }
+  clearStartupAutoplayRetryTimer();
+  startupAutoplayJobId += 1;
+  startupAutoplayAttemptCount = 0;
+  startupAutoplayAttempted = true;
+  var jobId = startupAutoplayJobId;
+  setTimeout(function () { runStartupAutoplayAttempt(jobId, reason || 'startup'); }, 300);
+  return true;
+}
+function flushStartupAutoplayAfterSplash() {
+  if (!startupAutoplayQueuedReason || !startupAutoplayPreference || startupAutoplayAttempted) { startupAutoplayQueuedReason = ''; return; }
+  var reason = startupAutoplayQueuedReason;
+  startupAutoplayQueuedReason = '';
+  scheduleStartupAutoplayFromSnapshot(reason);
+}
+syncStartupAutoplayToggle();
 
 window.addEventListener('beforeunload', function () {
   try {
