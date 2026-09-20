@@ -51,6 +51,8 @@ var VISUAL_PRESET_INDEX_MAX = 8;
 // 歌词显示模式合法值：启动恢复（734 行附近）先于 6300 行区的显示模式函数区执行，
 // 故常量定义在文件头部（normalizeLyricDisplayMode 依赖）
 var STAGE_LYRIC_DISPLAY_MODES = { single: 1, dual: 1, triple: 1, cinema: 1, custom: 1 };
+// 歌词动画风格合法值：readSavedLyricLayout（768 行）同样先于动画函数区执行（同款时序坑）
+var STAGE_LYRIC_MOTION_STYLES = { glass: 1, smooth: 1, float: 1, quick: 1, shine: 1, glitch: 1 };
 var PLAYBACK_QUALITY_STORE_KEY = 'bhandsmusic-playback-quality-v1';
 var UPLOAD_TIP_STORE_KEY = 'bhandsmusic-upload-tip-seen';
 var DIY_MODE_STORE_KEY = 'bhandsmusic-diy-player-mode-v1';
@@ -5046,6 +5048,8 @@ function readSavedLyricLayout() {
       lyricVerticalFloat: raw.lyricVerticalFloat !== false
     };
   } catch (e) {
+    // 静默回退默认会掩盖"启动读取失败"（曾因常量时序抛 TypeError 导致整套 fx 回默认且被写档固化）
+    try { console.error('[readSavedLyricLayout] 读取失败，已回退默认:', e && e.message); } catch (e2) {}
     return {};
   }
 }
@@ -6418,7 +6422,7 @@ function stageLyricUpcomingCount() {
   return Math.max(0, stageLyricLineCount() - 1 - stageLyricParkCount());
 }
 // ============ 歌词动画（对齐上游 Minera motion 体系） ============
-var STAGE_LYRIC_MOTION_STYLES = { glass: 1, smooth: 1, float: 1, quick: 1, shine: 1, glitch: 1 };
+// 合法值表 STAGE_LYRIC_MOTION_STYLES 定义在文件头部（同 DISPLAY_MODES 时序处理）
 function normalizeLyricMotionStyle(style) {
   style = String(style || 'glass');
   return STAGE_LYRIC_MOTION_STYLES[style] ? style : 'glass';
