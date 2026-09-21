@@ -1056,6 +1056,9 @@ body.login-guide-active #login-guide-canvas{opacity:1}
 .custom-lyric-status.fail{color:#ff8f9d}
 .lyric-source-row{display:grid;grid-template-columns:1fr;gap:8px;margin:8px 0 12px}
 .lyric-source-seg button.has-custom::after{content:'';display:inline-block;width:5px;height:5px;margin-left:5px;border-radius:50%;background:rgba(126,226,168,.86);vertical-align:middle;box-shadow:0 0 10px rgba(126,226,168,.50)}
+/* 溢光快捷按钮行（移植自上游 public/css/index.css，配色跟随溢光取色） */
+.lyric-glow-effect-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:-1px 0 10px;--lyric-glow-color:#9db8cf}
+.lyric-glow-effect-row .fx-mini-btn{width:100%;min-width:0;border-color:color-mix(in srgb,var(--lyric-glow-color) 18%,rgba(255,255,255,.10));color:color-mix(in srgb,var(--lyric-glow-color) 72%,rgba(255,255,255,.74))}
 
 /* ---------- 加载/拖放 ---------- */
 #loading-overlay{position:fixed;inset:0;z-index:40;pointer-events:none;display:none}

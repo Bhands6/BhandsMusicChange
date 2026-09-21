@@ -335,6 +335,12 @@ try {
         <div class="lyric-color-value" id="lyric-glow-value">跟随高亮</div>
         <button class="fx-mini-btn ghost active" id="lyric-glow-link-btn" type="button" onclick="toggleLyricGlowLink(event)">链接</button>
       </div>
+      <!-- 溢光快捷按钮行（上游同款，与控制台「歌词溢光开关」条目对应；
+           与下方 t-lyricGlow / t-lyricGlowBeat 开关是并存的两套入口） -->
+      <div class="lyric-glow-effect-row">
+        <button class="fx-mini-btn ghost" id="lyric-glow-enable-btn" type="button" onclick="toggleFx('lyricGlow')">后层溢光</button>
+        <button class="fx-mini-btn ghost" id="lyric-glow-beat-btn" type="button" onclick="toggleFx('lyricGlowBeat')">跟随鼓点</button>
+      </div>
       <div class="fx-section-label">歌词源</div>
       <div class="lyric-source-row">
         <div class="fx-seg lyric-source-seg" id="lyric-source-seg">
@@ -351,6 +357,16 @@ try {
         <button type="button" data-mode="custom" onclick="setLyricDisplayMode('custom')">自定</button>
       </div>
       <div class="fx-slider"><label>显示行数</label><input id="fx-lyriccustomlines" type="range" min="1" max="10" step="1"><output></output></div>
+      <div class="fx-section-label">双语翻译</div>
+      <div class="fx-seg lyric-translation-mode-seg" id="lyric-translation-mode-seg">
+        <button type="button" data-translation="off" class="active" onclick="setLyricTranslationMode('off')">关闭</button>
+        <button type="button" data-translation="current" onclick="setLyricTranslationMode('current')">当前</button>
+        <button type="button" data-translation="dual" onclick="setLyricTranslationMode('dual')">双行</button>
+        <button type="button" data-translation="multi" onclick="setLyricTranslationMode('multi')">多行</button>
+      </div>
+      <div class="fx-slider"><label>译文间距</label><input id="fx-lyrictranslationgap" type="range" min="0.28" max="2.20" step="0.01"><output></output></div>
+      <div class="fx-slider"><label>译文字号</label><input id="fx-lyrictranslationscale" type="range" min="0.46" max="1.12" step="0.01"><output></output></div>
+      <div class="fx-slider"><label>译文透明</label><input id="fx-lyrictranslationopacity" type="range" min="0.20" max="1" step="0.01"><output></output></div>
       <div class="fx-section-label">歌词动画</div>
       <div class="fx-seg lyric-motion-style-seg" id="lyric-motion-style-seg">
         <button type="button" data-motion="float" onclick="setLyricMotionStyle('float')">漂浮</button>
@@ -559,6 +575,12 @@ try {
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-rememberClose" onclick="toggleRememberClose()" title="记住关闭行为，下次不再弹窗"><span>记住关闭选择</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-startupAutoplay" onclick="toggleStartupAutoplay()" title="打开软件自动续播上次歌曲（从上次进度继续，解析全程静默）"><span>启动自动播放</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-startupFastSkip" onclick="toggleStartupFastSkip()" title="打开软件后直接进入主页，不等待启动动画"><span>秒启动跳过启动页</span><span class="dot"></span></div>
+      </div>
+      <div class="fx-section-label">恢复播放位置</div>
+      <div class="fx-seg" id="startup-resume-mode-seg" title="控制恢复上次播放时从哪里开始">
+        <button data-startup-resume-mode="resume" class="active" onclick="setStartupResumeMode('resume')">按上次进度</button>
+        <button data-startup-resume-mode="restart" onclick="setStartupResumeMode('restart')">重播整首</button>
       </div>
     </div>
   </div>
@@ -577,11 +599,12 @@ try {
       </div>
       <div class="fx-section-label">音源开关</div>
       <div class="fx-toggle-grid">
-        <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 joox/tidal/netease 搜索匹配"><span>GD音乐台</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-unblockMusic" onclick="toggleMusicSource('unblockMusic')" title="UnblockNeteaseMusic - 通过咪咕/酷我/酷狗等平台匹配"><span>UnblockMusic</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-lxMusic" onclick="toggleMusicSource('lxMusic')" title="LX Music 脚本 - 需要上传音源脚本"><span>LX Music</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-custom" onclick="toggleMusicSource('custom')" title="自定义 API - 填写第三方解析接口地址"><span>自定义 API</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 netease/joox 聚合搜索匹配，无损优先"><span>GD音乐台</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-goMusic" onclick="toggleMusicSource('goMusic')" title="go-music-api 智能换源 - 需本地运行该 Go 服务，用酷狗/酷我/QQ/咪咕官方音源兜底"><span>智能换源</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-src-kugou" onclick="toggleMusicSource('kugou')" title="酷狗音源 - 免登录搜索匹配并解析标准音质（移植自上游 Mineradio）"><span>酷狗音源</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-lxMusic" onclick="toggleMusicSource('lxMusic')" title="LX Music 脚本 - 需要上传音源脚本，支持旧版与事件式脚本"><span>LX Music</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-unblockMusic" onclick="toggleMusicSource('unblockMusic')" title="UnblockNeteaseMusic - 通过酷狗/酷我平台匹配，128k 兜底"><span>UnblockMusic</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-custom" onclick="toggleMusicSource('custom')" title="自定义 API - 填写第三方解析接口地址"><span>自定义 API</span><span class="dot"></span></div>
       </div>
       <div class="fx-section-label">LX Music 脚本</div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
@@ -598,6 +621,12 @@ try {
           <option value="POST">POST</option>
         </select>
       </div>
+      <div class="fx-section-label">go-music-api 换源服务地址</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+        <input type="text" id="go-music-api-url" placeholder="留空使用默认 http://127.0.0.1:8080" style="flex:1;height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);padding:0 8px;font-size:12px;outline:none;" onchange="saveGoMusicApiUrl()">
+        <button class="fx-mini-btn" onclick="testGoMusicService()">测试连接</button>
+      </div>
+      <div id="go-music-api-status" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;">未测试</div>
       <div class="fx-section-label">其他</div>
       <div style="display:flex;gap:8px;">
         <button class="fx-mini-btn" onclick="clearParseCache()">清除解析缓存</button>

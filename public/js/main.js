@@ -604,6 +604,10 @@ var fxDefaults = {
   lyricMotionSoftness: 1.0,     // 动画柔顺乘数（1.0=fork 现状；上游默认 0.72）
   lyricContextOpacity: 1.0,     // 上下句清晰乘数（1.0=fork 现状；上游默认 0.54）
   lyricContextSpread: 1.0,      // 上下句间距乘数（1.0=fork 现状；上游默认 1.96）
+  lyricTranslationMode: 'off',  // 双语翻译：off关闭/current仅当前行/dual双行/multi多行（默认 off = 零视觉变化）
+  lyricTranslationGap: 0.92,    // 译文间距（上游默认 0.92，范围 0.28-2.20）
+  lyricTranslationScale: 0.65,  // 译文字号乘数（上游默认 0.65，范围 0.46-1.12）
+  lyricTranslationOpacity: 0.86,// 译文透明度（上游默认 0.86，范围 0.20-1）
   lyricEdgeFade: 0,             // 边缘渐隐（0=fork 现状；上游默认 0.32）
   lyricGlitchIntensity: 1.0,    // 故障强度（上游同款默认：切故障态即有效果）
   lyricGlitchSlice: 0.72,       // 切片幅度（参数预留，shader 批次接入）
@@ -713,6 +717,10 @@ var PACKAGED_DEFAULT_FX_SNAPSHOT = Object.freeze({
   lyricMotionSoftness: 1.0,
   lyricContextOpacity: 1.0,
   lyricContextSpread: 1.0,
+  lyricTranslationMode: 'off',
+  lyricTranslationGap: 0.92,
+  lyricTranslationScale: 0.65,
+  lyricTranslationOpacity: 0.86,
   lyricEdgeFade: 0,
   lyricGlitchIntensity: 1.0,
   lyricGlitchSlice: 0.72,
@@ -5038,6 +5046,10 @@ function readSavedLyricLayout() {
       lyricMotionSoftness: clampRange(Number(raw.lyricMotionSoftness) || fxDefaults.lyricMotionSoftness, 0.15, 1.2),
       lyricContextOpacity: clampRange(raw.lyricContextOpacity == null ? fxDefaults.lyricContextOpacity : Number(raw.lyricContextOpacity), 0.25, 1),
       lyricContextSpread: clampRange(raw.lyricContextSpread == null ? fxDefaults.lyricContextSpread : Number(raw.lyricContextSpread), 0.60, 2.40),
+      lyricTranslationMode: normalizeLyricTranslationMode(raw.lyricTranslationMode),
+      lyricTranslationGap: clampRange(raw.lyricTranslationGap == null ? fxDefaults.lyricTranslationGap : Number(raw.lyricTranslationGap), 0.28, 2.20),
+      lyricTranslationScale: clampRange(raw.lyricTranslationScale == null ? fxDefaults.lyricTranslationScale : Number(raw.lyricTranslationScale), 0.46, 1.12),
+      lyricTranslationOpacity: clampRange(raw.lyricTranslationOpacity == null ? fxDefaults.lyricTranslationOpacity : Number(raw.lyricTranslationOpacity), 0.20, 1),
       lyricEdgeFade: clampRange(raw.lyricEdgeFade == null ? fxDefaults.lyricEdgeFade : Number(raw.lyricEdgeFade), 0, 1),
       lyricGlitchIntensity: clampRange(raw.lyricGlitchIntensity == null ? fxDefaults.lyricGlitchIntensity : Number(raw.lyricGlitchIntensity), 0, 1.5),
       lyricGlitchSlice: clampRange(raw.lyricGlitchSlice == null ? fxDefaults.lyricGlitchSlice : Number(raw.lyricGlitchSlice), 0, 1.4),
@@ -5153,6 +5165,10 @@ function saveLyricLayout() {
       lyricMotionSoftness: lyricMotionSoftnessValue(),
       lyricContextOpacity: lyricContextOpacityValue(),
       lyricContextSpread: lyricContextSpreadValue(),
+      lyricTranslationMode: lyricTranslationModeValue(),
+      lyricTranslationGap: lyricTranslationGapValue(),
+      lyricTranslationScale: lyricTranslationScaleValue(),
+      lyricTranslationOpacity: lyricTranslationOpacityValue(),
       lyricEdgeFade: lyricEdgeFadeValue(),
       lyricGlitchIntensity: lyricGlitchIntensityValue(),
       lyricGlitchSlice: lyricGlitchSliceValue(),
@@ -6434,6 +6450,27 @@ function lyricContextOpacityValue() {
 function lyricContextSpreadValue() {
   return clampRange(fx && fx.lyricContextSpread == null ? fxDefaults.lyricContextSpread : Number(fx && fx.lyricContextSpread), 0.60, 2.40);
 }
+/**
+ * 双语翻译模式（移植自上游 setLyricTranslationMode）：
+ * off 关闭 / current 仅当前行 / dual 双行 / multi 多行。
+ * 默认 off —— 不影响任何既有歌词观感。
+ */
+function normalizeLyricTranslationMode(value) {
+  var v = String(value == null ? '' : value).toLowerCase();
+  return (v === 'current' || v === 'dual' || v === 'multi') ? v : 'off';
+}
+function lyricTranslationModeValue() {
+  return normalizeLyricTranslationMode(fx && fx.lyricTranslationMode);
+}
+function lyricTranslationGapValue() {
+  return clampRange(fx && fx.lyricTranslationGap == null ? fxDefaults.lyricTranslationGap : Number(fx && fx.lyricTranslationGap), 0.28, 2.20);
+}
+function lyricTranslationScaleValue() {
+  return clampRange(fx && fx.lyricTranslationScale == null ? fxDefaults.lyricTranslationScale : Number(fx && fx.lyricTranslationScale), 0.46, 1.12);
+}
+function lyricTranslationOpacityValue() {
+  return clampRange(fx && fx.lyricTranslationOpacity == null ? fxDefaults.lyricTranslationOpacity : Number(fx && fx.lyricTranslationOpacity), 0.20, 1);
+}
 function lyricEdgeFadeValue() {
   return clampRange(fx && fx.lyricEdgeFade == null ? fxDefaults.lyricEdgeFade : Number(fx && fx.lyricEdgeFade), 0, 1);
 }
@@ -6549,6 +6586,169 @@ function upcomingLyricStyleFor(slot) {
     readability: Math.max(0.08, (0.46 - s * 0.10) * ctxOpacity)
   };
 }
+/**
+ * 为一行歌词挂上译文（双语翻译，移植自上游）。
+ *
+ * 译文作为该行 group 的**子节点**：自动继承父行的位置/缩放/浮动/镜头绑定动画，
+ * 且不在 stageLyrics.current/outgoing/upcoming 的动画跟踪表里 —— 保持静态，
+ * 不各自播放入场/退场。所以模式为 off 时（默认）对既有歌词观感零影响。
+ * disposeLyricMesh 会 traverse 子节点，译文随父行一起回收，无泄漏。
+ */
+function attachLyricTranslation(parentMesh, translationText) {
+  if (!parentMesh || !translationText) return null;
+  var group = buildLyricMesh(String(translationText));
+  if (!group) return null;
+  var data = group.userData.lyric || {};
+  // 记录文本：切模式/换行时据此判断要不要重建网格（文本没变只切 visible）
+  group.userData.translationText = String(translationText);
+  // 静态化：不让它走入场动画
+  group.userData.state = 'idle';
+  group.userData.age = 99;
+  group.userData.staticTranslationChild = true;
+  group.position.set(0, -0.46 * lyricTranslationGapValue(), 0.015);
+  group.scale.setScalar(lyricTranslationScaleValue());
+  // 译文只保留文字层：可读性底衬/辉光/太阳/光粒全关，避免压住主行
+  if (data.readabilityMat) data.readabilityMat.opacity = 0;
+  if (data.glowMat) data.glowMat.opacity = 0;
+  if (data.sunMat) data.sunMat.opacity = 0;
+  if (data.sparkMat) data.sparkMat.opacity = 0;
+  if (data.sparks) data.sparks.visible = false;
+  if (data.textMat && data.textMat.uniforms) {
+    // uProgress=1：整句统一底色，不做跟唱高亮
+    if (data.textMat.uniforms.uProgress) data.textMat.uniforms.uProgress.value = 1;
+    if (data.textMat.uniforms.uOpacity) data.textMat.uniforms.uOpacity.value = lyricTranslationOpacityValue();
+  }
+  parentMesh.add(group);
+  return group;
+}
+
+/**
+ * 译文该不该在某个位置显示（按模式 + 位置判定）。
+ *
+ * 位置分三种，对应沉浸/多行模式下屏幕上的三段：
+ *  - current ：当前唱到的那一行
+ *  - parked  ：**上方**已唱过的停驻行（stageLyrics.outgoing 里 userData.parked 的那些）
+ *  - upcoming：**下方**还没唱到的预告行
+ *
+ * 修过的坑（2026-09-21 用户实测）：早期实现只给 current + upcoming 挂译文，
+ * 于是「多行」模式下**上方停驻行永远没有译文**，看起来像"只翻译了后面的歌词"。
+ *
+ * @param {'current'|'parked'|'upcoming'} slotKind
+ * @param {number} [slot] upcoming 的槽位（0 起）
+ */
+function lyricTranslationWantedAt(slotKind, slot) {
+  var mode = lyricTranslationModeValue();
+  if (mode === 'off') return false;
+  if (slotKind === 'current') return true;
+  if (mode === 'current') return false;      // 仅当前行
+  if (mode === 'dual') return slotKind === 'upcoming' && slot === 0;   // 当前 + 下方第一行
+  return true;                                // multi：上方停驻行 + 下方预告行全要
+}
+
+/** 取第 idx 行的歌词对象（越界/非法返回 null） */
+function lyricLineAt(idx) {
+  if (typeof idx !== 'number' || idx < 0 || !Array.isArray(lyricsLines)) return null;
+  return lyricsLines[idx] || null;
+}
+
+/**
+ * 同步某行 mesh 的译文子节点：需要则挂上并显示，不需要则隐藏。
+ * 文本变了才重建网格（重建要重绘文字纹理）；否则只切 visible —— 所以切模式是瞬时的。
+ */
+function syncMeshTranslation(mesh, line, slotKind, slot) {
+  if (!mesh || !mesh.userData) return;
+  var wanted = lyricTranslationWantedAt(slotKind, slot);
+  var text = (wanted && line && line.translation) ? String(line.translation) : '';
+  var child = mesh.userData.translationMesh;
+  if (!text) {
+    if (child) child.visible = false;
+    return;
+  }
+  if (child && child.userData && child.userData.translationText === text) {
+    child.visible = true;
+    return;
+  }
+  if (child) {
+    mesh.remove(child);
+    disposeLyricMesh(child);
+    mesh.userData.translationMesh = null;
+  }
+  var built = attachLyricTranslation(mesh, text);
+  if (built) mesh.userData.translationMesh = built;
+}
+
+/**
+ * 重建/同步所有活跃行的译文（切模式、切字体、行滚动时调用）。
+ * 覆盖当前行 + 全部 outgoing（停驻行与退场行）+ 全部预告行。
+ */
+function refreshLyricTranslations() {
+  if (!stageLyrics) return;
+  syncMeshTranslation(stageLyrics.current, lyricLineAt(stageLyrics.currentIdx), 'current');
+  if (Array.isArray(stageLyrics.outgoing)) {
+    for (var i = 0; i < stageLyrics.outgoing.length; i++) {
+      var m = stageLyrics.outgoing[i];
+      if (!m || !m.userData) continue;
+      syncMeshTranslation(m, lyricLineAt(m.userData.lineIdx), 'parked');
+    }
+  }
+  if (Array.isArray(stageLyrics.upcoming)) {
+    for (var j = 0; j < stageLyrics.upcoming.length; j++) {
+      var um = stageLyrics.upcoming[j];
+      if (!um || !um.userData) continue;
+      syncMeshTranslation(um, lyricLineAt(um.userData.lineIdx), 'upcoming', j);
+    }
+  }
+}
+
+/**
+ * 拖动译文滑块时**就地**更新已有译文子节点（间距/字号/透明度）。
+ * 不重建网格：buildLyricMesh 要重绘文字纹理，滑块拖动时会卡。
+ */
+function applyLyricTranslationStyle() {
+  if (!stageLyrics) return;
+  var gap = lyricTranslationGapValue();
+  var scale = lyricTranslationScaleValue();
+  var alpha = lyricTranslationOpacityValue();
+  function apply(mesh) {
+    if (!mesh || !mesh.userData) return;
+    var t = mesh.userData.translationMesh;
+    if (!t) return;
+    t.position.y = -0.46 * gap;
+    t.scale.setScalar(scale);
+    var d = t.userData.lyric || {};
+    if (d.textMat && d.textMat.uniforms && d.textMat.uniforms.uOpacity) d.textMat.uniforms.uOpacity.value = alpha;
+  }
+  apply(stageLyrics.current);
+  // 上方停驻/退场行也要跟着调（multi 模式下它们同样有译文）
+  if (Array.isArray(stageLyrics.outgoing)) stageLyrics.outgoing.forEach(apply);
+  if (Array.isArray(stageLyrics.upcoming)) stageLyrics.upcoming.forEach(apply);
+}
+
+/**
+ * 双语翻译模式（上游同款四态）：off 关闭 / current 当前 / dual 双行 / multi 多行
+ * @param {string} mode
+ */
+function setLyricTranslationMode(mode) {
+  fx.lyricTranslationMode = normalizeLyricTranslationMode(mode);
+  syncLyricTranslationControls();
+  refreshLyricTranslations();
+  saveLyricLayout({ user: true, reason: 'lyricTranslationMode' });
+  showToast(fx.lyricTranslationMode === 'off' ? '双语翻译：关闭'
+    : fx.lyricTranslationMode === 'current' ? '双语翻译：仅当前行'
+      : fx.lyricTranslationMode === 'dual' ? '双语翻译：当前 + 下一行'
+        : '双语翻译：当前 + 全部上下文行');
+}
+
+/** 同步「双语翻译」四态按钮（3 个滑块的同步走 updateFxControls 的 setRange 表） */
+function syncLyricTranslationControls() {
+  var seg = document.getElementById('lyric-translation-mode-seg');
+  if (!seg) return;
+  var mode = lyricTranslationModeValue();
+  Array.prototype.forEach.call(seg.querySelectorAll('button[data-translation]'), function(b){
+    b.classList.toggle('active', b.getAttribute('data-translation') === mode);
+  });
+}
+
 function showStageLine(text, redrawOnly) {
   createLyricsParticles();
   if (!stageLyrics.group) return;
@@ -6557,22 +6757,31 @@ function showStageLine(text, redrawOnly) {
     disposeLyricMesh(stageLyrics.current);
     stageLyrics.current = null;
   } else if (stageLyrics.current) {
-    stageLyrics.current.userData.state = 'out';
+    var outgoingMesh = stageLyrics.current;
+    outgoingMesh.userData.state = 'out';
     if (stageLyricParkCount() > 0) {
       // 多行模式：旧行不立刻淡出，缩小上移停驻到当前行上方
-      stageLyrics.current.userData.parked = true;
-      stageLyrics.current.userData.age = 0;
-      stageLyrics.outgoing.push(stageLyrics.current);
+      outgoingMesh.userData.parked = true;
+      outgoingMesh.userData.age = 0;
+      stageLyrics.outgoing.push(outgoingMesh);
       expireParkedLyricLines();
     } else {
-      stageLyrics.current.userData.age = 0;
-      stageLyrics.outgoing.push(stageLyrics.current);
+      outgoingMesh.userData.age = 0;
+      stageLyrics.outgoing.push(outgoingMesh);
     }
+    // 这行刚从「当前行」变成「上方停驻/退场行」：按新身份重新同步译文
+    // （multi 模式要保留译文，current/dual 模式要隐藏 —— 早期实现漏了这一步，
+    //   导致上方停驻行永远没有译文）
+    syncMeshTranslation(outgoingMesh, lyricLineAt(outgoingMesh.userData.lineIdx), 'parked');
   }
   stageLyrics.currentText = text;
   var mesh = buildLyricMesh(text);
   stageLyrics.group.add(mesh);
   stageLyrics.current = mesh;
+  // 记录行号：这行之后会变成「停驻行」，那时要靠它找回自己的译文
+  mesh.userData.lineIdx = stageLyrics.currentIdx;
+  // 双语翻译：按模式给当前行挂/显示译文（off 时不挂，零额外开销）
+  syncMeshTranslation(mesh, lyricLineAt(stageLyrics.currentIdx), 'current');
 }
 
 function refreshCurrentLyricStyle() {
@@ -6597,14 +6806,18 @@ function refreshAllLyricLineFonts() {
         if (out[pi] && out[pi].userData && out[pi].userData.parked) parkRank++;
       }
       var ps = parkLyricStyleFor(parkRank);
+      var oldLineIdx = m.userData.lineIdx;
       disposeLyricMesh(m);
       var nm = buildLyricMesh(m.userData.text);
       nm.userData.parked = true;
+      nm.userData.lineIdx = oldLineIdx;             // 保留行号：双语翻译要靠它找回译文
       nm.userData.age = 0.42;                       // 渐显置满
       nm.position.set(0, ps.y, ps.z);
       nm.scale.setScalar(ps.scale);
       out[i] = nm;
       if (stageLyrics.group) stageLyrics.group.add(nm);
+      // 重建后译文子节点已随旧网格销毁，按新身份重新同步
+      syncMeshTranslation(nm, lyricLineAt(oldLineIdx), 'parked');
     }
   }
   // 预告行：清掉后按槽位重建（播放中由 tick 主分支驱动，暂停中由下方 sync 直接重建）
@@ -6917,6 +7130,8 @@ function syncUpcomingLyricLines(idx) {
       mesh.scale.setScalar(ps.scale);
       stageLyrics.group.add(mesh);
       stageLyrics.upcoming[slot] = mesh;
+      // 双语翻译：dual 只给第一行预告行，multi 给全部（off/current 不挂）
+      syncMeshTranslation(mesh, line, 'upcoming', slot);
     }
   }
 }
@@ -16560,6 +16775,55 @@ function skipFailedQueueItem(idx, token, message) {
   playQueueAt(nextIdx, { fallbackDepth: 0 });
 }
 /**
+ * 从歌曲对象里稳妥提取歌手名。
+ *
+ * 不同来源的 song 形态不一致：ar / artists 可能是对象数组，也可能是**字符串数组**，
+ * 还可能只有 singer / artist 字段。早期实现只认 `ar[i].name`，遇到字符串数组会静默
+ * 得到空数组 —— 而歌手为空会让所有音源的「歌手匹配」整条失效，从而匹配到同名翻唱版
+ *（2026-09-20「明天天明」实测：漏传歌手 → 选中山清翻唱版，表现为歌词跟曲不对）。
+ *
+ * 刻意不做分隔符拆分：合并串（如「海洋Bo、DJChronos时烬」）靠服务端的双向包含匹配
+ * 依然能命中，而按 `&` / `,` 拆会误伤「Simon & Garfunkel」这类本身含符号的歌手名。
+ * @param {Object} song
+ * @returns {string[]}
+ */
+function extractArtistNames(song) {
+  if (!song) return [];
+  var out = [];
+  function push(v) {
+    if (!v) return;
+    if (typeof v === 'string') {
+      var t = v.trim();
+      if (t) out.push(t);
+      return;
+    }
+    if (typeof v === 'object') push(v.name || v.artist || v.singer || '');
+  }
+  ['ar', 'artists', 'singer', 'artist', 'singers'].forEach(function (key) {
+    var v = song[key];
+    if (Array.isArray(v)) {
+      for (var i = 0; i < v.length; i++) push(v[i]);
+    } else if (v) {
+      push(v);
+    }
+  });
+  return out.filter(function (n, i) { return out.indexOf(n) === i; });
+}
+
+/**
+ * 从歌曲对象里提取专辑名（同样兼容字符串 / 对象两种形态）
+ * @param {Object} song
+ * @returns {string}
+ */
+function extractAlbumName(song) {
+  if (!song) return '';
+  var al = song.al || song.album;
+  if (!al) return '';
+  if (typeof al === 'string') return al.trim();
+  return (al.name || '').trim();
+}
+
+/**
  * 尝试使用第三方音源解析音乐 URL
  * @param {Object} song - 歌曲对象
  * @param {string} quality - 请求的音质
@@ -16567,15 +16831,14 @@ function skipFailedQueueItem(idx, token, message) {
  */
 async function tryThirdPartyParse(song, quality, opts) {
   try {
-    var artists = [];
-    if (song.ar && Array.isArray(song.ar)) {
-      artists = song.ar.map(function (a) { return a.name; }).filter(Boolean);
-    } else if (song.artists && Array.isArray(song.artists)) {
-      artists = song.artists.map(function (a) { return a.name; }).filter(Boolean);
+    var artists = extractArtistNames(song);
+    var albumName = extractAlbumName(song);
+
+    // 歌手为空是「货不对版」的高危信号：服务端会按网易云 ID 兜底补齐，
+    // 这里只做一次提示，便于排查是哪个调用路径漏了歌手
+    if (!artists.length) {
+      console.warn('[ThirdPartyParse] 未能从歌曲对象取到歌手，交由服务端兜底:', song && song.name);
     }
-    var albumName = '';
-    if (song.al && song.al.name) albumName = song.al.name;
-    else if (song.album && song.album.name) albumName = song.album.name;
 
     // silent（恢复态预解析/启动自动播放）：后台请求不打扰用户
     var silentParse = !!(opts && opts.silent);
@@ -17487,6 +17750,9 @@ async function fetchLyric(songOrId, token) {
     var timingSource = hasNativeKaraoke ? 'yrc-word' : (nativeLines.length ? 'yrc-line' : (lrcLines.length ? 'lrc-line' : 'fallback'));
     var lines = withLyricFallback(nativeLines.length ? nativeLines : lrcLines);
     if (lines.length && lines[0].fallback) timingSource = 'fallback';
+    // 双语翻译：接口早已返回 tlyric（netease / QQ 都有），此前客户端未消费；
+    // 这里并进 line.translation，渲染层按 fx.lyricTranslationMode 决定是否显示
+    mergeLyricTranslations(lines, parseLyricTranslationLines(r.tlyric || ''));
     setOriginalLyricsState(lines, hasNativeKaraoke, timingSource);
     applyPreferredLyricsForCurrent(true);
   } catch (e) {
@@ -17546,6 +17812,51 @@ function parseLyricText(text) {
   });
   return finalizeLyricLineDurations(lines);
 }
+/**
+ * 解析译文歌词文本（上游 tlyric 与主歌词同为 LRC 格式）。
+ * @returns {{t:number, text:string}[]} 按时间升序
+ */
+function parseLyricTranslationLines(text) {
+  var out = [], reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
+  String(text || '').split(/\r?\n/).forEach(function(line){
+    var times = [], m;
+    reg.lastIndex = 0;
+    while ((m = reg.exec(line))) times.push(lyricTagTimeToSeconds(m[1], m[2], m[3]));
+    if (!times.length) return;
+    var txt = line.replace(reg, '').trim();
+    if (!txt) return;
+    times.forEach(function(t){ out.push({ t: t, text: txt }); });
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
+  return out;
+}
+
+/** 译文与原文行的时间容差（秒）：两边时间戳一般完全一致，容差只兜浮点/毫秒截断 */
+var LYRIC_TRANSLATION_TIME_TOLERANCE = 0.6;
+
+/**
+ * 把译文按时间就近合并进主歌词行（写入 line.translation）。
+ * 上游做法是在解析阶段就把译文并进行对象，这里保持同样的数据形态，
+ * 渲染层只读 line.translation，不再关心数据来源。
+ * @param {Array} lines 主歌词行（会被就地修改）
+ * @param {Array} transLines parseLyricTranslationLines 的结果
+ */
+function mergeLyricTranslations(lines, transLines) {
+  if (!Array.isArray(lines) || !lines.length) return lines;
+  if (!Array.isArray(transLines) || !transLines.length) return lines;
+  for (var i = 0; i < lines.length; i++) {
+    var best = null, bestDiff = Infinity;
+    for (var j = 0; j < transLines.length; j++) {
+      var diff = Math.abs(transLines[j].t - lines[i].t);
+      if (diff < bestDiff) { bestDiff = diff; best = transLines[j]; }
+      // 已按时间升序：一旦超出容差且时间在原文之后，再往后只会更远
+      if (transLines[j].t > lines[i].t + LYRIC_TRANSLATION_TIME_TOLERANCE) break;
+    }
+    if (best && bestDiff <= LYRIC_TRANSLATION_TIME_TOLERANCE) lines[i].translation = best.text;
+  }
+  return lines;
+}
+
 function parseYrcText(text) {
   var lines = [];
   String(text || '').split(/\r?\n/).forEach(function(line){
@@ -18752,6 +19063,10 @@ function normalizeFxArchiveSnapshot(raw) {
     lyricMotionSoftness: clampRange(Number(raw.lyricMotionSoftness) || fxDefaults.lyricMotionSoftness, 0.15, 1.2),
     lyricContextOpacity: clampRange(raw.lyricContextOpacity == null ? fxDefaults.lyricContextOpacity : Number(raw.lyricContextOpacity), 0.25, 1),
     lyricContextSpread: clampRange(raw.lyricContextSpread == null ? fxDefaults.lyricContextSpread : Number(raw.lyricContextSpread), 0.60, 2.40),
+    lyricTranslationMode: normalizeLyricTranslationMode(raw.lyricTranslationMode),
+    lyricTranslationGap: clampRange(raw.lyricTranslationGap == null ? fxDefaults.lyricTranslationGap : Number(raw.lyricTranslationGap), 0.28, 2.20),
+    lyricTranslationScale: clampRange(raw.lyricTranslationScale == null ? fxDefaults.lyricTranslationScale : Number(raw.lyricTranslationScale), 0.46, 1.12),
+    lyricTranslationOpacity: clampRange(raw.lyricTranslationOpacity == null ? fxDefaults.lyricTranslationOpacity : Number(raw.lyricTranslationOpacity), 0.20, 1),
     lyricEdgeFade: clampRange(raw.lyricEdgeFade == null ? fxDefaults.lyricEdgeFade : Number(raw.lyricEdgeFade), 0, 1),
     lyricGlitchIntensity: clampRange(raw.lyricGlitchIntensity == null ? fxDefaults.lyricGlitchIntensity : Number(raw.lyricGlitchIntensity), 0, 1.5),
     lyricGlitchSlice: clampRange(raw.lyricGlitchSlice == null ? fxDefaults.lyricGlitchSlice : Number(raw.lyricGlitchSlice), 0, 1.4),
@@ -20288,6 +20603,10 @@ function updateFxInputs() {
   setRange('fx-lyricscale', fx.lyricScale);
   setRange('fx-lyriccontextopacity', lyricContextOpacityValue());
   setRange('fx-lyriccontextspread', lyricContextSpreadValue());
+  setRange('fx-lyrictranslationgap', lyricTranslationGapValue());
+  setRange('fx-lyrictranslationscale', lyricTranslationScaleValue());
+  setRange('fx-lyrictranslationopacity', lyricTranslationOpacityValue());
+  syncLyricTranslationControls();
   setRange('fx-lyricedgefade', lyricEdgeFadeValue());
   setRange('fx-lyricmotionsoftness', lyricMotionSoftnessValue());
   setRange('fx-lyricglitchintensity', lyricGlitchIntensityValue());
@@ -20315,6 +20634,11 @@ function updateFxInputs() {
   document.getElementById('t-cinema').classList.toggle('on', fx.cinema);
   var lyricGlowToggle = document.getElementById('t-lyricGlow');
   if (lyricGlowToggle) lyricGlowToggle.classList.toggle('on', fx.lyricGlow);
+  // 溢光快捷按钮行（上游同款入口，与控制台「歌词溢光开关」条目对应）
+  var lyricGlowEnableBtn = document.getElementById('lyric-glow-enable-btn');
+  if (lyricGlowEnableBtn) lyricGlowEnableBtn.classList.toggle('active', !!fx.lyricGlow);
+  var lyricGlowBeatBtn = document.getElementById('lyric-glow-beat-btn');
+  if (lyricGlowBeatBtn) lyricGlowBeatBtn.classList.toggle('active', !!fx.lyricGlowBeat);
   var lyricGlowBeatToggle = document.getElementById('t-lyricGlowBeat');
   if (lyricGlowBeatToggle) lyricGlowBeatToggle.classList.toggle('on', fx.lyricGlowBeat);
   var lyricGlowParticlesToggle = document.getElementById('t-lyricGlowParticles');
@@ -21013,6 +21337,7 @@ function bindFxPanel() {
     ['fx-lyricspacing','lyricLetterSpacing'],['fx-lyriclineheight','lyricLineHeight'],['fx-lyricweight','lyricWeight'],
     ['fx-lyriccustomlines','lyricCustomLineCount'],
     ['fx-lyriccontextopacity','lyricContextOpacity'],['fx-lyriccontextspread','lyricContextSpread'],
+    ['fx-lyrictranslationgap','lyricTranslationGap'],['fx-lyrictranslationscale','lyricTranslationScale'],['fx-lyrictranslationopacity','lyricTranslationOpacity'],
     ['fx-lyricedgefade','lyricEdgeFade'],['fx-lyricmotionsoftness','lyricMotionSoftness'],
     ['fx-lyricglitchintensity','lyricGlitchIntensity'],['fx-lyricglitchslice','lyricGlitchSlice'],['fx-lyricglitchchroma','lyricGlitchChroma'],['fx-lyricglitchrate','lyricGlitchRate'],['fx-lyricglitchjitter','lyricGlitchJitter'],
     ['fx-lyricscale','lyricScale'],['fx-lyricx','lyricOffsetX'],['fx-lyricy','lyricOffsetY'],['fx-lyricz','lyricOffsetZ'],['fx-lyrictiltx','lyricTiltX'],['fx-lyrictilty','lyricTiltY'],
@@ -21031,6 +21356,10 @@ function bindFxPanel() {
         applyCoverParticleResolution(fx.coverResolution, { reload: true });
       }
       if (pair[1] === 'lyricWeight') fx.lyricWeight = Math.round(clampRange(fx.lyricWeight, 500, 900) / 50) * 50;
+      // 译文三个滑块：就地更新已有译文子节点，避免重建网格（拖动手感）
+      if (pair[1] === 'lyricTranslationGap' || pair[1] === 'lyricTranslationScale' || pair[1] === 'lyricTranslationOpacity') {
+        applyLyricTranslationStyle();
+      }
       if (pair[1] === 'backgroundOpacity') {
         fx.backgroundOpacity = clampRange(fx.backgroundOpacity, 0, 1);
         fx.backgroundColorMode = 'custom';
@@ -21399,7 +21728,7 @@ async function saveMusicSourcesConfigToServer() {
 function syncMusicSourcesUI() {
   if (!_musicSourcesConfig) return;
   var enabled = _musicSourcesConfig.enabledSources || [];
-  ['gdmusic', 'unblockMusic', 'lxMusic', 'custom', 'kugou'].forEach(function (src) {
+  ['gdmusic', 'goMusic', 'kugou', 'lxMusic', 'unblockMusic', 'custom'].forEach(function (src) {
     var el = document.getElementById('t-src-' + src);
     if (el) el.classList.toggle('on', enabled.includes(src));
   });
@@ -21436,6 +21765,9 @@ function syncMusicSourcesUI() {
   if (urlInput) urlInput.value = _musicSourcesConfig.customApiUrl || '';
   var methodSelect = document.getElementById('custom-api-method');
   if (methodSelect) methodSelect.value = _musicSourcesConfig.customApiMethod || 'GET';
+  // go-music-api 换源服务地址
+  var goUrlInput = document.getElementById('go-music-api-url');
+  if (goUrlInput) goUrlInput.value = _musicSourcesConfig.goMusicApiUrl || '';
 }
 
 /**
@@ -21530,6 +21862,60 @@ function saveCustomApiUrl() {
   _musicSourcesConfig.customApiUrl = urlInput ? urlInput.value.trim() : '';
   _musicSourcesConfig.customApiMethod = methodSelect ? methodSelect.value : 'GET';
   saveMusicSourcesConfigToServer();
+}
+
+/**
+ * 保存 go-music-api 换源服务地址
+ */
+function saveGoMusicApiUrl() {
+  if (!_musicSourcesConfig) return;
+  var input = document.getElementById('go-music-api-url');
+  _musicSourcesConfig.goMusicApiUrl = input ? input.value.trim() : '';
+  saveMusicSourcesConfigToServer();
+  setGoMusicStatus('已保存，点「测试连接」验证', 'dim');
+}
+
+/**
+ * 更新 go-music-api 服务状态提示
+ * @param {string} text
+ * @param {string} [tone] - 'ok' | 'bad' | 'dim'
+ */
+function setGoMusicStatus(text, tone) {
+  var el = document.getElementById('go-music-api-status');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = tone === 'ok'
+    ? 'var(--c-accent,#7cf)'
+    : tone === 'bad'
+      ? '#f66'
+      : 'var(--c-text-dim,#888)';
+}
+
+/**
+ * 测试 go-music-api 换源服务连通性（由服务端代探，避免浏览器跨域）
+ */
+async function testGoMusicService() {
+  var input = document.getElementById('go-music-api-url');
+  if (_musicSourcesConfig && input) {
+    // 先把当前输入框的值落盘，保证测试的就是用户看到的地址
+    _musicSourcesConfig.goMusicApiUrl = input.value.trim();
+    await saveMusicSourcesConfigToServer();
+  }
+  setGoMusicStatus('测试中…', 'dim');
+  try {
+    var resp = await fetch('/api/parse/go-music/status');
+    var data = await resp.json();
+    if (data && data.reachable) {
+      setGoMusicStatus('连接正常 · ' + data.baseUrl + ' · ' + data.elapsedMs + 'ms', 'ok');
+      showToast('换源服务连接正常（' + data.elapsedMs + 'ms）');
+    } else {
+      setGoMusicStatus('连接失败 · ' + (data && data.baseUrl ? data.baseUrl + ' · ' : '') + ((data && data.error) || '未知错误'), 'bad');
+      showToast('换源服务连不上，检查 Docker 是否启动、端口是否发布');
+    }
+  } catch (e) {
+    setGoMusicStatus('测试失败: ' + e.message, 'bad');
+    showToast('测试失败: ' + e.message);
+  }
 }
 
 /**
@@ -25223,7 +25609,12 @@ function armSplashSoundFallback() {
   document.addEventListener('keydown', unlock, true);
 }
 
-function dismissSplash() {
+/**
+ * 关闭启动页。
+ * @param {{instant?: boolean}} [opts] instant=true 时不播退场动画、立刻进主页（秒启动用，对齐上游 dismissSplash({instant:true})）
+ */
+function dismissSplash(opts) {
+  var instant = !!(opts && opts.instant);
   var s = document.getElementById('splash');
   if (!s || s.classList.contains('hide') || s.classList.contains('exiting')) return;
   markAppPerf('splash-dismiss');
@@ -25235,18 +25626,20 @@ function dismissSplash() {
     : (typeof shouldShowEmptyHomeAfterSplash === 'function' && shouldShowEmptyHomeAfterSplash())) {
     activateHomeWallpaperPreview();
   }
-  revealIdleParticles(0, reduceSplashMotion ? 700 : 2400);
+  revealIdleParticles(0, instant ? 0 : (reduceSplashMotion ? 700 : 2400));
   document.body.classList.add('splash-revealing');
   s.classList.add('exiting');
 
   var content = s.querySelector('.splash-content');
   if (content) {
-    content.style.transition = 'opacity 680ms cubic-bezier(.22,1,.36,1), transform 980ms cubic-bezier(.22,1,.36,1)';
     content.style.opacity = '0';
-    content.style.transform = 'translateY(-14px) scale(.986)';
+    if (!instant) {
+      content.style.transition = 'opacity 680ms cubic-bezier(.22,1,.36,1), transform 980ms cubic-bezier(.22,1,.36,1)';
+      content.style.transform = 'translateY(-14px) scale(.986)';
+    }
   }
 
-  setTimeout(function() {
+  var finishReveal = function() {
     s.classList.add('hide');
     splashAnimating = false;
     document.body.classList.remove('splash-active');
@@ -25268,7 +25661,9 @@ function dismissSplash() {
         setTimeout(maybeShowUploadTipOnce, 5200);
       });
     });
-  }, 1180);
+  };
+
+  if (instant) finishReveal(); else setTimeout(finishReveal, 1180);
 }
 
 function markSplashReadyToEnter() {
@@ -25287,6 +25682,11 @@ document.addEventListener('DOMContentLoaded', function(){
   var s = document.getElementById('splash');
   if (!s) return;
   markAppPerf('dom-content-loaded');
+  // 秒启动跳过启动页（移植自上游 10-shell/03-splash.js）：直接进主页，不等待启动动画
+  if (startupFastSkipPreference) {
+    dismissSplash({ instant: true });
+    return;
+  }
   armSplashSoundFallback();
   prewarmHomeWallpaperPreview();
   function requestSplashEnter() {
@@ -25847,8 +26247,11 @@ async function restoreLastPlaybackSession() {
     // 恢复态标记：主页不因恢复的列表被顶掉；用户首次点播（创建 audio）后由判定函数自动失效
     restoredIdleSession = true;
     var current = playQueue[idx];
-    var position = Math.max(0, Number(record.position) || 0);
-    if (position > 2) pendingResumeAt = { key: queueItemKey(current), position: position };
+    lastRestoredPositionSec = Math.max(0, Number(record.position) || 0);
+    restoredCurrentKey = queueItemKey(current);
+    // 恢复播放位置模式（移植自上游）：restart = 不恢复进度，重播整首
+    var position = startupResumeSecondsFromSnapshot({ position: lastRestoredPositionSec });
+    if (position > 2) pendingResumeAt = { key: restoredCurrentKey, position: position };
 
     try {
       document.getElementById('thumb-title').textContent = current.name || 'BhandsMusic';
@@ -25887,6 +26290,59 @@ async function restoreLastPlaybackSession() {
 // ============================================================
 var STARTUP_AUTOPLAY_STORE_KEY = 'bhandsmusic_startup_autoplay_v1';
 var startupAutoplayPreference = readBooleanPreference(STARTUP_AUTOPLAY_STORE_KEY, false);
+
+// 秒启动跳过启动页（移植自上游 t-startupFastSkip）
+var STARTUP_FAST_SKIP_STORE_KEY = 'bhandsmusic_startup_fast_skip_v1';
+var startupFastSkipPreference = readBooleanPreference(STARTUP_FAST_SKIP_STORE_KEY, false);
+
+// 恢复播放位置（移植自上游 startup-resume-mode-seg）：resume=按上次进度 / restart=重播整首
+var STARTUP_RESUME_MODE_STORE_KEY = 'bhandsmusic_startup_resume_mode_v1';
+function normalizeStartupResumeMode(value) { return value === 'restart' ? 'restart' : 'resume'; }
+var startupResumeModePreference = (function () {
+  try { return normalizeStartupResumeMode(localStorage.getItem(STARTUP_RESUME_MODE_STORE_KEY) || 'resume'); }
+  catch (e) { return 'resume'; }
+})();
+/** 恢复态保存的原始进度与当前曲标识（供「恢复播放位置」当次会话即时切换用） */
+var lastRestoredPositionSec = 0;
+var restoredCurrentKey = '';
+
+/**
+ * 快照 → 实际恢复秒数：restart 模式不恢复进度（重播整首）
+ * @param {{position?: number}} snapshot
+ */
+function startupResumeSecondsFromSnapshot(snapshot) {
+  if (startupResumeModePreference === 'restart') return 0;
+  return Math.max(0, Number(snapshot && snapshot.position) || 0);
+}
+function syncStartupResumeModeUi() {
+  var seg = document.getElementById('startup-resume-mode-seg');
+  if (!seg) return;
+  Array.prototype.forEach.call(seg.querySelectorAll('[data-startup-resume-mode]'), function (btn) {
+    btn.classList.toggle('active', btn.getAttribute('data-startup-resume-mode') === startupResumeModePreference);
+  });
+}
+function setStartupResumeMode(value) {
+  startupResumeModePreference = normalizeStartupResumeMode(value);
+  try { localStorage.setItem(STARTUP_RESUME_MODE_STORE_KEY, startupResumeModePreference); } catch (e) {}
+  syncStartupResumeModeUi();
+  // 当次会话即时生效：恢复态尚未点播（audio 还没建）时直接改写待恢复进度
+  if (restoredIdleSession && !(audio && audio.src)) {
+    var next = startupResumeSecondsFromSnapshot({ position: lastRestoredPositionSec });
+    pendingResumeAt = (next > 2 && restoredCurrentKey) ? { key: restoredCurrentKey, position: next } : null;
+    try { updatePlaybackProgressUi(); } catch (e) {}
+  }
+  showToast(startupResumeModePreference === 'restart' ? '恢复播放将重播整首' : '恢复播放将按上次进度继续');
+}
+function syncStartupFastSkipToggle() {
+  var btn = document.getElementById('t-startupFastSkip');
+  if (btn) btn.classList.toggle('on', !!startupFastSkipPreference);
+}
+function toggleStartupFastSkip() {
+  startupFastSkipPreference = !startupFastSkipPreference;
+  saveBooleanPreference(STARTUP_FAST_SKIP_STORE_KEY, startupFastSkipPreference);
+  syncStartupFastSkipToggle();
+  showToast(startupFastSkipPreference ? '秒启动已开启：下次打开软件直接进主页' : '秒启动已关闭');
+}
 var startupAutoplayJobId = 0;
 var startupAutoplayAttempted = false;
 var startupAutoplayAttemptCount = 0;
@@ -25911,6 +26367,9 @@ function startupAutoplayRetryDelay(attempt) {
 function syncStartupAutoplayToggle() {
   var btn = document.getElementById('t-startupAutoplay');
   if (btn) btn.classList.toggle('on', !!startupAutoplayPreference);
+  // 同属「启动与退出」分组：一并同步（移植自上游 applyStartupAutoplayUi）
+  syncStartupFastSkipToggle();
+  syncStartupResumeModeUi();
 }
 function toggleStartupAutoplay() {
   startupAutoplayPreference = !startupAutoplayPreference;
