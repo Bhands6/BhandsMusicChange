@@ -176,7 +176,7 @@ var FX_CONSOLE_LAYOUT = [
       { key: 'cache', title: '缓存与存储', hint: '统一缓存目录、占用和各类路径', items: [
         fxConsoleItem('cache-storage-panel', '本地缓存', '缓存路径 缓存目录 占用 歌词 封面 音频 更新', false)
       ] },
-      { key: 'bhands-advanced', title: 'BhandsMusic 专属', hint: '系统设置与第三方音源', items: [
+      { key: 'bhands-advanced', title: '音源解析', hint: '音源开关与解析顺序', items: [
         fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
         fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
       ] },
