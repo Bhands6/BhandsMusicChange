@@ -126,9 +126,16 @@ async function ensureRunning(opts) {
 
   let exitInfo = null;
   try {
-    // spawn 'node' 走 PATH（desktop 模式由 npm start 启动，PATH 里必有 node）；
-    // KUGOU_NODE_EXE 环境变量可显式指定
-    child = spawn(options.nodeExe || 'node', [appEntry], {
+    // node 可执行文件的解析顺序：
+    //   1. KUGOU_NODE_EXE / 传入的 nodeExe（显式指定）
+    //   2. vendor/kugou-api/node.exe（fetch 脚本 --with-node 拉取的便携版，分发场景）
+    //   3. PATH 上的 'node'（开发态 npm start 场景）
+    let nodeExe = options.nodeExe || '';
+    if (!nodeExe) {
+      const vendored = path.join(appDir, 'node.exe');
+      if (fs.existsSync(vendored)) nodeExe = vendored;
+    }
+    child = spawn(nodeExe || 'node', [appEntry], {
       cwd: appDir,
       env: buildEnv(),
       stdio: ['ignore', logFd == null ? 'ignore' : logFd, logFd == null ? 'ignore' : logFd],

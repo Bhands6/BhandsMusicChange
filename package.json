@@ -8,9 +8,9 @@
   "private": true,
   "scripts": {
     "start": "chcp 65001 >nul && electron .",
-    "prebuild:win": "node build/fetch-go-music-api.js",
+    "prebuild:win": "node build/fetch-go-music-api.js && node build/fetch-kugou-api.js",
     "build:win": "electron-builder --win nsis",
-    "prebuild:win:dir": "node build/fetch-go-music-api.js",
+    "prebuild:win:dir": "node build/fetch-go-music-api.js && node build/fetch-kugou-api.js",
     "build:win:dir": "electron-builder --win dir"
   },
   "build": {
@@ -33,14 +33,16 @@
       "vendor/go-music-api/**/*",
       "package.json",
       "!public/index.*.html",
-      "public/index.html"
+      "public/index.html",
+      "vendor/kugou-api/**/*"
     ],
     "asar": true,
     "asarUnpack": [
       "public/js/server.js",
       "public/js/dj-analyzer.js",
       "cuefield/**/*",
-      "vendor/go-music-api/**/*"
+      "vendor/go-music-api/**/*",
+      "vendor/kugou-api/**/*"
     ],
     "win": {
       "executableName": "BhandsMusic",
