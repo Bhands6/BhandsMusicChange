@@ -632,16 +632,12 @@ try {
   </div>
 
   <!-- 第三方音源设置 -->
+  <div class="fx-toggle" id="kugou-qr-login-row" onclick="openKugouQrLogin()" title="扫码登录酷狗概念版，解锁会员音质（FLAC/320k）"><span>酷狗扫码登录</span><span class="dot"></span><small id="kugou-login-status" style="margin-left:8px;font-size:10px;color:rgba(255,255,255,.45)">未登录</small></div>
   <div class="fx-advanced" id="fx-music-sources">
     <div class="fx-advanced-head" onclick="document.getElementById('fx-music-sources').classList.toggle('open')">
       <span>第三方音源</span><span class="arrow">▶</span>
     </div>
     <div class="fx-advanced-body">
-      <div class="fx-section-label">酷狗会员（概念版）</div>
-      <div class="memory-action-row" id="kugou-qr-login-row">
-        <button class="fx-mini-btn ghost" type="button" id="kugou-qr-login-btn" onclick="openKugouQrLogin()">酷狗扫码登录</button>
-        <span class="fx-sub" id="kugou-login-status">未登录</span>
-      </div>
       <div class="fx-section-label">音源解析顺序</div>
       <div class="fx-seg" id="source-parse-order-seg" title="会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级">
         <button data-parse-order="auto" type="button" class="active" onclick="setSourceParseOrder('auto')">自动</button>

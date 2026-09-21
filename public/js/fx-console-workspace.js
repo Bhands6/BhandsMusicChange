@@ -177,6 +177,7 @@ var FX_CONSOLE_LAYOUT = [
         fxConsoleItem('cache-storage-panel', '本地缓存', '缓存路径 缓存目录 占用 歌词 封面 音频 更新', false)
       ] },
       { key: 'bhands-advanced', title: '音源解析', hint: '音源开关与解析顺序', items: [
+        fxConsoleItem('kugou-qr-login-row', '酷狗扫码登录', '酷狗 扫码 会员 登录 音质 概念版 FLAC'),
         fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
         fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
       ] },
