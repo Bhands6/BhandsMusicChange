@@ -6023,11 +6023,17 @@ var STAGE_LYRIC_MAX_LINES = 1;
 
 function makeLyricMask(text, isContext) {
   var canvas = document.createElement('canvas');
-  // 歌词清晰度：按 fx.lyricTextureClarity 放大纹理（上下句在高清开关关闭时回落 1×）
+  // 歌词清晰度（对齐上游 rasterScale 思路）：布局全部按逻辑坐标 2048×384 计算，
+  // 只放大物理分辨率并用 ctx.scale 一次性映射 —— 3D 世界大小 / UV 高亮区间完全不变，
+  // 仅纹理更清晰。之前直接放大 W/H 但字号不变，导致文字占画布比例变小 → 歌词缩小。
+  // 上下句在「上下句高清纹理」关闭时回落 1×。
   var clarity = (typeof lyricTextureClarityScale === 'function') ? lyricTextureClarityScale(isContext) : 1;
-  var W = Math.min(8192, Math.round(2048 * clarity)), H = Math.min(2048, Math.round(384 * clarity));
-  canvas.width = W; canvas.height = H;
+  var W = 2048, H = 384;
+  var rasterW = Math.min(8192, Math.round(W * clarity));
+  var rasterH = Math.min(2048, Math.round(H * clarity));
+  canvas.width = rasterW; canvas.height = rasterH;
   var ctx = canvas.getContext('2d');
+  ctx.scale(rasterW / W, rasterH / H);
   var maxWidth = W - 190;
   var maxLines = STAGE_LYRIC_MAX_LINES;
   var fontSize = 128;
@@ -6072,7 +6078,7 @@ function makeLyricMask(text, isContext) {
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
   tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1);
-  return { texture:tex, width:W, height:H, textWidth:width, textHeight:blockH, fontSize:fontSize, lineHeight:lineHeight, lineCount:lines.length, lines:lines, fitScaleX:fitScaleX, textMin:(W / 2 - width / 2) / W, textMax:(W / 2 + width / 2) / W };
+  return { texture:tex, width:W, height:H, rasterScale:clarity, textWidth:width, textHeight:blockH, fontSize:fontSize, lineHeight:lineHeight, lineCount:lines.length, lines:lines, fitScaleX:fitScaleX, textMin:(W / 2 - width / 2) / W, textMax:(W / 2 + width / 2) / W };
 }
 
 function makeLyricReadabilityTexture(mask) {
