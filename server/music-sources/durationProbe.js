@@ -217,14 +217,19 @@ async function probeAudio(upstreamUrl) {
 }
 
 /**
- * 时长是否可信：无法探测时放行；差值超过 max(10s, 8%) 判定为错版本。
- * 阈值偏宽松，避免误杀「现场版/加长版」等合理差异。
+ * 时长是否可信：无法探测时放行；差值超过 max(5s, 4%) 判定为错版本。
+ *
+ * 原为 max(10s, 8%)：对长歌太松 —— 238.8s 的歌容差到 19.1s，
+ * 实测「Take Me To Your Heart (Live)」音频 221.9s（差 16.9s）被放行，
+ * 表现为"歌词前半对得上、后面全飘"（累积漂移）。
+ * 收紧到 max(5s, 4%) 后该候选会被拒；最坏情况只是换成别的音源
+ * （全部候选都不过时仍有 settleFallback 兜底，不会反而没得播）。
  */
 function isDurationPlausible(actualSec, expectedMs) {
   if (actualSec == null || !expectedMs) return true;
   const expectedSec = expectedMs / 1000;
   const diff = Math.abs(actualSec - expectedSec);
-  return diff <= Math.max(10, expectedSec * 0.08);
+  return diff <= Math.max(5, expectedSec * 0.04);
 }
 
 /**

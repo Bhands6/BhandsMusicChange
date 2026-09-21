@@ -46,3 +46,9 @@ tmp/
 *.png.tmp
 verification/
 screenshots/
+
+# 内置换源服务二进制：构建前由 build/fetch-go-music-api.js 按需拉取，不入库
+vendor/go-music-api/
+
+# 用户音源配置：含自定义 API 地址与脚本信息，不入库
+.music-sources.json

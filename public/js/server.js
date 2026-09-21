@@ -64,6 +64,7 @@ const { fileURLToPath } = require('url');  // URL 转文件路径
 const { analyzePodcastDjStream, analyzePodcastDjIntro } = require('./dj-analyzer');  // DJ 节拍分析器
 const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('../../server/music-sources/musicParser');  // 多音源解析器
 const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('../../server/music-sources/lxMusicRunner');  // LX Music 脚本执行器
+const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('../../server/music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
 
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
@@ -89,13 +90,15 @@ const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json')
  * 默认音源配置
  */
 const DEFAULT_MUSIC_SOURCES_CONFIG = {
-  enabledSources: ['gdmusic', 'unblockMusic'],
+  enabledSources: ['gdmusic', 'unblockMusic', 'goMusic'],
   quality: 'higher',
   lxMusicScripts: [],
   activeLxMusicApiId: null,
   customApiUrl: '',
   customApiMethod: 'GET',
-  unblockPlatforms: ['migu', 'kugou', 'pyncmd']
+  unblockPlatforms: ['kugou', 'kuwo'],
+  // go-music-api 换源服务地址：留空则用环境变量 GO_MUSIC_API_URL 或默认 http://127.0.0.1:8080
+  goMusicApiUrl: ''
 };
 
 /**
@@ -125,6 +128,48 @@ function saveMusicSourcesConfig(config) {
     console.log('[MusicSources] 配置已保存');
   } catch (e) {
     console.error('[MusicSources] 保存配置失败:', e.message);
+  }
+}
+
+/**
+ * 歌手缺失时按网易云 ID 回查歌曲详情补齐元数据。
+ *
+ * 为什么需要：第三方音源全部是「按歌名+歌手」匹配的，歌手一旦为空，
+ * 所有音源的歌手匹配整条失效 → 同名翻唱/DJ 版/别人的歌都会变成合法候选。
+ * 2026-09-20 实测「明天天明」：漏传歌手 → 选中了山清的翻唱版（215s），
+ * 而歌词来自原版（海洋Bo 213s），表现为「歌词跟曲不对」。
+ *
+ * 触发条件刻意收紧（正常路径不增加任何请求延迟）：
+ *  - 仅在歌手为空时调用；
+ *  - 仅接受纯数字 id（QQ 音乐 mid 是字母数字混合，拿去查网易云会查到别的歌）；
+ *  - 详情歌名必须与请求歌名一致（防张冠李戴）。
+ */
+async function fillMetaFromNetease(id, meta) {
+  const sid = String(id == null ? '' : id).trim();
+  if (!/^\d{1,12}$/.test(sid)) return null;
+  try {
+    const r = await song_detail({ ids: sid, cookie: userCookie });
+    const s = r && r.body && r.body.songs && r.body.songs[0];
+    if (!s) return null;
+    const detailName = String(s.name || '').trim();
+    if (meta.name && detailName && detailName !== meta.name) {
+      console.warn('[ParseMusic] 详情歌名不一致（' + detailName + ' ≠ ' + meta.name + '），不采用兜底元数据');
+      return null;
+    }
+    const ar = Array.isArray(s.ar)
+      ? s.ar.map(function (a) { return (a && a.name) || (typeof a === 'string' ? a : ''); }).filter(Boolean)
+      : [];
+    if (!ar.length) return null;
+    console.log('[ParseMusic] 歌手缺失，已按网易云详情补齐:', detailName || meta.name, '-', ar.join('/'));
+    return {
+      name: meta.name || detailName,
+      artists: ar,
+      album: meta.album || ((s.al && s.al.name) || ''),
+      duration: meta.duration || s.dt || 0
+    };
+  } catch (e) {
+    console.warn('[ParseMusic] 元数据兜底失败:', e.message);
+    return null;
   }
 }
 
@@ -4423,17 +4468,30 @@ const server = http.createServer(async (req, res) => {
 
       const config = readMusicSourcesConfig();
 
-      const result = await parseMusic({
-        id: parseInt(String(id), 10),
+      // 元数据兜底：歌手为空时按网易云 ID 回查补齐（详见 fillMetaFromNetease 注释）
+      let meta = {
         name: name || '',
         artists: Array.isArray(artists) ? artists : [],
         album: album || '',
-        duration: duration || 0,
+        duration: duration || 0
+      };
+      if (meta.artists.length === 0) {
+        const filled = await fillMetaFromNetease(id, meta);
+        if (filled) meta = filled;
+      }
+
+      const result = await parseMusic({
+        id: parseInt(String(id), 10),
+        name: meta.name,
+        artists: meta.artists,
+        album: meta.album,
+        duration: meta.duration,
         quality: quality || config.quality || 'higher',
-        enabledSources: config.enabledSources || ['gdmusic', 'unblockMusic'],
+        enabledSources: config.enabledSources || ['gdmusic', 'unblockMusic', 'goMusic'],
         customApiUrl: config.customApiUrl || '',
         customApiMethod: config.customApiMethod || 'GET',
-        unblockPlatforms: config.unblockPlatforms || ['migu', 'kugou', 'kuwo', 'pyncmd']
+        unblockPlatforms: config.unblockPlatforms || ['kugou', 'kuwo'],
+        goMusicApiUrl: config.goMusicApiUrl || ''
       });
 
       if (result && result.url) {
@@ -4472,6 +4530,21 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // GET /api/parse/go-music/status - 探测 go-music-api 换源服务连通性（由服务端代探，避免浏览器跨域）
+  if (pn === '/api/parse/go-music/status' && req.method === 'GET') {
+    try {
+      const config = readMusicSourcesConfig();
+      const probe = await probeGoMusicService(config.goMusicApiUrl || '');
+      // 探活成功即清掉策略内的"服务离线"冷却，让用户测通后立刻恢复可用
+      if (probe && probe.reachable) resetGoMusicServiceHealth();
+      sendJSON(res, probe);
+    } catch (err) {
+      console.error('[GoMusicStatus]', err);
+      sendJSON(res, { reachable: false, error: err.message }, 500);
+    }
+    return;
+  }
+
   // POST /api/parse/config - 更新音源配置
   if (pn === '/api/parse/config' && req.method === 'POST') {
     try {
@@ -4485,6 +4558,11 @@ const server = http.createServer(async (req, res) => {
       if (body.customApiUrl !== undefined) newConfig.customApiUrl = body.customApiUrl;
       if (body.customApiMethod !== undefined) newConfig.customApiMethod = body.customApiMethod;
       if (body.unblockPlatforms !== undefined) newConfig.unblockPlatforms = body.unblockPlatforms;
+      if (body.goMusicApiUrl !== undefined) {
+        newConfig.goMusicApiUrl = body.goMusicApiUrl;
+        // 地址变了就重置服务健康记忆，让新地址立刻生效（否则可能还在冷却期）
+        resetGoMusicServiceHealth();
+      }
       if (body.activeLxMusicApiId !== undefined) {
         newConfig.activeLxMusicApiId = body.activeLxMusicApiId;
         setActiveRunner(body.activeLxMusicApiId);

@@ -15,6 +15,16 @@ const {
   LocalMusicLibrary,
   registerLocalMusicScheme,
 } = require('./local-music-library'); // 本地音乐库：批量导入/元数据提取/持久化索引/自定义协议流播（移植自上游 Mineradio 2.2.0）
+const goMusicService = require('./go-music-service'); // 内置换源服务：托管随包分发的 go-music-api 二进制
+
+/**
+ * asar 内路径 → asar 外的真实路径。
+ * 可执行文件不能被 require/读取于 asar 虚拟包内，必须落在 app.asar.unpacked；
+ * package.json 的 asarUnpack 已包含 vendor/**。开发态（未打包）原样返回。
+ */
+function toUnpackedPath(p) {
+  return app.isPackaged ? p.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1') : p;
+}
 
 // ==================== 全局状态变量 ====================
 let mainWindow = null;                    // 主窗口实例
@@ -2170,6 +2180,22 @@ async function createWindow() {
   process.env.BHANDSMUSIC_UPDATE_DIR = getUpdateDownloadDir();
   process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(app.getPath('userData'), 'cuefield-feedback.jsonl');
 
+  // 内置换源服务（go-music-api）：随包分发的 Windows 二进制，由主进程托管启动。
+  // 不 await，避免拖慢窗口创建（实测就绪约 600ms）；就绪后 go-music-service 会清掉
+  // 策略可能记下的「服务离线」冷却。8080 已被用户自己的实例占用时会直接复用，不重复启动。
+  const goMusicDataDir = path.join(app.getPath('userData'), 'go-music-api');
+  goMusicService.ensureRunning({
+    exePath: toUnpackedPath(path.join(__dirname, '..', 'vendor', 'go-music-api', 'go-music-api.exe')),
+    dataDir: goMusicDataDir,
+    logFile: path.join(goMusicDataDir, 'service.log')
+  }).then((r) => {
+    console.log('[startup] 内置换源服务: ' + (r.ok
+      ? (r.spawned ? '已启动 pid=' + r.pid : '复用现有实例（' + r.reason + '）')
+      : '不可用 - ' + r.reason));
+  }).catch((e) => {
+    console.warn('[startup] 内置换源服务启动异常:', (e && e.message) || e);
+  });
+
   // 迁移旧版 QQ Cookie 文件到新位置
   try {
     const legacyQQCookie = path.join(__dirname, '..', '.qq-cookie');
@@ -2524,5 +2550,7 @@ if (!gotSingleInstanceLock) {
     closeOverlayWindows();              // 关闭覆盖层窗口
     if (appTray) { appTray.destroy(); appTray = null; } // 销毁托盘图标
     if (localServer && localServer.close) localServer.close(); // 关闭本地服务器
+    // 停掉内置换源服务（只杀自己启动的进程；用户自己的 Docker 实例不受影响）
+    try { goMusicService.stop(); } catch (e) { /* ignore */ }
   });
 }

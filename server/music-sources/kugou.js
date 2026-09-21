@@ -158,6 +158,14 @@ async function kugouSearch(keywords, limit, timeoutMs) {
 /** 变体标注（Live/翻唱/伴奏等括号后缀）——这类版本不能冒充原曲 */
 const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|翻唱|cover|伴奏|dj|remix|现场|演唱会|铃声|试听|纯音乐|降压|助眠)[^\)）\]]*[)）\]]/i;
 
+/**
+ * 时长接近度的打分尺度（毫秒）：差值 0 → +1.0，差值越大线性递减到 0。
+ * 必须连续打分：分段加分（如「±3s 内都是 +1」）会让"差 2 秒"和"差 0 秒"同分，
+ * 然后被搜索顺序微调翻盘 —— 2026-09-20 实测「明天天明」正确版（海洋Bo 213s）
+ * 就是这样以 4.03 输给了 2 秒偏差的翻唱版（山清 215s）4.05。
+ */
+const DURATION_PROXIMITY_MS = 12000;
+
 function pickBestCandidate(candidates, expected) {
   let best = null;
   let bestScore = -1;
@@ -199,15 +207,16 @@ function pickBestCandidate(candidates, expected) {
     // 免费曲目优先（VIP 曲目免登录大概率拿不到完整播放地址）
     if (item.playableGuess) score += 1;
 
-    // 时长接近度加分（±3 秒内 +1，±8 秒内 +0.5）
+    // 时长接近度：连续打分，保证「最接近原曲时长」的候选胜出
+    // （不能用分段加分，见 DURATION_PROXIMITY_MS 注释里的实测翻盘案例）
     if (expected.durationMs > 0 && item.durationMs > 0) {
       const diff = Math.abs(expected.durationMs - item.durationMs);
-      if (diff <= 3000) score += 1;
-      else if (diff <= 8000) score += 0.5;
+      score += Math.max(0, 1 - diff / DURATION_PROXIMITY_MS);
     }
 
-    // 搜索顺序靠前的天然热度更高，微弱加分保持稳定排序
-    score += (candidates.length - i) * 0.01;
+    // 搜索顺序靠前说明热度更高，但只能作为「完全同分」时的稳定排序：
+    // 量级必须远小于时长接近度，否则会再次把正确答案翻盘
+    score += (candidates.length - i) * 0.001;
 
     if (score > bestScore) {
       best = item;

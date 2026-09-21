@@ -10,14 +10,17 @@ const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
 const { parseFromCustomApi } = require('./customApi');
 const { parseFromKugou } = require('./kugou');
+const { tryGoMusicSwitch } = require('./goMusicSwitch');
 const { probeAudio, acceptProbe } = require('./durationProbe');
 
 // ============================================================
 // 缓存配置
 // ============================================================
 
-/** 成功缓存时间：30 分钟 */
-const SUCCESS_CACHE_TTL = 30 * 60 * 1000;
+/** 成功缓存时间：10 分钟（对齐 Bhands_Web）
+ *  外站直链与网易 URL 都带时效 token，缓存过长会供出已过期死链；
+ *  原 30 分钟偏长，播放失败重试依赖前端 fresh 绕过。 */
+const SUCCESS_CACHE_TTL = 10 * 60 * 1000;
 
 /** 失败缓存时间：1 分钟 */
 const FAILED_CACHE_TTL = 1 * 60 * 1000;
@@ -114,15 +117,32 @@ setInterval(function () {
 }, 5 * 60 * 1000); // 每 5 分钟清理一次
 
 // ============================================================
+// 音质档位映射（对齐 Bhands_Web）
+// ============================================================
+
+/**
+ * 用户音质档位 → GDMusic 的 br 参数：999=无损, 320/128=有损。
+ * 原实现把 br 写死 '999'，导致用户选「标准」也会去要无损档（拿不到时白等一轮）。
+ */
+function gdQualityOf(tier) {
+  if (tier === 'standard') return '128';
+  if (tier === 'lossless' || tier === 'hires' || tier === 'jymaster') return '999';
+  return '320';
+}
+
+// ============================================================
 // 解析策略定义
 // ============================================================
 
 /**
  * @typedef {Object} ParseStrategy
  * @property {string} name - 策略名称
- * @property {number} priority - 优先级（越小越优先）
+ * @property {number} priority - 排序权重（越小越靠前）。
+ *   注意：编排器已是**并发竞速**，priority 只决定启动顺序与日志/冷却惩罚的排序，
+ *   不再决定「谁先返回」——竞速下最快通过校验者胜出。保留该字段用于：
+ *   ① 同刻完成的稳定排序；② 冷却期策略排到队尾的观测依据。
  * @property {function(Object): boolean} canHandle - 是否可以处理
- * @property {function(Object): Promise<{url: string, source: string} | null>} parse - 执行解析
+ * @property {function(Object): Promise<{url: string, source: string, size?: number} | null>} parse - 执行解析
  */
 
 /**
@@ -230,22 +250,60 @@ const gdmusicStrategy = {
     return params.enabledSources.includes('gdmusic');
   },
   parse: async function (params) {
-    if (isInFailedCache(params.id, 'gdmusic')) return null;
+    // 失败缓存按「歌曲 + 音质档位」隔离（对齐 Bhands_Web）：
+    // 无损档失败不应连带封禁有损档，反之亦然
+    const br = gdQualityOf(params.quality);
+    const failKey = 'gdmusic_' + br;
+    if (isInFailedCache(params.id, failKey)) return null;
 
     const result = await parseFromGDMusic({
       id: params.id,
       name: params.name,
       artists: params.artists,
       duration: params.duration,
-      quality: '999',
+      quality: br,
       timeout: 6000  // 整体竞速超时：上游挂掉时不让后续策略久等（原 15s 太长）
     });
 
     if (result && result.url) {
-      return { url: result.url, source: result.source || 'gdmusic', br: result.br };
+      return { url: result.url, source: result.source || 'gdmusic', br: result.br, size: result.size || 0 };
     }
 
-    addFailedCache(params.id, 'gdmusic');
+    addFailedCache(params.id, failKey);
+    return null;
+  }
+};
+
+/**
+ * go-music-api 智能换源策略（移植自 Bhands_Web）
+ * 独立 Go 服务，用酷狗/酷我/QQ/咪咕的**官方真实音源**替代——远优于 unblock 的 128k 错配。
+ * 优先级 3.7：排在 gdmusic/kugou 之后、unblock 之前（与 Web 的链路位置一致）。
+ * 服务离线时策略内部会短路 3 分钟（健康记忆），不会拖慢解析。
+ */
+const goMusicStrategy = {
+  name: 'goMusic',
+  priority: 3.7,
+  canHandle: function (params) {
+    return params.enabledSources.includes('goMusic');
+  },
+  parse: async function (params) {
+    if (isInFailedCache(params.id, 'goMusic')) return null;
+
+    const result = await tryGoMusicSwitch({
+      id: params.id,
+      name: params.name,
+      artists: params.artists,
+      album: params.album,
+      duration: params.duration,
+      quality: params.quality,
+      baseUrl: params.goMusicApiUrl
+    });
+
+    if (result && result.url) {
+      return { url: result.url, source: result.source, br: result.br, size: result.size || 0 };
+    }
+
+    addFailedCache(params.id, 'goMusic');
     return null;
   }
 };
@@ -272,7 +330,12 @@ const unblockMusicStrategy = {
     });
 
     if (result && result.url) {
-      return { url: result.url, source: 'unblock-' + (result.platform || 'unknown'), br: result.br };
+      return {
+        url: result.url,
+        source: 'unblock-' + (result.platform || 'unknown'),
+        br: result.br,
+        size: result.size || 0
+      };
     }
 
     addFailedCache(params.id, 'unblockMusic');
@@ -281,7 +344,14 @@ const unblockMusicStrategy = {
 };
 
 /** 所有策略列表 */
-const ALL_STRATEGIES = [lxMusicStrategy, customApiStrategy, kugouStrategy, gdmusicStrategy, unblockMusicStrategy];
+const ALL_STRATEGIES = [
+  lxMusicStrategy,
+  customApiStrategy,
+  gdmusicStrategy,
+  kugouStrategy,
+  goMusicStrategy,
+  unblockMusicStrategy
+];
 
 // ============================================================
 // 策略健康记忆：连败冷却（策略级、跨歌曲）
@@ -323,6 +393,34 @@ function strategyCooldownPenalty(name) {
 }
 
 // ============================================================
+// 硬拒绝（垫片 / 伪音频）——不进「宽容回落」
+// ============================================================
+
+/** 垫片大小阈值：400KB ≈ 128kbps 下 25 秒；期望 ≥90s 的歌不可能只有这点数据 */
+const SHIM_MAX_BYTES = 400 * 1000;
+const SHIM_MIN_EXPECTED_MS = 90 * 1000;
+
+/**
+ * 声明大小硬防御（对齐 Bhands_Web 的 isHardRejected）：
+ * 上游自己声明了体积，且体积小得离谱 → 必是碎片/广告垫片，直接丢弃。
+ * expectedMs 为 0（时长未知）时同样生效——此时没有时长可依，声明体积是唯一证据。
+ */
+function isHardRejected(result, expectedMs) {
+  const size = Number(result && result.size) || 0;
+  return size > 0 && size < SHIM_MAX_BYTES && (expectedMs >= SHIM_MIN_EXPECTED_MS || expectedMs === 0);
+}
+
+/**
+ * 探测结果确认是垫片：物理体积是绝对证据，不依赖上游声明。
+ * 用于「未声明体积」的音源（LX / 自定义 API）——它们在 isHardRejected 上 fail-open，
+ * 但探测拿到的 totalBytes 仍能识别垫片。
+ */
+function isShimProbe(probe, expectedMs) {
+  return expectedMs >= SHIM_MIN_EXPECTED_MS
+    && !!probe && probe.totalBytes > 0 && probe.totalBytes < SHIM_MAX_BYTES;
+}
+
+// ============================================================
 // 主解析函数
 // ============================================================
 
@@ -340,6 +438,7 @@ function strategyCooldownPenalty(name) {
  * @param {string} [params.customApiMethod] - 自定义 API 请求方法
  * @param {string} [params.lxMusicScriptId] - LX Music 脚本 ID
  * @param {string[]} [params.unblockPlatforms] - UnblockNeteaseMusic 平台列表
+ * @param {string} [params.goMusicApiUrl] - go-music-api 换源服务地址（留空则用环境变量/默认 127.0.0.1:8080）
  * @returns {Promise<{url: string, source: string, quality?: string, br?: number} | null>}
  */
 async function parseMusic(params) {
@@ -413,6 +512,18 @@ async function parseMusic(params) {
           onPendingDone();
           return;
         }
+        // 声明体积硬防御（前置）：碎片/广告垫片直接丢弃且**不进宽容回落**。
+        // 回落本意是兜「时长元数据误差误杀的正确源」，但垫片（声明体积是绝对证据）
+        // 被拒后若也进回落，全部源完成时 settleFallback 会把它又放回来
+        // —— 对齐 Bhands_Web 的 isHardRejected（2026-09-15「晴天」185KB 垫片漏网即此）。
+        if (isHardRejected(result, expectedMs)) {
+          console.warn(
+            '[MusicParser] 声明大小 ' + result.size + 'B 过小（expectedMs=' + expectedMs +
+            '），疑似广告垫片，丢弃 ' + strategy.name
+          );
+          onPendingDone();
+          return;
+        }
         // 候选探测校验（真实音频 + 时长可信），通过即胜出
         probeAudio(result.url).then(function (probe) {
           if (settled) return;
@@ -420,12 +531,15 @@ async function parseMusic(params) {
             settleWith(result, strategy.name);
             return;
           }
+          const shim = isShimProbe(probe, expectedMs);
           console.warn(
             '[MusicParser] 候选音源 ' + strategy.name + ' 未通过校验丢弃' +
             (probe.status === 'not-audio' ? '（返回的不是音频）' :
-              probe.durationSec ? '（实际 ' + Math.round(probe.durationSec) + 's vs 期望 ' + Math.round(expectedMs / 1000) + 's）' : '')
+              shim ? '（探测体积仅 ' + probe.totalBytes + 'B，疑似垫片）' :
+                probe.durationSec ? '（实际 ' + Math.round(probe.durationSec) + 's vs 期望 ' + Math.round(expectedMs / 1000) + 's）' : '')
           );
-          if (!fallback) fallback = result;
+          // 垫片不进宽容回落（未声明体积的音源只能靠探测识别，见 isShimProbe）
+          if (!shim && !fallback) fallback = result;
           onPendingDone();
         }).catch(function () {
           // 探测自身异常：fail-open 放行（与 unreachable 同语义）

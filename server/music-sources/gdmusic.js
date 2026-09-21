@@ -10,6 +10,19 @@ const axios = require('axios');
 const BASE_URL = 'https://music-api.gdstudio.xyz/api.php';
 
 /**
+ * 时长接近度的打分尺度（毫秒）：差值 0 → +1.0，差值越大线性递减到 0。
+ * 必须连续打分，否则「差 2 秒」和「差 0 秒」同分，会被其它微调项翻盘。
+ */
+const DURATION_PROXIMITY_MS = 12000;
+
+/**
+ * 变体标注（Live/现场/翻唱/伴奏/Remix/DJ 版等）——这类版本不能冒充原曲。
+ * 必须对**原始**歌名判断：normalizeText 会把括号内容整段删掉，
+ * 「Take Me To Your Heart (Live)」归一化后与原曲完全相同。
+ */
+const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|现场|演唱会|翻唱|cover|伴奏|remix|dj|混音|铃声|试听|纯音乐|acoustic|instrumental|karaoke|demo|翻录|重制|remaster)[^\)）\]]*[)）\]]/i;
+
+/**
  * 归一化文本用于匹配：去掉括号备注（Live/翻唱/伴奏等）、空白与常见标点，转小写
  */
 function normalizeText(text) {
@@ -52,25 +65,34 @@ function isNameMatched(expectedName, candidateName) {
 
 /**
  * 从候选中挑选与原曲匹配的结果
- * 校验策略：歌名必须匹配；候选带歌手信息时歌手也必须匹配，
+ * 校验策略（按强度从高到低）：
+ *  ① 网易云子源且候选 id == 目标歌曲 id → 同一首，直接命中；
+ *  ② 歌名必须匹配（normalizeText 会剥掉括号内容，所以括号里的变体标注要单独降权）；
+ *  ③ 候选带歌手信息时歌手也必须匹配；
  * 宁可解析失败也不返回错误的歌（防止"货不对版"）
  */
-function pickBestCandidate(candidates, expected) {
+function pickBestCandidate(candidates, expected, source) {
   let best = null;
   let bestScore = 0;
 
   for (let i = 0; i < candidates.length; i++) {
     const item = candidates[i];
     if (!item || !item.id) continue;
+
+    // ① 最强信号：网易云子源的候选 id 就是网易云歌曲 id，与目标相同即同一首。
+    // 必须放在歌名/变体判断之前 —— 否则「原曲 (Live)」这类同名变体会抢先。
+    //（GD 接口 search 返回里 id / url_id / lyric_id 都是网易云歌曲 id）
+    if (source === 'netease' && expected.targetId && String(item.id) === String(expected.targetId)) return item;
+
     if (!isNameMatched(expected.name, item.name || '')) continue;
 
     // 时长硬校验：偏差超过 max(10s, 12%) 直接拒绝（不同版本歌词时间轴必然对不上）
-    if (expected.durationMs > 0) {
-      const itemDurationMs = (Number(item.duration) || 0) * 1000;
-      if (itemDurationMs > 0) {
-        const durationDiff = Math.abs(expected.durationMs - itemDurationMs);
-        if (durationDiff > Math.max(10000, expected.durationMs * 0.12)) continue;
-      }
+    // ⚠ 实测 GD 接口的 search 返回**不含 duration 字段**，所以对 netease/joox 这条基本不生效，
+    //   真正的兜底是 ② 的变体降权 和下游 durationProbe 的真实音频时长校验。
+    const itemDurationMs = (Number(item.duration) || 0) * 1000;
+    if (expected.durationMs > 0 && itemDurationMs > 0) {
+      const durationDiff = Math.abs(expected.durationMs - itemDurationMs);
+      if (durationDiff > Math.max(10000, expected.durationMs * 0.12)) continue;
     }
 
     const candidateArtist = normalizeText(getCandidateArtistText(item.artist));
@@ -95,6 +117,19 @@ function pickBestCandidate(candidates, expected) {
       score = 3;
     }
 
+    // 变体强降权：Live / 翻唱 / 伴奏 / Remix / DJ 版等不能优先于原曲。
+    //（2026-09-21 实测：GD 接口不返回 duration → 时长校验失效 → 选中了
+    //  「Take Me To Your Heart (Live)」，音频 221.9s vs 期望 238.8s，
+    //  表现为"歌词前半对得上、后面全飘"）
+    if (VARIANT_NAME_RE.test(String(item.name || ''))) score -= 2;
+
+    // 时长接近度：连续打分，让「最接近原曲时长」的候选胜出。
+    // 原实现只按 1/2/3 分级，同分时是「搜索结果里排最前的那个」胜出 ——
+    // 候选里常混有翻唱/DJ 版，排在原版前面就会被选中（2026-09-20「明天天明」实测）。
+    if (expected.durationMs > 0 && itemDurationMs > 0) {
+      score += Math.max(0, 1 - Math.abs(expected.durationMs - itemDurationMs) / DURATION_PROXIMITY_MS);
+    }
+
     if (score > bestScore) {
       best = item;
       bestScore = score;
@@ -106,7 +141,7 @@ function pickBestCandidate(candidates, expected) {
 
 /**
  * 在指定音源搜索歌曲并获取 URL
- * @param {string} source - 音源 (joox, tidal, netease)
+ * @param {string} source - 音源 (netease, joox)
  * @param {string} searchQuery - 搜索关键词
  * @param {{ name: string, artists: string[] }} expected - 原曲信息
  * @param {string} quality - 音质
@@ -129,7 +164,7 @@ async function searchAndGetUrl(source, searchQuery, expected, quality) {
     Array.isArray(searchResponse.data) &&
     searchResponse.data.length > 0
   ) {
-    const matchedResult = pickBestCandidate(searchResponse.data, expected);
+    const matchedResult = pickBestCandidate(searchResponse.data, expected, source);
     if (!matchedResult) {
       console.log('[GDMusic]', source, '搜索结果与原曲不匹配，已拒绝（避免货不对版）');
       return null;
@@ -191,7 +226,9 @@ async function parseFromGDMusic(params) {
   const expected = {
     name: name || '',
     artists: artists || [],
-    durationMs: Number(params.duration) || 0  // 时长硬校验用（候选偏差过大即拒绝）
+    durationMs: Number(params.duration) || 0,  // 时长硬校验用（候选偏差过大即拒绝）
+    // 网易云子源专用：目标歌曲 id。候选 id 与之相同即同一首（最强匹配信号）
+    targetId: id == null ? '' : String(id)
   };
 
   // 超时兜底（主流程完成时清 timer，避免成功后仍残留"超时"假日志）
@@ -203,8 +240,11 @@ async function parseFromGDMusic(params) {
     }, timeout);
   });
 
-  // 所有可用的音源
-  const allSources = ['joox', 'tidal', 'netease'];
+  // 子音源顺序（对齐 Bhands_Web，实测 2026-09-10 / 30 首样本）：
+  //  - netease：成功率 100%、时长正确率 100%、FLAC ~1336k ← 最优，放最前
+  //  - joox   ：成功率 ~20%、命中时为 FLAC（~1484k），仅作兜底
+  //  - tidal  ：实测 0/20 全部失败，已移除（保留只会白白消耗超时预算）
+  const allSources = ['netease', 'joox'];
 
   try {
     const result = await Promise.race([

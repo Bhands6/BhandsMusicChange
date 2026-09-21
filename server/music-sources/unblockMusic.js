@@ -7,8 +7,13 @@
 
 const match = require('@unblockneteasemusic/server');
 
-// 所有可用平台
-const ALL_PLATFORMS = ['migu', 'kugou', 'kuwo', 'pyncmd'];
+/**
+ * 可用平台（对齐 Bhands_Web 实测结论）：
+ *  - migu / pyncmd：实测全部返回空（0/20），保留只会白白增加失败延迟 → 移除
+ *  - kugou：正确率 78%，优于 kuwo（21%），故 kugou 在前
+ *  - kuwo：成功率尚可但错配率高，作最后兜底
+ */
+const ALL_PLATFORMS = ['kugou', 'kuwo'];
 
 /**
  * 确保歌曲数据结构完整
