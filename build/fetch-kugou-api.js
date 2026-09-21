@@ -97,6 +97,27 @@ async function main() {
     console.log('[fetch-kugou-api] 依赖已安装，跳过');
   }
 
+  // 2.5 平台补丁：上游 login_qr_key.js 硬编码 appid=1001（主版），
+  //     概念版（platform=lite）必须用 liteAppid=3116，否则扫码确认页品牌错误
+  //     且拿到的 token 与概念版服务不通用。--force 更新上游后补丁自动重放。
+  const qrKeyFile = path.join(OUT_DIR, 'module', 'login_qr_key.js');
+  if (fs.existsSync(qrKeyFile)) {
+    let qrSrc = fs.readFileSync(qrKeyFile, 'utf8');
+    const patched = qrSrc.indexOf('appid: params?.type') !== -1 && qrSrc.indexOf(': 1001,') === -1;
+    if (!patched) {
+      const fixed = qrSrc.replace(
+        /appid: params\?\.type === 'web' \? 1014 : 1001,/,
+        "appid: params?.type === 'web' ? 1014 : appid, // fork 补丁：跟随平台（lite=3116）"
+      );
+      if (fixed !== qrSrc) {
+        fs.writeFileSync(qrKeyFile, fixed);
+        console.log('[fetch-kugou-api] 已应用平台 appid 补丁（login_qr_key.js）');
+      } else {
+        console.warn('[fetch-kugou-api] 警告：qr_key appid 补丁锚点未命中（上游可能已变更），请人工检查');
+      }
+    }
+  }
+
   // 3. 可选的便携 node.exe（分发给没有 Node.js 的机器）
   if (withNode) {
     const ok = await downloadNodeExe();
