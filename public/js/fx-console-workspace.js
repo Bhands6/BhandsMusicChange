@@ -180,9 +180,9 @@ var FX_CONSOLE_LAYOUT = [
         fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
         fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
       ] },
-      { key: 'experimental', title: '实验功能', hint: '尚未开放或需要谨慎使用的能力', items: [
-        fxConsoleItem('t-wallpaperMode', '完整桌面模式', '完整 Mineradio 进入桌面层 Ctrl Shift M 切换操作层 本次启动有效', false)
-      ] }
+      // 「实验功能」组已下线（2026-09-21 按用户要求移除）：
+      // 唯一条目 t-wallpaperMode（完整桌面模式）移入 FX_CONSOLE_REMOVED_BLOCK_IDS 隐藏容器，
+      // main.js 里该开关的状态同步（getElementById + classList）继续有效，只是不再展示。
     ]
   }
 ];
@@ -201,7 +201,9 @@ var FX_CONSOLE_REMOVED_BLOCK_IDS = [
   // fxConsoleFindUnclassifiedControls 扫进「其他设置」兜底组（挂到系统 tab）重新出现。
   // 放这里会移进隐藏容器 #fx-console-removed-controls —— 不显示，但 DOM 保留，
   // 使 main.js 里 querySelectorAll('#cam-seg button') 的状态同步与点击绑定继续有效。
-  'cam-seg'
+  'cam-seg',
+  // 「实验功能」组下线（2026-09-21 按用户要求移除）：唯一条目完整桌面模式开关随之隐藏
+  't-wallpaperMode'
 ];
 
 function fxConsoleResolveBlock(ref) {
@@ -413,19 +415,16 @@ function organizeFxConsoleWorkspace() {
       });
     });
   });
+  // 「其他设置」兜底组已下线（2026-09-21 按用户要求移除）：未归类控件不再展示，
+  // 改为移入隐藏容器 #fx-console-removed-controls —— DOM 保留，
+  // main.js 对这些节点的状态同步与事件绑定继续有效。
   var residual = fxConsoleFindUnclassifiedControls(oldRoots);
   if (residual.length) {
-    var fallbackMeta = { key: 'other', title: '其他设置', hint: '尚未归入明确分类的兼容项' };
-    var fallbackBody = fxConsoleMakeGroup(pages.system, { key: 'system', label: '系统' }, fallbackMeta);
-    residual.forEach(function (node, index) {
-      fxConsoleAppendItem(fallbackBody, { key: 'system', label: '系统' }, fallbackMeta, {
-        ref: { element: node },
-        title: String(node.textContent || '兼容设置').trim().slice(0, 40) || '兼容设置',
-        aliases: '其他 兼容',
-        history: true
-      }, { toggleGrid: null });
+    residual.forEach(function (node) {
+      var block = fxConsoleResolveBlock(node) || node;
+      removedStore.appendChild(block);
     });
-    console.warn('[FxConsole] residual controls:', residual.length);
+    console.warn('[FxConsole] residual controls (hidden):', residual.length);
   }
   oldRoots.forEach(function (node) {
     if (node && node.isConnected && node.parentNode === panel && node !== toolbar && node !== removedStore && !node.classList.contains('fx-tab-page')) node.remove();
