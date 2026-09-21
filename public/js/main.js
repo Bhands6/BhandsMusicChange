@@ -3965,14 +3965,16 @@ backgroundStarRiverParticles.frustumCulled = false;
 backgroundStarRiverParticles.renderOrder = -2;
 scene.add(backgroundStarRiverParticles);
 
+// 上游默认 0.34 的星河透明度过于含蓄（实测几乎不可见），fork 提亮 2.6 倍到可感知水平
+var STAR_RIVER_BRIGHTNESS = 2.6;
 function backgroundStarRiverTargetAlpha() {
   if (!fx || fx.backgroundStarRiver === false) return 0;
   if (Number(fx.preset) === 5) return 0; // 星河预设自带星野粒子，背景星河自动禁用避免重复（上游同款语义）
   // 骷髅预设自带暗色氛围，压低星河；sonic 系预设自带地形背景，同理
-  if (Number(fx.preset) === SKULL_PRESET_INDEX) return 0.38;
-  if (typeof window !== 'undefined' && window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx)) return 0.28;
-  if (typeof window !== 'undefined' && window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) return 0.28;
-  return 0.34;
+  if (Number(fx.preset) === SKULL_PRESET_INDEX) return 0.38 * STAR_RIVER_BRIGHTNESS;
+  if (typeof window !== 'undefined' && window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx)) return 0.28 * STAR_RIVER_BRIGHTNESS;
+  if (typeof window !== 'undefined' && window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) return 0.28 * STAR_RIVER_BRIGHTNESS;
+  return 0.34 * STAR_RIVER_BRIGHTNESS;
 }
 
 function updateBackgroundStarRiverState(dt, immediate) {
