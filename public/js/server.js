@@ -4587,21 +4587,31 @@ const server = http.createServer(async (req, res) => {
   }
 
   // GET /api/kugou/login/qr/create - 生成酷狗扫码登录二维码（并保存会话 cookie）
+  // ⚠️ 必须走完整三步链路：qr/key 拿 key → /login/qr/create 把 key 转成授权链接二维码
+  //    （直接展示 qr/key 自带的图，App 扫了不会触发授权，状态会永远停在 1）
   if (pn === '/api/kugou/login/qr/create' && req.method === 'GET') {
     try {
       const ready = await ensureKugouApi();
       if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
-      const meta = await kugouService.apiGetWithMeta('/login/qr/key');
-      const j = meta.json;
-      if (!j || !j.data || !j.data.qrcode) { sendJSON(res, { error: '二维码生成失败' }, 502); return; }
+      const keyMeta = await kugouService.apiGetWithMeta('/login/qr/key');
+      const keyResp = keyMeta.json;
+      if (!keyResp || !keyResp.data || !keyResp.data.qrcode) { sendJSON(res, { error: '二维码 key 生成失败' }, 502); return; }
+      const key = String(keyResp.data.qrcode);
+      const createMeta = await kugouService.apiGetWithMeta('/login/qr/create?key=' + encodeURIComponent(key) + '&qrimg=1');
+      const createResp = createMeta.json;
+      if (!createResp || !createResp.data || !createResp.data.url) { sendJSON(res, { error: '授权链接生成失败' }, 502); return; }
       // 保存本次二维码的设备指纹 cookie（10 分钟过期清理）
-      console.log('[KugouQR] create set-cookie 字段: ' + (meta.setCookies.map((c) => c.split('=')[0]).join(', ') || '(空)'));
-      kugouQrSessions.set(j.data.qrcode, { cookies: meta.setCookies || [], at: Date.now() });
+      console.log('[KugouQR] create set-cookie 字段: ' + (keyMeta.setCookies.map((c) => c.split('=')[0]).join(', ') || '(空)'));
+      kugouQrSessions.set(key, { cookies: keyMeta.setCookies || [], at: Date.now() });
       if (kugouQrSessions.size > 20) {
         const oldest = kugouQrSessions.keys().next().value;
         kugouQrSessions.delete(oldest);
       }
-      sendJSON(res, { qrcode: j.data.qrcode, qrcode_img: j.data.qrcode_img || '' });
+      sendJSON(res, {
+        qrcode: key,
+        url: createResp.data.url,
+        qrcode_img: createResp.data.base64 || ''
+      });
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
     }
