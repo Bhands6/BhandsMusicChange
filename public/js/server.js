@@ -65,6 +65,7 @@ const { analyzePodcastDjStream, analyzePodcastDjIntro } = require('./dj-analyzer
 const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('../../server/music-sources/musicParser');  // 多音源解析器
 const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('../../server/music-sources/lxMusicRunner');  // LX Music 脚本执行器
 const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('../../server/music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
+const kugouService = require('../../server/music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
 
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
@@ -4542,6 +4543,104 @@ const server = http.createServer(async (req, res) => {
       console.error('[GoMusicStatus]', err);
       sendJSON(res, { reachable: false, error: err.message }, 500);
     }
+    return;
+  }
+
+  // ==================== 酷狗会员（扫码登录 / 会员音质） ====================
+  // 内置 KuGouMusicApi 服务（vendor/kugou-api，概念版平台）由本进程懒启动托管。
+
+  const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
+  function kugouApiAppDir() {
+    if (!kugouApiState.appDir) {
+      // 开发态：项目根/vendor/kugou-api；打包态：app.asar → app.asar.unpacked
+      let dir = path.resolve(__dirname, '..', '..', 'vendor', 'kugou-api');
+      dir = dir.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+      kugouApiState.appDir = dir;
+    }
+    return kugouApiState.appDir;
+  }
+  async function ensureKugouApi() {
+    if (!kugouApiState.ensured) {
+      const config = readMusicSourcesConfig();
+      kugouApiState.nodeExe = process.env.KUGOU_NODE_EXE || undefined;
+      kugouApiState.ensured = kugouService.ensureRunning({
+        appDir: kugouApiAppDir(),
+        nodeExe: kugouApiState.nodeExe,
+        dataDir: kugouApiAppDir(),
+        logFile: path.join(kugouApiAppDir(), 'kugou-api.log')
+      }).then((r) => {
+        if (!r.ok) kugouApiState.ensured = null; // 失败允许下次重试
+        return r;
+      }).catch((e) => {
+        kugouApiState.ensured = null;
+        return { ok: false, reason: e.message };
+      });
+    }
+    return kugouApiState.ensured;
+  }
+
+  // GET /api/kugou/login/qr/create - 生成酷狗扫码登录二维码
+  if (pn === '/api/kugou/login/qr/create' && req.method === 'GET') {
+    try {
+      const ready = await ensureKugouApi();
+      if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
+      const j = await kugouService.apiGet('/login/qr/key');
+      if (!j || !j.data || !j.data.qrcode) { sendJSON(res, { error: '二维码生成失败' }, 502); return; }
+      sendJSON(res, { qrcode: j.data.qrcode, qrcode_img: j.data.qrcode_img || '' });
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/kugou/login/qr/check?key=xxx - 轮询扫码状态；status=4 时保存登录凭据
+  if (pn === '/api/kugou/login/qr/check' && req.method === 'GET') {
+    try {
+      const ready = await ensureKugouApi();
+      if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
+      const key = String(url.searchParams.get('key') || '');
+      if (!key) { sendJSON(res, { error: '缺少 qrcode key' }, 400); return; }
+      const j = await kugouService.apiGet('/login/qr/check?qrcode=' + encodeURIComponent(key));
+      if (!j) { sendJSON(res, { error: '轮询失败' }, 502); return; }
+      const status = j && j.data ? Number(j.data.status) : -1;
+      if (status === 4) {
+        // 登录成功：token/userid 来自 body，kg_mid 等设备字段来自 set-cookie
+        const token = String((j.data && j.data.token) || '');
+        const userid = String((j.data && j.data.userid) || '');
+        const midMatch = /(?:^|;\s*)MID=([^;]+)/i.exec(j.cookieHeader || '');
+        let cookieStr = 'token=' + token + '; userid=' + userid;
+        if (j.mid) cookieStr += '; kg_mid=' + j.mid;
+        void midMatch;
+        const config = readMusicSourcesConfig();
+        config.kugouCookie = cookieStr;
+        if (!config.kugouVipToken && token) config.kugouVipToken = token;
+        saveMusicSourcesConfig(config);
+        console.log('[KugouLogin] 扫码登录成功，凭据已保存');
+        sendJSON(res, { status: 4, success: true });
+        return;
+      }
+      sendJSON(res, { status: status, pending: status === 1 || status === 2 });
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/kugou/login/status - 当前酷狗登录态
+  if (pn === '/api/kugou/login/status' && req.method === 'GET') {
+    const config = readMusicSourcesConfig();
+    sendJSON(res, { loggedIn: !!config.kugouCookie || !!config.kugouVipToken });
+    return;
+  }
+
+  // POST /api/kugou/login/clear - 清除酷狗登录凭据
+  if (pn === '/api/kugou/login/clear' && req.method === 'POST') {
+    const config = readMusicSourcesConfig();
+    delete config.kugouCookie;
+    delete config.kugouVipToken;
+    delete config.kugouVipMid;
+    saveMusicSourcesConfig(config);
+    sendJSON(res, { success: true });
     return;
   }
 

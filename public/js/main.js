@@ -26761,6 +26761,85 @@ function toggleStartupAutoplay() {
   // 当次会话即时生效：恢复态仍在且尚未尝试过 → 立即发起
   if (startupAutoplayPreference && !startupAutoplayAttempted) scheduleStartupAutoplayFromSnapshot('setting-toggle');
 }
+
+// ============================================================
+// 酷狗会员扫码登录（内置 KuGouMusicApi 服务，概念版平台）
+// ============================================================
+var kugouQrPollTimer = null;
+function updateKugouLoginStatusText() {
+  var el = document.getElementById('kugou-login-status');
+  if (!el) return;
+  fetch('/api/kugou/login/status').then(function (r) { return r.json(); }).then(function (j) {
+    el.textContent = j && j.loggedIn ? '已登录（会员音质已启用）' : '未登录';
+  }).catch(function () { el.textContent = ''; });
+}
+function closeKugouQrLogin() {
+  if (kugouQrPollTimer) { clearTimeout(kugouQrPollTimer); kugouQrPollTimer = null; }
+  var ov = document.getElementById('kugou-qr-overlay');
+  if (ov) ov.remove();
+}
+function pollKugouQrStatus(key, attempts) {
+  if (attempts <= 0) {
+    var note = document.getElementById('kugou-qr-note');
+    if (note) note.textContent = '二维码已过期，请点击刷新重试';
+    return;
+  }
+  kugouQrPollTimer = setTimeout(function () {
+    fetch('/api/kugou/login/qr/check?key=' + encodeURIComponent(key)).then(function (r) { return r.json(); }).then(function (j) {
+      var note = document.getElementById('kugou-qr-note');
+      if (j && j.status === 4) {
+        if (note) note.textContent = '✅ 登录成功！会员音质已启用';
+        showToast('酷狗会员登录成功，已启用会员音质');
+        updateKugouLoginStatusText();
+        setTimeout(closeKugouQrLogin, 1600);
+        return;
+      }
+      if (j && j.status === 2 && note) note.textContent = '已扫码，请在手机上确认…';
+      else if (j && j.status === 1 && note) note.textContent = '等待扫码…（使用酷狗概念版 App）';
+      else if (j && j.status === 0 && note) note.textContent = '二维码已过期，请点击刷新重试';
+      pollKugouQrStatus(key, attempts - 1);
+    }).catch(function () { pollKugouQrStatus(key, attempts - 1); });
+  }, 2000);
+}
+function openKugouQrLogin() {
+  closeKugouQrLogin();
+  var ov = document.createElement('div');
+  ov.id = 'kugou-qr-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;';
+  ov.innerHTML =
+    '<div style="background:#0b1016;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:22px 26px;width:300px;text-align:center;color:#dfe8ee">' +
+    '<div style="font-weight:700;font-size:14px;margin-bottom:12px">酷狗会员扫码登录</div>' +
+    '<div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">使用酷狗概念版 App 扫一扫</div>' +
+    '<div id="kugou-qr-img" style="display:flex;align-items:center;justify-content:center;min-height:180px;color:rgba(255,255,255,.4);font-size:11px">生成二维码中…</div>' +
+    '<div id="kugou-qr-note" style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.62)">准备中…</div>' +
+    '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center">' +
+    '<button id="kugou-qr-refresh" class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 12px">刷新二维码</button>' +
+    '<button class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 12px" onclick="closeKugouQrLogin()">关闭</button>' +
+    '</div></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function (e) { if (e.target === ov) closeKugouQrLogin(); });
+  document.getElementById('kugou-qr-refresh').addEventListener('click', openKugouQrLogin);
+  var imgBox = document.getElementById('kugou-qr-img');
+  fetch('/api/kugou/login/qr/create').then(function (r) { return r.json(); }).then(function (j) {
+    if (!j || j.error || !j.qrcode) {
+      imgBox.textContent = '生成失败：' + ((j && j.error) || '未知错误');
+      return;
+    }
+    if (j.qrcode_img) {
+      var img = document.createElement('img');
+      img.src = j.qrcode_img;
+      img.style.cssText = 'width:180px;height:180px;border-radius:8px;background:#fff;padding:6px';
+      imgBox.innerHTML = '';
+      imgBox.appendChild(img);
+      document.getElementById('kugou-qr-note').textContent = '等待扫码…（使用酷狗概念版 App）';
+      pollKugouQrStatus(j.qrcode, 90);
+    } else {
+      imgBox.textContent = '二维码数据缺失';
+    }
+  }).catch(function (e) {
+    imgBox.textContent = '生成失败：' + e.message;
+  });
+}
 function finishStartupAutoplayJob(success) {
   clearStartupAutoplayRetryTimer();
   startupAutoplaySilent = false;

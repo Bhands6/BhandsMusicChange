@@ -281,33 +281,68 @@ function pickVipPlayUrl(json) {
 }
 
 // ============================================================
-// 酷狗会员凭据（可选）：酷狗概念版/网页版会员的 token + mid。
+// 酷狗会员凭据（可选）：扫码登录（推荐）或手动配置。
 // 配置方式（二选一，.music-sources.json 优先）：
-//   1. .music-sources.json  →  "kugouVipToken": "...", "kugouVipMid": "..."
-//   2. 环境变量             →  KUGOU_VIP_TOKEN / KUGOU_VIP_MID
-// 有 token 时播放请求带登录态，优先解析 extra1/extra2 高品质地址（320k/FLAC）；
-// token 失效或未配置时自动回退免登录 128k 路径。
+//   1. 扫码登录（控制台「音源解析」→ 酷狗扫码登录）→ 自动写入 kugouCookie
+//   2. 手动填  →  "kugouVipToken": "...", "kugouVipMid": "..."
+//   3. 环境变量 →  KUGOU_VIP_TOKEN / KUGOU_VIP_MID
+// 有登录态时播放地址走本地 KuGouMusicApi 服务的 /song/url（FLAC → 320 递减），
+// 登录态失效或未配置时自动回退免登录 128k 路径。
 // ============================================================
 const PROJECT_ROOT_FOR_KUGOU = path.resolve(__dirname, '..', '..');
+const kugouService = require('./kugouService');
+const KUGOU_LOCAL_APP_DIR = path.join(PROJECT_ROOT_FOR_KUGOU, 'vendor', 'kugou-api');
 let cachedVipCredentials = null;
 let cachedVipCredentialsAt = 0;
 
 function readKugouVipCredentials() {
-  // 配置文件 5 分钟重读一次，用户改完无需等太久
+  // 配置文件 5 分钟重读一次，扫码登录后无需等太久
   if (cachedVipCredentials && Date.now() - cachedVipCredentialsAt < 5 * 60 * 1000) return cachedVipCredentials;
   let token = process.env.KUGOU_VIP_TOKEN || '';
   let mid = process.env.KUGOU_VIP_MID || '';
+  let cookie = '';
   try {
     const file = path.join(PROJECT_ROOT_FOR_KUGOU, '.music-sources.json');
     if (fs.existsSync(file)) {
       const cfg = JSON.parse(fs.readFileSync(file, 'utf8')) || {};
       if (!token && cfg.kugouVipToken) token = String(cfg.kugouVipToken).trim();
       if (!mid && cfg.kugouVipMid) mid = String(cfg.kugouVipMid).trim();
+      if (cfg.kugouCookie) cookie = String(cfg.kugouCookie).trim();
     }
   } catch (e) { /* 配置损坏按未配置处理 */ }
-  cachedVipCredentials = token ? { token, mid: mid || GUEST_MID } : null;
+  if (cookie) {
+    cachedVipCredentials = { cookie: cookie, token: token, mid: mid || GUEST_MID };
+  } else if (token) {
+    cachedVipCredentials = { cookie: 'token=' + token + (mid ? '; kg_mid=' + mid : ''), token: token, mid: mid || GUEST_MID };
+  } else {
+    cachedVipCredentials = null;
+  }
   cachedVipCredentialsAt = Date.now();
   return cachedVipCredentials;
+}
+
+/**
+ * 会员播放地址：走本地 KuGouMusicApi 服务的 /song/url（带登录态 Cookie）。
+ * quality 从 FLAC 递减到 320；服务不可用或全部失败返回 ''（回退免登录）。
+ */
+async function tryKugouLocalSongUrl(hash, albumId, timeoutMs) {
+  const cred = readKugouVipCredentials();
+  if (!cred || !cred.cookie) return '';
+  const ready = await kugouService.ensureRunning({ appDir: KUGOU_LOCAL_APP_DIR, dataDir: KUGOU_LOCAL_APP_DIR });
+  if (!ready.ok) return '';
+  const qualities = ['flac', '320', '128'];
+  for (let i = 0; i < qualities.length; i++) {
+    const j = await kugouService.apiGet(
+      '/song/url?hash=' + encodeURIComponent(hash) + '&album_id=' + encodeURIComponent(albumId || '0') +
+      '&quality=' + qualities[i] + '&isFreePart=1',
+      timeoutMs || 10000,
+      { Cookie: cred.cookie }
+    );
+    if (!j) continue;
+    const url = pickPlayUrl(j);
+    if (url) return url;
+  }
+  return '';
 }
 
 async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
@@ -315,10 +350,18 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
   const cached = playUrlCache.get(cacheKey);
   if (cached !== null) return cached;
 
-  const vip = readKugouVipCredentials();
+  // ① 会员路径：本地 KuGouMusicApi 服务 + 扫码登录态（FLAC → 320）
+  try {
+    const localUrl = await tryKugouLocalSongUrl(hash, albumId, timeoutMs);
+    if (localUrl) {
+      playUrlCache.set(cacheKey, localUrl);
+      return localUrl;
+    }
+  } catch (e) { /* 会员路径失败回退免登录 */ }
 
-  // ① 会员路径：带 token 请求（mid 必须与 token 绑定一致），优先高品质 extra 字段
-  if (vip) {
+  // ② 直连官方带 token（旧手动配置路径，保留兼容）
+  const vip = readKugouVipCredentials();
+  if (vip && vip.token && !vip.cookie) {
     try {
       const resp = await axios.get(KUGOU_PLAY_MOBILE, {
         timeout: timeoutMs || 8000,
@@ -341,11 +384,10 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
         playUrlCache.set(cacheKey, vipUrl);
         return vipUrl;
       }
-      // token 无效/过期：继续走免登录回退
-    } catch (e) { /* 会员路径失败回退免登录 */ }
+    } catch (e) { /* 回退免登录 */ }
   }
 
-  // ② 免登录回退：标准音质 128k
+  // ③ 免登录回退：标准音质 128k
   const resp = await axios.get(KUGOU_PLAY_MOBILE, {
     timeout: timeoutMs || 8000,
     headers: { Referer: 'https://m.kugou.com/', 'User-Agent': KUGOU_HEADERS['User-Agent'] },

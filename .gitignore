@@ -52,3 +52,6 @@ vendor/go-music-api/
 
 # 用户音源配置：含自定义 API 地址与脚本信息，不入库
 .music-sources.json
+
+# 内置酷狗 API 服务源码：开发态 git clone，打包前由 fetch 脚本拉取，不入库
+vendor/kugou-api/
