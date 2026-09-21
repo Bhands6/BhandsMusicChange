@@ -1167,7 +1167,39 @@ function getRenderLoadTier() {
   if (cssPixels >= 3200000 || renderPixels >= 3600000) return 1;
   return 0;
 }
-var renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
+var stageWebglFailed = false;
+var renderer = (function createStageRenderer() {
+  try {
+    return new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: 'high-performance' });
+  } catch (err) {
+    // WebGL 不可用（远程桌面/虚拟机/老显卡/驱动异常/GPU 被组策略或杀软禁用）。
+    // 这里曾是顶层同步创建 —— 一旦抛错，main.js 后续所有初始化全部中断：
+    // 函数因声明提升仍可调用，但所有 var 赋值丢失，应用呈"半死"状态且无任何提示。
+    // 降级为 no-op 桩 renderer：播放/歌词/控制台等功能照常，仅无 3D 舞台视觉。
+    stageWebglFailed = true;
+    var stubCanvas = document.createElement('canvas');
+    stubCanvas.width = Math.max(1, innerWidth);
+    stubCanvas.height = Math.max(1, innerHeight);
+    console.warn('[main] WebGL 创建失败，已降级为基础模式（无 3D 舞台视觉）:', (err && err.message) || err);
+    return {
+      isStubRenderer: true,
+      domElement: stubCanvas,
+      info: { render: { calls: 0, triangles: 0 }, memory: { geometries: 0, textures: 0 }, programs: null },
+      renderLists: { dispose: function () {} },
+      capabilities: { isWebGL2: false, precision: 'lowp', getMaxAnisotropy: function () { return 1; } },
+      render: function () {},
+      setSize: function (w, h) { stubCanvas.width = Math.max(1, w || 1); stubCanvas.height = Math.max(1, h || 1); },
+      setPixelRatio: function () {},
+      getPixelRatio: function () { return 1; },
+      setClearColor: function () {},
+      initTexture: function () {},
+      compile: function () {},
+      dispose: function () {},
+      forceContextLoss: function () {},
+      getContext: function () { return null; }
+    };
+  }
+})();
 renderer.setClearColor(0x000000, 0);
 renderer.setPixelRatio(getRenderPixelRatio());
 renderer.setSize(innerWidth, innerHeight);
@@ -1177,6 +1209,13 @@ renderer.domElement.style.width = '100%';
 renderer.domElement.style.height = '100%';
 renderer.domElement.tabIndex = 0;
 document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+if (stageWebglFailed) {
+  // 延后提示，避免打断启动流程（splash 期间 toast 不显眼）
+  setTimeout(function () {
+    try { showToast('当前环境不支持 WebGL，已切换基础模式（无 3D 舞台视觉，其余功能正常）'); } catch (e) {}
+  }, 3200);
+}
 
 // ============================================================
 //  相机系统 v7.1 — 分离 user offset / cinema offset
@@ -17802,6 +17841,23 @@ function finalizeLyricLineDurations(lines) {
 function parseLyricText(text) {
   var lines = [], reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
   text.split(/\r?\n/).forEach(function(line){
+    line = String(line);
+    // 网易云 /api/lyric 的 lyric 字段偶发返回 YRC JSON 行（{"t":ms,"c":[{"tx":"..."}]}），
+    // LRC 时间戳正则一行都匹配不到 → 整首解析为空 → 回退成「歌名-歌手」假歌词。
+    // 逐行检测：命中 JSON 行就地提取文本，其余行仍走下方 LRC 路径。
+    var trimmed = line.trim();
+    if (trimmed.charAt(0) === '{' && trimmed.indexOf('"t"') !== -1) {
+      try {
+        var obj = JSON.parse(trimmed);
+        var ms = Number(obj && obj.t);
+        var txt = Array.isArray(obj && obj.c)
+          ? obj.c.map(function (seg) { return (seg && seg.tx != null) ? String(seg.tx) : ''; }).join('')
+          : '';
+        txt = txt.trim();
+        if (isFinite(ms) && ms >= 0 && txt) lines.push({ t: ms / 1000, text: txt, source: 'yrc-json' });
+      } catch (e) { /* 非法 JSON 行：走下方 LRC 路径，匹配不到即丢弃 */ }
+      return;
+    }
     var times = [], m;
     reg.lastIndex = 0;
     while ((m = reg.exec(line))) times.push(lyricTagTimeToSeconds(m[1], m[2], m[3]));
@@ -18972,14 +19028,6 @@ var lyricColorPresets = [
 var USER_FX_ARCHIVE_STORE_KEY = 'bhandsmusic-user-fx-archives-v1';
 var USER_FX_ARCHIVE_EXPORT_TYPE = 'bhandsmusic-user-fx-archive';
 var USER_FX_ARCHIVE_SCHEMA = 1;
-function defaultUserFxArchiveName(index) {
-  return '存档 ' + (index + 1);
-}
-function normalizeUserFxArchiveName(name, index) {
-  name = String(name || '').replace(/\s+/g, ' ').trim();
-  if (!name) name = defaultUserFxArchiveName(index);
-  return name.slice(0, 18);
-}
 function archiveNumber(raw, key, fallback, min, max) {
   var value = raw && raw[key] != null ? Number(raw[key]) : fallback;
   if (!isFinite(value)) value = fallback;
@@ -19220,77 +19268,6 @@ if (!hadStoredUserFxArchives) {
   saveUserFxArchives();
 }
 var userFxArchiveEditing = -1;
-function renderUserFxArchives() {
-  var grid = document.getElementById('user-archive-grid');
-  if (!grid) return;
-  grid.innerHTML = userFxArchives.map(function(slot, index){
-    var hasSave = !!slot.snapshot;
-    var editing = userFxArchiveEditing === index;
-    var nameHtml = editing
-      ? '<input class="user-archive-input" id="user-archive-input-' + index + '" type="text" maxlength="18" value="' + escHtml(slot.name) + '" onkeydown="handleUserFxArchiveRenameKey(event,' + index + ')">'
-      : '<div class="user-archive-name" title="' + escHtml(slot.name) + '">' + escHtml(slot.name) + '</div>';
-    var actionsHtml = editing
-      ? '<button type="button" onclick="commitUserFxArchiveRename(' + index + ')">确定</button>' +
-        '<button type="button" onclick="cancelUserFxArchiveRename()">取消</button>'
-      : '<button type="button" onclick="applyUserFxArchive(' + index + ')"' + (hasSave ? '' : ' disabled') + '>应用</button>' +
-        '<button type="button" onclick="saveUserFxArchive(' + index + ')">保存</button>' +
-        '<button type="button" onclick="renameUserFxArchive(' + index + ')">命名</button>';
-    return '<div class="user-archive-slot' + (hasSave ? ' has-save' : '') + '" data-slot="' + index + '">' +
-      nameHtml +
-      '<div class="user-archive-meta">' + formatUserArchiveTime(slot.savedAt) + '</div>' +
-      '<div class="user-archive-actions">' +
-        actionsHtml +
-      '</div>' +
-    '</div>';
-  }).join('');
-  if (userFxArchiveEditing >= 0) {
-    setTimeout(function(){
-      var input = document.getElementById('user-archive-input-' + userFxArchiveEditing);
-      if (input) {
-        input.focus();
-        input.select();
-      }
-    }, 0);
-  }
-}
-function saveUserFxArchive(index) {
-  index = clampRange(Number(index) || 0, 0, Math.max(0, userFxArchives.length - 1));
-  userFxArchives[index].snapshot = captureFxArchiveSnapshot();
-  userFxArchives[index].savedAt = Date.now();
-  userFxArchives[index].name = normalizeUserFxArchiveName(userFxArchives[index].name, index);
-  saveUserFxArchives();
-  renderUserFxArchives();
-  showToast('已保存到 ' + userFxArchives[index].name);
-}
-function applyUserFxArchive(index) {
-  index = clampRange(Number(index) || 0, 0, Math.max(0, userFxArchives.length - 1));
-  var slot = userFxArchives[index];
-  if (!slot || !slot.snapshot) {
-    showToast('这个用户存档还是空的');
-    return;
-  }
-  if (applyFxArchiveSnapshot(slot.snapshot)) {
-    showToast('已应用 ' + slot.name);
-  }
-}
-function renameUserFxArchive(index) {
-  index = clampRange(Number(index) || 0, 0, Math.max(0, userFxArchives.length - 1));
-  userFxArchiveEditing = index;
-  renderUserFxArchives();
-}
-function commitUserFxArchiveRename(index) {
-  index = clampRange(Number(index) || 0, 0, Math.max(0, userFxArchives.length - 1));
-  var input = document.getElementById('user-archive-input-' + index);
-  userFxArchives[index].name = normalizeUserFxArchiveName(input && input.value, index);
-  userFxArchiveEditing = -1;
-  saveUserFxArchives();
-  renderUserFxArchives();
-  showToast('已命名为 ' + userFxArchives[index].name);
-}
-function cancelUserFxArchiveRename() {
-  userFxArchiveEditing = -1;
-  renderUserFxArchives();
-}
 function handleUserFxArchiveRenameKey(e, index) {
   if (e.key === 'Enter') {
     e.preventDefault();

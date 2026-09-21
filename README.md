@@ -18,13 +18,13 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 
 | 下载入口 | 推荐人群 | 链接 |
 | --- | --- | --- |
-| GitHub Release  | 能稳定访问 GitHub 的用户 | [点击下载 v1.4.0](https://github.com/Bhands6/BhandsMusicChange/releases/tag/BhandsMusic-v1.4.0) |
+| GitHub Release  | 能稳定访问 GitHub 的用户 | [点击下载 v1.5.0](https://github.com/Bhands6/BhandsMusicChange/releases/tag/BhandsMusic-v1.5.0) |
 
-安装时只需要下载并运行 `BhandsMusic-1.4.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
+安装时只需要下载并运行 `BhandsMusic-1.5.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
 
 ## 下载或安装被拦截怎么办
 
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名是 `BhandsMusic-1.4.0-Setup.exe`。
+小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名是 `BhandsMusic-1.5.0-Setup.exe`。
 
 1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
 2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
@@ -33,7 +33,7 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 
 ## 当前版本
 
-当前版本：`v1.4.0`
+当前版本：`v1.5.0`
 
 状态：多音源解析 + 智能音质降级。
 
@@ -61,7 +61,7 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 
 Windows 用户可以在 GitHub Releases 中下载安装包。
 
-正式分发以 `BhandsMusic-1.4.0-Setup.exe` 为准。安装包会创建桌面快捷方式；直接运行打包版 `BhandsMusic.exe` 时，应用也会在首次启动时补创建桌面快捷方式。
+正式分发以 `BhandsMusic-1.5.0-Setup.exe` 为准。安装包会创建桌面快捷方式；直接运行打包版 `BhandsMusic.exe` 时，应用也会在首次启动时补创建桌面快捷方式。
 
 已经安装过旧版本的用户，建议卸载旧版本后，再使用新版安装包纯净安装。
 

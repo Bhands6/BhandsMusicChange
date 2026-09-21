@@ -26,7 +26,7 @@ Get-Content RELEASE.md
 ## 当前状态
 
 - 当前真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
-- 当前版本：`v1.4.0`
+- 当前版本：`v1.5.0`
 - 当前发布策略：纯净安装版，从当前可信源码重新构建；`v1.0.10` 及更早旧安装包需要隔离，不再建议安装或传播。
 - 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
 - GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`

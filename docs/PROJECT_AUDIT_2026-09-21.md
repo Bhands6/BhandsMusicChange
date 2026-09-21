@@ -331,3 +331,17 @@ git -C BhandsMusic/BhandsMusicChange rev-list --count @{u}..HEAD   # 54
 **顺带印证**：日志里 `[MusicParser] 声明大小 185336B 过小（expectedMs=238760），疑似广告垫片，丢弃 unblockMusic` —— 之前做的**垫片硬拒绝在真实流量里生效了**，unblock 返回的 185KB 广告垫片被正确拦下。
 
 **请复核**：再放一次「Take Me To Your Heart」，歌词应全程对得上。
+
+## I. 修复记录（2026-09-21 11:45，A 节 5 个 bug 全部处理完毕）
+
+| # | 结论 | 处理方式 | 验证 |
+|---|---|---|---|
+| A1 重复函数 | ✅ 已修 | 删除 8 个死函数共 79 行（按 span 精确删，保留了夹在中间的 archiveNumber/archiveMode 等活代码） | 语法 OK；每函数仅剩 1 份；存档功能冒烟 3/3 |
+| A2 WebGL 无降级 | ✅ 已修 | 顶层创建包进 try/catch，失败时造 no-op 桩 renderer + `stageWebglFailed` 标志 + 3.2s 后 toast 提示；后续初始化全部照常 | 禁 GPU 环境（原崩溃复现环境）：桩生效、`startupAutoplayPreference` 等赋值恢复、splash 点击退场、无 Uncaught，4/4 |
+| A3 YRC 假歌词 | ✅ 已修 | `parseLyricText` 逐行检测 `{"t":...,"c":[{"tx":...}]}` JSON 行并提取文本，其余仍走 LRC；非法 JSON 安全丢弃 | 单测 13/13（LRC 不回归 / YRC 提取 / 混合 / duration 推断） |
+| A4 gitignore | ✅ 已修（随提交推送时顺带） | `.music-sources.json` 与 `vendor/go-music-api/` 已入 `.gitignore` | `git check-ignore` 生效 |
+| A5 版本号 | ✅ 已修 | README 与 HANDOFF「当前版本」统一到 1.5.0（package.json 为准）；PROJECT_MEMORY / SECURITY_REBUILD 里的历史快照刻意不动 | 脚本校验 README 与 package.json 一致 |
+
+**新发现的小问题（本轮扫描补充，未修）**：`public/js/server.js` 里多处裸 `new URL(...)`（如 L559 `String(value || '')` 空串即抛）产生 `Uncaught (in promise) TypeError: Failed to construct 'URL'`。仅出现在特定环境/入参下，不阻塞启动，属低优先级健壮性问题。
+
+**A2 修复的边界说明**：降级模式下 3D 更新逻辑（animate 循环体）仍会执行 CPU 计算，只是 `renderer.render` 为 no-op —— 属"保命降级"而非"完整 2D 模式"。如需省 CPU，后续可做真正的 2D 分支。
