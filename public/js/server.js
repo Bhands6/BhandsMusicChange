@@ -71,6 +71,8 @@ const kugouService = require('../../server/music-sources/kugouService');  // 内
 const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
 /** 二维码会话：qrcodeKey → { cookies: string[] }（create 时的设备指纹 cookie，10 分钟过期） */
 const kugouQrSessions = new Map();
+/** 验证码登录会话的设备 cookie（发验证码与登录必须同一设备标识） */
+let kugouCellCookies = null;
 
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
@@ -4678,6 +4680,87 @@ const server = http.createServer(async (req, res) => {
     saveMusicSourcesConfig(config);
     sendJSON(res, { success: true });
     return;
+  }
+
+  // ==================== 酷狗验证码登录（扫码的可靠备选） ====================
+  // 设备 cookie 会话（kugouCellCookies 定义在模块级）：发验证码与登录必须同一设备标识
+
+  /** 确保有一组设备 cookie（借 qr/key 的 Set-Cookie 生成并缓存） */
+  async function ensureKugouCellCookies() {
+    if (kugouCellCookies) return kugouCellCookies;
+    const ready = await ensureKugouApi();
+    if (!ready.ok) throw new Error(ready.reason || '酷狗服务未就绪');
+    const meta = await kugouService.apiGetWithMeta('/login/qr/key');
+    if (!meta.json || !meta.json.data) throw new Error('设备标识生成失败');
+    kugouCellCookies = meta.setCookies || [];
+    return kugouCellCookies;
+  }
+
+  // GET /api/kugou/login/captcha?mobile=xxx - 发送手机验证码
+  if (pn === '/api/kugou/login/captcha' && req.method === 'GET') {
+    try {
+      const mobile = String(url.searchParams.get('mobile') || '').trim();
+      if (!/^1\d{10}$/.test(mobile)) { sendJSON(res, { error: '手机号格式不正确' }, 400); return; }
+      const cookies = await ensureKugouCellCookies();
+      const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ');
+      const j = await kugouService.apiGet('/captcha/sent?mobile=' + encodeURIComponent(mobile), 12000, { Cookie: cookieHeader });
+      // 接口成功时 status=1；data 里可能有验证码回显（测试模式）
+      const ok = j && (Number(j.status) === 1 || (j.data && j.data.code));
+      console.log('[KugouLogin] 验证码发送: ' + JSON.stringify(j).slice(0, 150));
+      sendJSON(res, ok ? { success: true } : { error: '验证码发送失败' });
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // GET /api/kugou/login/cellphone?mobile=&code= - 验证码登录
+  if (pn === '/api/kugou/login/cellphone' && req.method === 'GET') {
+    try {
+      const mobile = String(url.searchParams.get('mobile') || '').trim();
+      const code = String(url.searchParams.get('code') || '').trim();
+      if (!/^1\d{10}$/.test(mobile)) { sendJSON(res, { error: '手机号格式不正确' }, 400); return; }
+      if (!/^\d{4,6}$/.test(code)) { sendJSON(res, { error: '验证码格式不正确' }, 400); return; }
+      const cookies = await ensureKugouCellCookies();
+      const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ');
+      const j = await kugouService.apiGet(
+        '/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code),
+        12000,
+        { Cookie: cookieHeader }
+      );
+      console.log('[KugouLogin] 验证码登录响应: ' + JSON.stringify(j).slice(0, 200));
+      // 登录成功：token/userid 在 body 或 body.data
+      const token = String((j && (j.token || (j.data && j.data.token))) || '');
+      const userid = String((j && (j.userid || (j.data && j.data.userid))) || '');
+      if (!j || !token) {
+        const msg = (j && (j.error_code === 20010 || (j.data && j.data.error_code === 20010))) ? '验证码错误或已过期' : '登录失败，请检查验证码';
+        sendJSON(res, { error: msg });
+        return;
+      }
+      const allCookies = cookies.concat(metaCookiesOf(j));
+      const pairs = {};
+      allCookies.forEach((c) => {
+        const eq = c.indexOf('=');
+        if (eq > 0) pairs[c.slice(0, eq).trim()] = c.slice(eq + 1).split(';')[0];
+      });
+      let cookieStr = 'token=' + token + '; userid=' + userid;
+      Object.keys(pairs).forEach((name) => { cookieStr += '; ' + name + '=' + pairs[name]; });
+      const config = readMusicSourcesConfig();
+      config.kugouCookie = cookieStr;
+      config.kugouVipToken = token;
+      saveMusicSourcesConfig(config);
+      console.log('[KugouLogin] 验证码登录成功，凭据已保存');
+      sendJSON(res, { success: true });
+    } catch (err) {
+      sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  function metaCookiesOf(json) {
+    // login_cellphone 成功响应的 set-cookie 已被 kugou-api 归并进 body 的部分字段，
+    // 这里防御性返回空数组（设备字段已在 kugouCellCookies 里）
+    return [];
   }
 
   // POST /api/parse/config - 更新音源配置

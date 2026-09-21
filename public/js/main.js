@@ -26807,18 +26807,36 @@ function openKugouQrLogin() {
   ov.id = 'kugou-qr-overlay';
   ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;';
   ov.innerHTML =
-    '<div style="background:#0b1016;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:22px 26px;width:300px;text-align:center;color:#dfe8ee">' +
-    '<div style="font-weight:700;font-size:14px;margin-bottom:12px">酷狗会员扫码登录</div>' +
-    '<div style="font-size:11px;color:rgba(255,255,255,.55);margin-bottom:12px">使用酷狗概念版 App 扫一扫</div>' +
-    '<div id="kugou-qr-img" style="display:flex;align-items:center;justify-content:center;min-height:180px;color:rgba(255,255,255,.4);font-size:11px">生成二维码中…</div>' +
-    '<div id="kugou-qr-note" style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.62)">准备中…</div>' +
-    '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center">' +
-    '<button id="kugou-qr-refresh" class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 12px">刷新二维码</button>' +
-    '<button class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 12px" onclick="closeKugouQrLogin()">关闭</button>' +
-    '</div></div>';
+    '<div style="background:#0b1016;border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:22px 26px;width:320px;text-align:center;color:#dfe8ee">' +
+    '<div style="font-weight:700;font-size:14px;margin-bottom:12px">酷狗会员登录</div>' +
+    '<div style="display:flex;gap:6px;justify-content:center;margin-bottom:14px">' +
+    '<button id="kugou-tab-qr" type="button" style="flex:1;min-height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.10);color:#fff;font-size:11px;cursor:pointer">扫码登录</button>' +
+    '<button id="kugou-tab-sms" type="button" style="flex:1;min-height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:rgba(255,255,255,.55);font-size:11px;cursor:pointer">验证码登录</button>' +
+    '</div>' +
+    '<div id="kugou-qr-body"></div>' +
+    '<div style="margin-top:12px"><button class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 14px" onclick="closeKugouQrLogin()">关闭</button></div>' +
+    '</div>';
   document.body.appendChild(ov);
   ov.addEventListener('click', function (e) { if (e.target === ov) closeKugouQrLogin(); });
-  document.getElementById('kugou-qr-refresh').addEventListener('click', openKugouQrLogin);
+  var tabQr = document.getElementById('kugou-tab-qr');
+  var tabSms = document.getElementById('kugou-tab-sms');
+  var body = document.getElementById('kugou-qr-body');
+  function setActiveTab(which) {
+    tabQr.style.background = which === 'qr' ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.04)';
+    tabQr.style.color = which === 'qr' ? '#fff' : 'rgba(255,255,255,.55)';
+    tabSms.style.background = which === 'sms' ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.04)';
+    tabSms.style.color = which === 'sms' ? '#fff' : 'rgba(255,255,255,.55)';
+  }
+  tabQr.addEventListener('click', function () { setActiveTab('qr'); renderQrTab(body); });
+  tabSms.addEventListener('click', function () { setActiveTab('sms'); renderSmsTab(body); });
+  setActiveTab('qr');
+  renderQrTab(body);
+}
+function renderQrTab(body) {
+  body.innerHTML =
+    '<div id="kugou-qr-img" style="display:flex;align-items:center;justify-content:center;min-height:180px;color:rgba(255,255,255,.4);font-size:11px">生成二维码中…</div>' +
+    '<div id="kugou-qr-note" style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.62)">准备中…（使用酷狗概念版 App 扫一扫）</div>' +
+    '<div style="margin-top:10px"><button id="kugou-qr-refresh" class="fx-mini-btn ghost" type="button" style="min-height:25px;padding:0 10px;font-size:10px">刷新二维码</button></div>';
   var imgBox = document.getElementById('kugou-qr-img');
   fetch('/api/kugou/login/qr/create').then(function (r) { return r.json(); }).then(function (j) {
     if (!j || j.error || !j.qrcode) {
@@ -26831,13 +26849,69 @@ function openKugouQrLogin() {
       img.style.cssText = 'width:180px;height:180px;border-radius:8px;background:#fff;padding:6px';
       imgBox.innerHTML = '';
       imgBox.appendChild(img);
-      document.getElementById('kugou-qr-note').textContent = '等待扫码…（使用酷狗概念版 App）';
+      document.getElementById('kugou-qr-note').textContent = '等待扫码…（使用酷狗概念版 App 扫一扫）';
       pollKugouQrStatus(j.qrcode, 90);
     } else {
       imgBox.textContent = '二维码数据缺失';
     }
   }).catch(function (e) {
     imgBox.textContent = '生成失败：' + e.message;
+  });
+  document.getElementById('kugou-qr-refresh').addEventListener('click', function () {
+    if (kugouQrPollTimer) { clearTimeout(kugouQrPollTimer); kugouQrPollTimer = null; }
+    renderQrTab(body);
+  });
+}
+function renderSmsTab(body) {
+  body.innerHTML =
+    '<input id="kugou-sms-mobile" type="tel" maxlength="11" placeholder="手机号" style="width:100%;box-sizing:border-box;min-height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;font-size:13px;padding:0 10px;outline:none">' +
+    '<div style="display:flex;gap:8px;margin-top:10px">' +
+    '<input id="kugou-sms-code" type="text" maxlength="6" placeholder="验证码" style="flex:1;box-sizing:border-box;min-height:34px;border-radius:8px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:#fff;font-size:13px;padding:0 10px;outline:none">' +
+    '<button id="kugou-sms-send" class="fx-mini-btn ghost" type="button" style="min-height:34px;padding:0 12px">发送验证码</button>' +
+    '</div>' +
+    '<div id="kugou-sms-note" style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.5);min-height:16px">验证码将发送到酷狗账号绑定的手机号</div>' +
+    '<button id="kugou-sms-login" class="fx-mini-btn ghost" type="button" style="width:100%;min-height:32px;margin-top:6px">登录</button>';
+  var mobileInput = document.getElementById('kugou-sms-mobile');
+  var codeInput = document.getElementById('kugou-sms-code');
+  var note = document.getElementById('kugou-sms-note');
+  document.getElementById('kugou-sms-send').addEventListener('click', function () {
+    var mobile = mobileInput.value.trim();
+    if (!/^1\d{10}$/.test(mobile)) { note.textContent = '请输入正确的手机号'; note.style.color = '#ff8a8a'; return; }
+    note.style.color = 'rgba(255,255,255,.5)';
+    note.textContent = '发送中…';
+    fetch('/api/kugou/login/captcha?mobile=' + encodeURIComponent(mobile)).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.success) {
+        note.textContent = '验证码已发送，请查收短信';
+        var btn = document.getElementById('kugou-sms-send');
+        var left = 60;
+        btn.disabled = true;
+        var iv = setInterval(function () {
+          btn.textContent = left + 's';
+          if (--left <= 0) { clearInterval(iv); btn.disabled = false; btn.textContent = '发送验证码'; }
+        }, 1000);
+      } else {
+        note.textContent = (j && j.error) || '发送失败';
+        note.style.color = '#ff8a8a';
+      }
+    }).catch(function (e) { note.textContent = '发送失败：' + e.message; note.style.color = '#ff8a8a'; });
+  });
+  document.getElementById('kugou-sms-login').addEventListener('click', function () {
+    var mobile = mobileInput.value.trim();
+    var code = codeInput.value.trim();
+    if (!/^1\d{10}$/.test(mobile) || !/^\d{4,6}$/.test(code)) { note.textContent = '请填写手机号和验证码'; note.style.color = '#ff8a8a'; return; }
+    note.style.color = 'rgba(255,255,255,.5)';
+    note.textContent = '登录中…';
+    fetch('/api/kugou/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code)).then(function (r) { return r.json(); }).then(function (j) {
+      if (j && j.success) {
+        note.textContent = '✅ 登录成功！会员音质已启用';
+        showToast('酷狗会员登录成功，已启用会员音质');
+        updateKugouLoginStatusText();
+        setTimeout(closeKugouQrLogin, 1600);
+      } else {
+        note.textContent = (j && j.error) || '登录失败';
+        note.style.color = '#ff8a8a';
+      }
+    }).catch(function (e) { note.textContent = '登录失败：' + e.message; note.style.color = '#ff8a8a'; });
   });
 }
 function finishStartupAutoplayJob(success) {
