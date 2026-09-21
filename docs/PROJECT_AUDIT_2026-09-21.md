@@ -345,3 +345,23 @@ git -C BhandsMusic/BhandsMusicChange rev-list --count @{u}..HEAD   # 54
 **新发现的小问题（本轮扫描补充，未修）**：`public/js/server.js` 里多处裸 `new URL(...)`（如 L559 `String(value || '')` 空串即抛）产生 `Uncaught (in promise) TypeError: Failed to construct 'URL'`。仅出现在特定环境/入参下，不阻塞启动，属低优先级健壮性问题。
 
 **A2 修复的边界说明**：降级模式下 3D 更新逻辑（animate 循环体）仍会执行 CPU 计算，只是 `renderer.render` 为 no-op —— 属"保命降级"而非"完整 2D 模式"。如需省 CPU，后续可做真正的 2D 分支。
+
+## J. 控制台补回收尾（2026-09-21 12:30，B 节 missing 全部清零）
+
+剩余 10 项缺失控件已全部补回（markup + 状态 + 持久化 + 渲染侧效果），注册表 105 项 **missing = 0**。
+
+| 控件 | 渲染侧效果 | 说明 |
+|---|---|---|
+| t-backgroundStarRiver 背景星河 | ✅ 完整 | 门控歌词星河光带的显示（fork 已有着色器，此前无开关） |
+| foreground-fps-seg 前台帧率上限 | ✅ 完整 | 接入 getAdaptiveRenderFps：vsync=跟随自适应；固定档位取 min(自适应, 上限) |
+| lyric-texture-quality-seg 歌词清晰度 | ✅ 完整 | makeLyricMask 纹理 1~4 倍（宽 8192 上限），切换即重建全部歌词行 |
+| fx-lyricbgadapt 亮底避光 | ✅ 完整 | 挂到 fork 现成的可读性衬底层（readabilityMat），拖动实时生效 |
+| t-lyricBackdropAdapt 全局歌词避光 | ✅ 完整 | 同上，总开关（关闭=衬底完全隐藏）。**默认值 1 而非上游 0.72**（0.72 是上游新管线的调参，fork 沿用会让既有观感变淡） |
+| t-lyricContextHighQuality 上下句高清纹理 | ✅ fork 适配版 | 关闭时上下句/停驻行回落 1× 纹理省显存（上游语义为预热高清缓存，fork 管线无此机制，按等价意图实现） |
+| t-coverBackdropAdapt 封面粒子避光 | ✅ fork 适配版 | 关闭时悬浮层展开不再压低背景粒子（uParticleDim） |
+| t-lyricLiveViewportFit 歌词实时边界 | ⚠️ 仅持久化 | 上游依赖逐帧投影管线（row-layers），fork 歌词管线无对应机制；开关可存档但不改变渲染 |
+| audio-output-panel 播放输出设备 | ✅ 完整 | enumerateDevices 枚举 + setSinkId 切换 + localStorage 记忆，启动时自动恢复；真实声卡效果待用户验证 |
+| cache-storage-panel 本地缓存 | ✅ 完整（桌面版） | 新增 IPC：bhandsmusic-cache-get-info / open-path（路径白名单校验）；报告节拍映射/网络 HTTP/应用数据三目录占用；Web 模式降级提示。无「更改目录」（fork 无缓存根切换机制，仅支持 BHANDSMUSIC_BEAT_CACHE_DIR 环境变量） |
+
+**验证**：渲染交互 13/13（seg 点击/toggle/滑块/降级提示）、持久化 saveLyricLayout 往返 1/1、无 control missing。
+**待用户真机验证**：播放输出设备切换（需真实声卡）、4× 清晰度在长歌词下的显存占用、星河开关的观感。

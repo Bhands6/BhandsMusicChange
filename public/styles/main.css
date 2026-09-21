@@ -2382,3 +2382,26 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 .cuefield-feedback-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
 .cuefield-feedback-actions button{min-height:29px;border:1px solid rgba(255,255,255,.12);border-radius:9px;background:rgba(255,255,255,.055);color:rgba(255,255,255,.82);cursor:pointer;font-size:11px;transition:transform .16s ease,background .16s ease,border-color .16s ease}
 .cuefield-feedback-actions button:hover{transform:translateY(-1px);border-color:rgba(255,218,144,.42);background:rgba(255,201,104,.13)}
+
+/* ==================== 视觉控制台：播放输出设备 + 本地缓存面板（移植自上游 Mineradio） ==================== */
+.audio-output-section{display:grid;grid-template-columns:1fr;gap:6px;margin:8px 0 12px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035)}
+.quality-output-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 2px 1px;color:rgba(255,255,255,.48);font-size:10px;font-weight:800;letter-spacing:.3px}
+.quality-output-actions{display:inline-flex;align-items:center;gap:5px}
+.quality-output-refresh{height:20px;padding:0 7px;border-radius:8px;border:1px solid rgba(255,255,255,.09);background:rgba(255,255,255,.04);color:rgba(255,255,255,.58);font:inherit;font-size:10px;cursor:pointer}
+.quality-output-refresh:hover{color:rgba(255,255,255,.9);border-color:rgba(var(--fc-accent-rgb),.32)}
+.audio-output-list{display:grid;grid-template-columns:1fr;gap:5px;max-height:88px;overflow:auto;overscroll-behavior:contain;padding-right:1px}
+.audio-output-item{display:block;width:100%;text-align:left;min-height:26px;padding:4px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.075);background:rgba(255,255,255,.04);color:rgba(255,255,255,.66);font:inherit;font-size:10.5px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.audio-output-item:hover{color:rgba(255,255,255,.92);border-color:rgba(var(--fc-accent-rgb),.3)}
+.audio-output-item.active{color:rgba(255,255,255,.94);border-color:rgba(var(--fc-accent-rgb),.55);background:rgba(var(--fc-accent-rgb),.12)}
+.audio-output-empty{padding:6px 2px;color:rgba(255,255,255,.42);font-size:10px}
+.cache-storage-panel{border:1px solid rgba(255,255,255,.075);background:rgba(3,9,14,.42);border-radius:10px;padding:10px;margin:-1px 0 12px}
+.cache-storage-head,.cache-storage-row,.cache-storage-actions{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.cache-storage-head{color:rgba(255,255,255,.82);font-size:11px;font-weight:700}
+.cache-storage-head span:last-child,.cache-storage-row b{color:rgba(var(--fc-accent-rgb),.86);font-size:10px;font-variant-numeric:tabular-nums}
+.cache-storage-path{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(222,240,246,.56);font-size:9px;line-height:1.45;margin:4px 0 8px;font-family:inherit}
+.cache-storage-path.small{color:rgba(222,240,246,.38);margin:2px 0 7px}
+.cache-storage-actions{justify-content:flex-start;margin:7px 0 10px}
+.cache-storage-actions .fx-mini-btn{min-height:25px;padding:0 8px;font-size:10px}
+.cache-storage-row{color:rgba(255,255,255,.63);font-size:10px}
+.cache-storage-row.muted{color:rgba(255,255,255,.42)}
+.cache-storage-note{margin-top:5px;line-height:1.45}

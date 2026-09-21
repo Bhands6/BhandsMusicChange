@@ -44,6 +44,12 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   /** 重启应用 */
   restartApp: () => ipcRenderer.invoke('bhandsmusic-restart-app'),
 
+  // ==================== 本地缓存面板 ====================
+  /** 读取缓存目录与占用（节拍映射 / 网络 HTTP / 应用数据） */
+  getCacheInfo: () => ipcRenderer.invoke('bhandsmusic-cache-get-info'),
+  /** 打开缓存目录（只允许打开 getCacheInfo 返回过的目录，校验在主进程执行） */
+  openCachePath: (targetPath) => ipcRenderer.invoke('bhandsmusic-cache-open-path', targetPath),
+
   // ==================== 全局快捷键 ====================
   /** 配置全局快捷键绑定（bindings: [{action, accelerator}]） */
   configureGlobalHotkeys: (bindings) => ipcRenderer.invoke('bhandsmusic-hotkeys-configure-global', bindings || []),

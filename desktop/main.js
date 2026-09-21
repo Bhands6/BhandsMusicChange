@@ -1593,6 +1593,69 @@ function closeOverlayWindows() {
   closeWallpaperWindow();
 }
 
+// ==================== IPC 处理器：本地缓存面板 ====================
+// 视觉控制台「缓存与存储」分组：目录、占用、打开目录（与 server.js 的 BEATMAP_CACHE_DIR 约定一致）
+
+const CACHE_SIZE_WALK_MAX_ENTRIES = 20000; // 单目录统计上限，防止极端目录卡死主进程
+const CACHE_SIZE_WALK_MAX_DEPTH = 4;
+
+/** 递归统计目录大小（错误容忍、限量） */
+async function walkDirSize(dirPath, depth = 0) {
+  let total = 0;
+  let entries = 0;
+  try {
+    const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    for (const item of items) {
+      if (entries >= CACHE_SIZE_WALK_MAX_ENTRIES) break;
+      entries++;
+      const full = path.join(dirPath, item.name);
+      try {
+        if (item.isDirectory()) {
+          if (depth < CACHE_SIZE_WALK_MAX_DEPTH) total += await walkDirSize(full, depth + 1);
+        } else if (item.isFile()) {
+          const st = await fs.promises.stat(full);
+          total += st.size;
+        }
+      } catch (_) { /* 单个条目失败不影响整体 */ }
+    }
+  } catch (_) { /* 目录不可读按 0 处理 */ }
+  return total;
+}
+
+ipcMain.handle('bhandsmusic-cache-get-info', async () => {
+  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';
+  const cacheRoot = path.dirname(beatmapsDir);
+  const userDataPath = app.getPath('userData');
+  const networkCachePath = path.join(userDataPath, 'Cache');
+  const [beatmapsBytes, networkBytes, userBytes] = await Promise.all([
+    walkDirSize(beatmapsDir),
+    walkDirSize(networkCachePath),
+    walkDirSize(userDataPath),
+  ]);
+  return {
+    cacheRoot,
+    beatmaps: { path: beatmapsDir, bytes: beatmapsBytes },
+    networkCache: { path: networkCachePath, bytes: networkBytes },
+    userData: { path: userDataPath, bytes: userBytes },
+  };
+});
+
+ipcMain.handle('bhandsmusic-cache-open-path', async (_event, targetPath) => {
+  // 安全校验：只允许打开缓存面板返回过的目录（节拍缓存根 / userData）
+  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';
+  const allowed = [path.dirname(beatmapsDir), app.getPath('userData')];
+  const p = String(targetPath || '');
+  if (!allowed.some((root) => p === root || p.startsWith(root + path.sep))) {
+    return { ok: false, error: '路径不在允许范围内' };
+  }
+  try {
+    const result = await shell.openPath(p);
+    return { ok: !result, error: result || '' };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message || err) };
+  }
+});
+
 // ==================== IPC 处理器：窗口控制 ====================
 // 渲染进程通过 ipcRenderer.invoke() 调用这些处理器
 

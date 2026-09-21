@@ -310,6 +310,7 @@ try {
   <div class="fx-slider"><label>封面清晰度</label><input id="fx-coverres" type="range" min="0.75" max="1.55" step="0.01"><output></output></div>
   <div class="fx-slider"><label>镜头晃动</label><input id="fx-cineshake" type="range" min="0" max="1.8" step="0.01"><output></output></div>
   <div class="fx-slider"><label>歌词溢光</label><input id="fx-lyricglow" type="range" min="0" max="0.85" step="0.01"><output></output></div>
+  <div class="fx-slider" id="fx-lyricbgadapt-row"><label>亮底避光</label><input id="fx-lyricbgadapt" type="range" min="0" max="1" step="0.01"><output></output></div>
 
   <div class="fx-fold" id="fx-lyric-fold">
     <div class="fx-fold-head" onclick="document.getElementById('fx-lyric-fold').classList.toggle('open')">
@@ -388,6 +389,13 @@ try {
       <div class="fx-slider"><label>边缘渐隐</label><input id="fx-lyricedgefade" type="range" min="0" max="1" step="0.01"><output></output></div>
       <div class="fx-slider"><label>动画柔顺</label><input id="fx-lyricmotionsoftness" type="range" min="0.15" max="1.2" step="0.01"><output></output></div>
       <div class="fx-toggle" id="t-lyricVerticalFloat" onclick="toggleFx('lyricVerticalFloat')"><span>歌词上下浮动</span><span class="dot"></span></div>
+      <div class="fx-section-label">歌词清晰度</div>
+      <div class="fx-seg lyric-texture-quality-seg" id="lyric-texture-quality-seg" role="group" aria-label="歌词纹理清晰度">
+        <button type="button" data-lyric-texture-clarity="1" title="1 倍基础纹理，节省显存，适合低配设备或超长歌词"><span>1×</span><small>标清</small></button>
+        <button type="button" data-lyric-texture-clarity="2" title="2 倍歌词纹理，兼顾清晰度与流畅度"><span>2×</span><small>高清</small></button>
+        <button type="button" data-lyric-texture-clarity="3" title="3 倍歌词纹理，适合大屏或歌词放大"><span>3×</span><small>超清</small></button>
+        <button type="button" data-lyric-texture-clarity="4" title="4 倍歌词纹理，使用受控高清缓存以保护显存"><span>4×</span><small>极致</small></button>
+      </div>
       <div class="fx-section-label">歌词字体</div>
       <div class="fx-font-grid expanded" id="lyric-font-grid">
         <button type="button" data-font="sans" onclick="setLyricFont('sans')">默认</button>
@@ -427,6 +435,7 @@ try {
         <div class="fx-toggle" id="t-lyricGlow" onclick="toggleFx('lyricGlow')"><span>歌词溢光</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricGlowBeat" onclick="toggleFx('lyricGlowBeat')"><span>鼓点溢光</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricGlowParticles" onclick="toggleFx('lyricGlowParticles')"><span>歌词光粒</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-backgroundStarRiver" onclick="toggleFx('backgroundStarRiver')" title="歌词区下方的星河光带背景"><span>背景星河</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricCameraLock" onclick="toggleFx('lyricCameraLock')"><span>歌词镜头绑定</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-lyricPauseHold" onclick="toggleFx('lyricPauseHold')" title="暂停时保留歌词显示"><span>暂停保留歌词</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-bloom" onclick="toggleFx('bloom')"><span>粒子溢光</span><span class="dot"></span></div>
@@ -520,6 +529,27 @@ try {
         <button data-performance-quality="high">高</button>
         <button data-performance-quality="ultra">超高</button>
       </div>
+      <div class="fx-section-label">输出接口</div>
+      <div class="audio-output-section" id="audio-output-panel">
+        <div class="quality-output-head"><span>播放输出设备</span><span class="quality-output-actions"><button class="quality-output-refresh" type="button" onclick="refreshAudioOutputDevices(true)">刷新</button></span></div>
+        <div id="audio-output-list" class="audio-output-list"></div>
+      </div>
+      <div class="fx-section-label">前台帧率上限</div>
+      <div class="fx-seg foreground-fps-seg" id="foreground-fps-seg" role="group" aria-label="前台帧率上限" title="默认跟随屏幕垂直同步；固定档位用于节能或降低负载">
+        <button data-foreground-fps="vsync">跟随屏幕</button>
+        <button data-foreground-fps="45">45</button>
+        <button data-foreground-fps="60">60</button>
+        <button data-foreground-fps="75">75</button>
+        <button data-foreground-fps="90">90</button>
+        <button data-foreground-fps="120">120</button>
+      </div>
+      <div class="fx-section-label">实时视觉性能</div>
+      <div class="fx-toggle-grid" id="visual-performance-toggle-grid">
+        <div class="fx-toggle" id="t-lyricLiveViewportFit" onclick="toggleFx('lyricLiveViewportFit')" title="逐帧检查长歌词的屏幕余量，关闭可省一点性能"><span>歌词实时边界</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-lyricContextHighQuality" onclick="toggleFx('lyricContextHighQuality')" title="上下句预告/停驻行也用高清纹理；关闭时上下句用标清纹理节省显存"><span>上下句高清纹理</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-lyricBackdropAdapt" onclick="toggleFx('lyricBackdropAdapt')" title="歌词后方自动压暗，保证亮背景下的可读性"><span>全局歌词避光</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-coverBackdropAdapt" onclick="toggleFx('coverBackdropAdapt')" title="封面/悬浮层展开时自动压低背景粒子，关闭则粒子保持原亮度"><span>封面粒子避光</span><span class="dot"></span></div>
+      </div>
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-liveBackgroundKeep" onclick="toggleFx('liveBackgroundKeep')" title="开启后后台或最小化时保持视觉渲染，不进入低占用暂停"><span>直播后台保持</span><span class="dot"></span></div>
       </div>
@@ -550,6 +580,22 @@ try {
         <button class="fx-mini-btn ghost" type="button" onclick="runAppMemoryTrim('manual')">压缩播放器</button>
         <button class="fx-mini-btn ghost" type="button" onclick="runSystemMemoryPurge(false)">系统释放</button>
         <button class="fx-mini-btn ghost" type="button" onclick="runSystemMemoryPurge(true)">提权释放</button>
+      </div>
+      <div class="fx-section-label">本地缓存</div>
+      <div class="cache-storage-panel" id="cache-storage-panel">
+        <div class="cache-storage-head"><span>缓存目录与占用</span><span id="cache-storage-total">读取中...</span></div>
+        <code class="cache-storage-path" id="cache-storage-root">桌面版启动后读取</code>
+        <div class="cache-storage-actions">
+          <button class="fx-mini-btn ghost" type="button" onclick="refreshCacheStoragePanel(true)">刷新占用</button>
+          <button class="fx-mini-btn ghost" type="button" id="cache-storage-open" onclick="openCacheStorageDir()" hidden>打开目录</button>
+        </div>
+        <div class="cache-storage-row"><span>节拍映射缓存</span><b id="cache-storage-beatmaps-size">—</b></div>
+        <code class="cache-storage-path small" id="cache-storage-beatmaps-path">—</code>
+        <div class="cache-storage-row"><span>网络与 HTTP 缓存</span><b id="cache-storage-chromium-size">—</b></div>
+        <code class="cache-storage-path small" id="cache-storage-chromium-path">—</code>
+        <div class="cache-storage-row muted"><span>应用数据（设置 / 登录资料，安全固定）</span><b id="cache-storage-userdata-size">—</b></div>
+        <code class="cache-storage-path small" id="cache-storage-userdata-path">—</code>
+        <div class="fx-sub cache-storage-note" id="cache-storage-note">节拍缓存目录可用环境变量 BHANDSMUSIC_BEAT_CACHE_DIR 指定；其余目录由系统管理。</div>
       </div>
       <div class="fx-slider"><label>粒子尺寸</label><input id="fx-point" type="range" min="0.5" max="2.2" step="0.01"><output></output></div>
       <div class="fx-slider"><label>流速</label><input id="fx-speed" type="range" min="0.2" max="2.5" step="0.01"><output></output></div>
