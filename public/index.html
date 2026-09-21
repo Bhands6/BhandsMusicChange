@@ -618,10 +618,10 @@ try {
         <button data-close-behavior="minimize" onclick="setCloseBehavior('minimize')">最小化到托盘</button>
         <button data-close-behavior="exit" onclick="setCloseBehavior('exit')">直接退出</button>
       </div>
+      <div class="fx-toggle" id="t-rememberClose" onclick="toggleRememberClose()" title="记住关闭行为，下次不再弹窗"><span>记住关闭选择</span><span class="dot"></span></div>
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-startupFastSkip" onclick="toggleStartupFastSkip()" title="打开软件后直接进入主页，不等待启动动画"><span>秒启动跳过启动页</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-startupAutoplay" onclick="toggleStartupAutoplay()" title="打开软件自动续播上次歌曲（从上次进度继续，解析全程静默）"><span>启动自动播放</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-rememberClose" onclick="toggleRememberClose()" title="记住关闭行为，下次不再弹窗"><span>记住关闭选择</span><span class="dot"></span></div>
       </div>
       <div class="fx-section-label">恢复播放位置</div>
       <div class="fx-seg" id="startup-resume-mode-seg" title="控制恢复上次播放时从哪里开始">
