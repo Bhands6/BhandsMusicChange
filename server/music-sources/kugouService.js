@@ -212,9 +212,30 @@ async function apiGet(pathAndQuery, timeoutMs, headers) {
   }
 }
 
+/**
+ * 带响应元数据的 GET：返回 { json, setCookies }。
+ * 二维码登录必须用它——酷狗在 create 时通过 Set-Cookie 下发设备指纹
+ * （GUID/DEV/MID），check 时必须原样回传，否则服务端报 20010（二维码无效）。
+ */
+async function apiGetWithMeta(pathAndQuery, timeoutMs, headers) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 10000);
+  try {
+    const r = await fetch(SERVICE_URL + pathAndQuery, { signal: ctrl.signal, headers: headers || {} });
+    const json = await r.json().catch(() => null);
+    const setCookies = typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : [];
+    return { json: json, setCookies: setCookies };
+  } catch (e) {
+    return { json: null, setCookies: [] };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 module.exports = {
   SERVICE_URL,
   ensureRunning,
+  apiGetWithMeta,
   isKugouApi,
   apiGet,
   stop,

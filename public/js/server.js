@@ -4548,8 +4548,13 @@ const server = http.createServer(async (req, res) => {
 
   // ==================== 酷狗会员（扫码登录 / 会员音质） ====================
   // 内置 KuGouMusicApi 服务（vendor/kugou-api，概念版平台）由本进程懒启动托管。
+  // ⚠️ 酷狗在 create 时通过 Set-Cookie 下发设备指纹（GUID/DEV/MID），check 必须原样回传，
+  //    否则服务端报 20010（二维码无效）——这里是踩过的坑，cookie 必须按 key 保存/回放。
 
   const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
+  /** 二维码会话：qrcodeKey → { cookies: string[] }（create 时的设备指纹 cookie） */
+  const kugouQrSessions = new Map();
+
   function kugouApiAppDir() {
     if (!kugouApiState.appDir) {
       // 开发态：项目根/vendor/kugou-api；打包态：app.asar → app.asar.unpacked
@@ -4561,7 +4566,6 @@ const server = http.createServer(async (req, res) => {
   }
   async function ensureKugouApi() {
     if (!kugouApiState.ensured) {
-      const config = readMusicSourcesConfig();
       kugouApiState.nodeExe = process.env.KUGOU_NODE_EXE || undefined;
       kugouApiState.ensured = kugouService.ensureRunning({
         appDir: kugouApiAppDir(),
@@ -4579,13 +4583,21 @@ const server = http.createServer(async (req, res) => {
     return kugouApiState.ensured;
   }
 
-  // GET /api/kugou/login/qr/create - 生成酷狗扫码登录二维码
+  // GET /api/kugou/login/qr/create - 生成酷狗扫码登录二维码（并保存会话 cookie）
   if (pn === '/api/kugou/login/qr/create' && req.method === 'GET') {
     try {
       const ready = await ensureKugouApi();
       if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
-      const j = await kugouService.apiGet('/login/qr/key');
+      const meta = await kugouService.apiGetWithMeta('/login/qr/key');
+      const j = meta.json;
       if (!j || !j.data || !j.data.qrcode) { sendJSON(res, { error: '二维码生成失败' }, 502); return; }
+      // 保存本次二维码的设备指纹 cookie（10 分钟过期清理）
+      console.log('[KugouQR] create set-cookie 字段: ' + (meta.setCookies.map((c) => c.split('=')[0]).join(', ') || '(空)'));
+      kugouQrSessions.set(j.data.qrcode, { cookies: meta.setCookies || [], at: Date.now() });
+      if (kugouQrSessions.size > 20) {
+        const oldest = kugouQrSessions.keys().next().value;
+        kugouQrSessions.delete(oldest);
+      }
       sendJSON(res, { qrcode: j.data.qrcode, qrcode_img: j.data.qrcode_img || '' });
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
@@ -4593,29 +4605,37 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  // GET /api/kugou/login/qr/check?key=xxx - 轮询扫码状态；status=4 时保存登录凭据
+  // GET /api/kugou/login/qr/check?key=xxx - 轮询扫码状态（回放会话 cookie）；status=4 时保存登录凭据
   if (pn === '/api/kugou/login/qr/check' && req.method === 'GET') {
     try {
       const ready = await ensureKugouApi();
       if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
       const key = String(url.searchParams.get('key') || '');
       if (!key) { sendJSON(res, { error: '缺少 qrcode key' }, 400); return; }
-      const j = await kugouService.apiGet('/login/qr/check?qrcode=' + encodeURIComponent(key));
+      const session = kugouQrSessions.get(key);
+      const cookieHeader = session ? session.cookies.map((c) => c.split(';')[0]).join('; ') : '';
+      const meta = await kugouService.apiGetWithMeta('/login/qr/check?key=' + encodeURIComponent(key), 10000, cookieHeader ? { Cookie: cookieHeader } : {});
+      const j = meta.json;
       if (!j) { sendJSON(res, { error: '轮询失败' }, 502); return; }
       const status = j && j.data ? Number(j.data.status) : -1;
       if (status === 4) {
-        // 登录成功：token/userid 来自 body，kg_mid 等设备字段来自 set-cookie
+        // 登录成功：token/userid 来自 body，设备字段来自会话 cookie + 本次 set-cookie
         const token = String((j.data && j.data.token) || '');
         const userid = String((j.data && j.data.userid) || '');
-        const midMatch = /(?:^|;\s*)MID=([^;]+)/i.exec(j.cookieHeader || '');
+        const allCookies = (session ? session.cookies : []).concat(meta.setCookies || []);
+        const pairs = {};
+        allCookies.forEach((c) => {
+          const eq = c.indexOf('=');
+          if (eq > 0) pairs[c.slice(0, eq).trim()] = c.slice(eq + 1).split(';')[0];
+        });
         let cookieStr = 'token=' + token + '; userid=' + userid;
-        if (j.mid) cookieStr += '; kg_mid=' + j.mid;
-        void midMatch;
+        Object.keys(pairs).forEach((name) => { cookieStr += '; ' + name + '=' + pairs[name]; });
         const config = readMusicSourcesConfig();
         config.kugouCookie = cookieStr;
         if (!config.kugouVipToken && token) config.kugouVipToken = token;
         saveMusicSourcesConfig(config);
-        console.log('[KugouLogin] 扫码登录成功，凭据已保存');
+        kugouQrSessions.delete(key);
+        console.log('[KugouLogin] 扫码登录成功，凭据已保存（' + cookieStr.split(';').length + ' 项）');
         sendJSON(res, { status: 4, success: true });
         return;
       }
