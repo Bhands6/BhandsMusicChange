@@ -3967,6 +3967,7 @@ scene.add(backgroundStarRiverParticles);
 
 function backgroundStarRiverTargetAlpha() {
   if (!fx || fx.backgroundStarRiver === false) return 0;
+  if (Number(fx.preset) === 5) return 0; // 星河预设自带星野粒子，背景星河自动禁用避免重复（上游同款语义）
   // 骷髅预设自带暗色氛围，压低星河；sonic 系预设自带地形背景，同理
   if (Number(fx.preset) === SKULL_PRESET_INDEX) return 0.38;
   if (typeof window !== 'undefined' && window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx)) return 0.28;
@@ -3974,11 +3975,15 @@ function backgroundStarRiverTargetAlpha() {
   return 0.34;
 }
 
-function updateBackgroundStarRiverState(dt) {
+function updateBackgroundStarRiverState(dt, immediate) {
   if (!backgroundStarRiverParticles || !backgroundStarRiverUniforms) return;
   var target = backgroundStarRiverTargetAlpha();
-  var ease = target > backgroundStarRiverUniforms.uAlpha.value ? 0.085 : 0.16;
-  backgroundStarRiverUniforms.uAlpha.value += (target - backgroundStarRiverUniforms.uAlpha.value) * Math.min(1, ease * Math.max(1, (dt || 0.016) * 60));
+  if (immediate) {
+    backgroundStarRiverUniforms.uAlpha.value = target;
+  } else {
+    var ease = target > backgroundStarRiverUniforms.uAlpha.value ? 0.085 : 0.16;
+    backgroundStarRiverUniforms.uAlpha.value += (target - backgroundStarRiverUniforms.uAlpha.value) * Math.min(1, ease * Math.max(1, (dt || 0.016) * 60));
+  }
   backgroundStarRiverParticles.visible = backgroundStarRiverUniforms.uAlpha.value > 0.006;
 }
 
@@ -21977,7 +21982,11 @@ function toggleFx(key) {
   if (key === 'lyricCameraLock') showToast(fx.lyricCameraLock ? '歌词已绑定镜头' : '歌词已恢复自由漂浮');
   if (key === 'lyricPauseHold') showToast(fx.lyricPauseHold !== false ? '暂停时保留歌词' : '暂停时隐藏歌词');
   if (key === 'lyricVerticalFloat') showToast(fx.lyricVerticalFloat !== false ? '歌词上下浮动已开启' : '歌词上下浮动已关闭');
-  if (key === 'backgroundStarRiver') showToast(fx.backgroundStarRiver !== false ? '背景星河已开启' : '背景星河已关闭');
+  if (key === 'backgroundStarRiver') {
+    // 对齐上游：切换瞬间立即把 alpha 跳到目标值（不渐变），视觉反馈更直接
+    if (typeof updateBackgroundStarRiverState === 'function') updateBackgroundStarRiverState(0.016, true);
+    showToast(fx.backgroundStarRiver !== false ? '背景星河已开启' : '背景星河已关闭');
+  }
   if (key === 'lyricLiveViewportFit') showToast(fx.lyricLiveViewportFit !== false ? '歌词实时边界已开启' : '歌词实时边界已关闭');
   if (key === 'lyricContextHighQuality') {
     // 上下句纹理倍率变化：重建已有歌词行纹理（当前行用满倍率，上下句按开关回落）
