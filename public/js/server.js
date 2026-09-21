@@ -67,6 +67,11 @@ const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } 
 const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('../../server/music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
 const kugouService = require('../../server/music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
 
+// ==================== 酷狗会员状态（模块级：跨请求持久） ====================
+const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
+/** 二维码会话：qrcodeKey → { cookies: string[] }（create 时的设备指纹 cookie，10 分钟过期） */
+const kugouQrSessions = new Map();
+
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
 const HOST = process.env.HOST || '0.0.0.0';     // 监听地址
@@ -4550,10 +4555,8 @@ const server = http.createServer(async (req, res) => {
   // 内置 KuGouMusicApi 服务（vendor/kugou-api，概念版平台）由本进程懒启动托管。
   // ⚠️ 酷狗在 create 时通过 Set-Cookie 下发设备指纹（GUID/DEV/MID），check 必须原样回传，
   //    否则服务端报 20010（二维码无效）——这里是踩过的坑，cookie 必须按 key 保存/回放。
-
-  const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
-  /** 二维码会话：qrcodeKey → { cookies: string[] }（create 时的设备指纹 cookie） */
-  const kugouQrSessions = new Map();
+  // ⚠️ kugouApiState / kugouQrSessions 定义在模块顶层（createServer 回调之外）——
+  //    放在回调内会被每次请求重建，create 存的会话立刻丢失（实测踩坑：session=无）。
 
   function kugouApiAppDir() {
     if (!kugouApiState.appDir) {
@@ -4618,6 +4621,9 @@ const server = http.createServer(async (req, res) => {
       const j = meta.json;
       if (!j) { sendJSON(res, { error: '轮询失败' }, 502); return; }
       const status = j && j.data ? Number(j.data.status) : -1;
+      console.log('[KugouQR] check: session=' + (session ? '有(' + session.cookies.length + '项)' : '无') +
+        ' status=' + status + ' error_code=' + ((j && j.error_code) || '-') +
+        (j && j.data && j.data.token ? ' token=有' : ''));
       if (status === 4) {
         // 登录成功：token/userid 来自 body，设备字段来自会话 cookie + 本次 set-cookie
         const token = String((j.data && j.data.token) || '');
