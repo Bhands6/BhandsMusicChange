@@ -8,13 +8,14 @@ var FX_CONSOLE_TABS = [
   { key: 'system', label: '系统' }
 ];
 
-function fxConsoleItem(ref, title, aliases, history, label) {
+function fxConsoleItem(ref, title, aliases, history, label, fullRow) {
   return {
     ref: ref,
     title: title,
     aliases: aliases || '',
     history: history !== false,
-    label: label || ''
+    label: label || '',
+    fullRow: fullRow === true   // 整行开关：独占一行（不与相邻开关并排 2 列）
   };
 }
 
@@ -142,9 +143,9 @@ var FX_CONSOLE_LAYOUT = [
     groups: [
       { key: 'startup', title: '启动与退出', hint: '关闭窗口行为和恢复播放方式', open: true, items: [
         fxConsoleItem('close-behavior-seg', '关闭窗口', '直接退出 后台托盘'),
-        fxConsoleItem('t-rememberClose', '记住关闭选择', '记住关闭行为 最小化托盘 不再询问'),
-        fxConsoleItem('t-startupAutoplay', '启动自动播放', '打开软件继续播放'),
+        fxConsoleItem('t-rememberClose', '记住关闭选择', '记住关闭行为 最小化托盘 不再询问', true, '', true),
         fxConsoleItem('t-startupFastSkip', '秒启动跳过启动页', '快速启动'),
+        fxConsoleItem('t-startupAutoplay', '启动自动播放', '打开软件继续播放'),
         fxConsoleItem('startup-resume-mode-seg', '恢复播放位置', '按上次进度 重播整首')
       ] },
       { key: 'output', title: '播放输出', hint: '音频输出设备和路由面板', items: [
@@ -313,12 +314,15 @@ function fxConsoleAppendItem(body, tabMeta, groupMeta, item, state) {
     body.appendChild(labelNode);
   }
   if (node.classList.contains('fx-toggle')) {
-    if (!state.toggleGrid) {
+    // fullRow 开关独占一行（单列容器），且结束当前 grid —— 后续开关另起 2 列网格
+    if (item.fullRow || !state.toggleGrid) {
       state.toggleGrid = document.createElement('div');
       state.toggleGrid.className = 'fx-toggle-grid fx-console-toggle-grid';
+      if (item.fullRow) state.toggleGrid.style.gridTemplateColumns = '1fr';
       body.appendChild(state.toggleGrid);
     }
     state.toggleGrid.appendChild(node);
+    if (item.fullRow) state.toggleGrid = null;
   } else {
     state.toggleGrid = null;
     body.appendChild(node);
