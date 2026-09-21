@@ -3869,11 +3869,13 @@ function buildBackgroundStarRiverGeometry(count) {
   var seeds = new Float32Array(count);
   var lanes = new Float32Array(count);
   var depths = new Float32Array(count);
+  var positions = new Float32Array(count * 3); // THREE 依赖 position attribute 决定 drawCount，缺失会导致整个层一个粒子都不画
   for (var i = 0; i < count; i++) {
     seeds[i] = Math.random() * 1000 + i * 0.37;
     lanes[i] = Math.random();
     depths[i] = Math.random();
   }
+  bgGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   bgGeo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
   bgGeo.setAttribute('aLane', new THREE.BufferAttribute(lanes, 1));
   bgGeo.setAttribute('aDepthSeed', new THREE.BufferAttribute(depths, 1));
@@ -3962,11 +3964,14 @@ var backgroundStarRiverMaterial = new THREE.ShaderMaterial({
 });
 var backgroundStarRiverParticles = new THREE.Points(buildBackgroundStarRiverGeometry(BACKGROUND_STAR_RIVER_COUNT), backgroundStarRiverMaterial);
 backgroundStarRiverParticles.frustumCulled = false;
-backgroundStarRiverParticles.renderOrder = -2;
+// fork 主粒子是 NormalBlending（上游为 additive）——后画会覆盖先画的星河像素，
+// 因此星河必须在最后画（renderOrder 大值），用加色叠上去；视觉上仍是远景背景层
+backgroundStarRiverParticles.renderOrder = 200;
 scene.add(backgroundStarRiverParticles);
 
-// 上游默认 0.34 的星河透明度过于含蓄（实测几乎不可见），fork 提亮 2.6 倍到可感知水平
-var STAR_RIVER_BRIGHTNESS = 2.6;
+// 上游默认 0.34 的星河透明度叠加 dust/ridge/twinkle 三重衰减后单粒子平均 alpha 仅 ~0.07，
+// 实测（readPixels on-off 差 0.86）在真实画面上完全不可见 —— fork 提亮 6 倍到可感知水平
+var STAR_RIVER_BRIGHTNESS = 6.0;
 function backgroundStarRiverTargetAlpha() {
   if (!fx || fx.backgroundStarRiver === false) return 0;
   if (Number(fx.preset) === 5) return 0; // 星河预设自带星野粒子，背景星河自动禁用避免重复（上游同款语义）
