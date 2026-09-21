@@ -176,8 +176,7 @@ var FX_CONSOLE_LAYOUT = [
       { key: 'cache', title: '缓存与存储', hint: '统一缓存目录、占用和各类路径', items: [
         fxConsoleItem('cache-storage-panel', '本地缓存', '缓存路径 缓存目录 占用 歌词 封面 音频 更新', false)
       ] },
-      { key: 'bhands-advanced', title: 'BhandsMusic 专属', hint: '高级参数、系统设置与第三方音源', items: [
-        fxConsoleItem({ selector: '#fx-advanced' }, '高级参数', '直播后台 画质档位 内存压缩 Mem Reduct 粒子尺寸 流速 扭曲 色彩张力 溢光 离散 背景压缩'),
+      { key: 'bhands-advanced', title: 'BhandsMusic 专属', hint: '系统设置与第三方音源', items: [
         fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
         fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
       ] },
@@ -204,7 +203,10 @@ var FX_CONSOLE_REMOVED_BLOCK_IDS = [
   // 使 main.js 里 querySelectorAll('#cam-seg button') 的状态同步与点击绑定继续有效。
   'cam-seg',
   // 「实验功能」组下线（2026-09-21 按用户要求移除）：唯一条目完整桌面模式开关随之隐藏
-  't-wallpaperMode'
+  't-wallpaperMode',
+  // 「高级参数」面板下线（2026-09-21 按用户要求移除）：面板内的画质档位/帧率/内存压缩/
+  // 输出设备/缓存面板等控件 DOM 全部保留，main.js 的状态同步与事件绑定继续有效
+  'fx-advanced'
 ];
 
 function fxConsoleResolveBlock(ref) {
