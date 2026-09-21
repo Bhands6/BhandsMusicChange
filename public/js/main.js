@@ -3856,6 +3856,132 @@ var particles = new THREE.Points(geo, material);
 particles.frustumCulled = false;
 particles.renderOrder = 1;
 scene.add(particles);
+
+// ============================================================
+//  背景星河（移植自上游 00-pointer-cover-particles.js，t-backgroundStarRiver 开关的门控对象）
+//  独立的整屏背景星河粒子层：renderOrder -2 垫在最底层，additive 发光，
+//  透明度按预设差异化（backgroundStarRiverTargetAlpha），随音频能量/鼓点呼吸。
+//  注意：这不是歌词区光带（那是 updateLyricStarRiver），此前开关门控错了对象导致"没作用"。
+// ============================================================
+var BACKGROUND_STAR_RIVER_COUNT = 1400;
+function buildBackgroundStarRiverGeometry(count) {
+  var bgGeo = new THREE.BufferGeometry();
+  var seeds = new Float32Array(count);
+  var lanes = new Float32Array(count);
+  var depths = new Float32Array(count);
+  for (var i = 0; i < count; i++) {
+    seeds[i] = Math.random() * 1000 + i * 0.37;
+    lanes[i] = Math.random();
+    depths[i] = Math.random();
+  }
+  bgGeo.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+  bgGeo.setAttribute('aLane', new THREE.BufferAttribute(lanes, 1));
+  bgGeo.setAttribute('aDepthSeed', new THREE.BufferAttribute(depths, 1));
+  return bgGeo;
+}
+
+var backgroundStarRiverUniforms = {
+  uDotTex: uniforms.uDotTex,
+  uTime: uniforms.uTime,
+  uBass: uniforms.uBass,
+  uTreble: uniforms.uTreble,
+  uBeat: uniforms.uBeat,
+  uEnergy: uniforms.uEnergy,
+  uPixel: uniforms.uPixel,
+  uPointScale: uniforms.uPointScale,
+  uParticleDim: uniforms.uParticleDim,
+  uTintColor: uniforms.uTintColor,
+  uAlpha: { value: 0 }
+};
+
+var backgroundStarRiverVs = `
+precision highp float;
+attribute float aSeed, aLane, aDepthSeed;
+uniform float uTime, uBass, uTreble, uBeat, uEnergy, uPixel, uPointScale, uAlpha, uParticleDim;
+uniform vec3 uTintColor;
+varying vec3 vColor;
+varying float vAlpha, vTwinkle;
+
+float hash11(float p){ return fract(sin(p * 127.1) * 43758.5453123); }
+
+void main(){
+  float band = floor(aLane * 6.0);
+  float local = fract(aLane * 6.0);
+  float bandN = (band + 0.5) / 6.0;
+  float seed = aSeed + band * 19.17;
+  float flow = fract(hash11(seed * 2.13) + uTime * (0.0022 + bandN * 0.0028 + hash11(seed * 5.1) * 0.0034));
+  float arc = (flow - 0.5) * 6.2831853 * (0.68 + bandN * 0.46) + bandN * 2.4 + hash11(seed) * 6.2831853;
+  float wave = sin(arc * (1.18 + bandN * 0.28) + uTime * (0.014 + bandN * 0.012) + seed * 0.07);
+  float radius = 7.2 + bandN * 15.8 + hash11(seed * 3.7) * 6.2 + local * 1.8;
+  vec3 pos;
+  pos.x = cos(arc * 0.76 + bandN * 0.84) * radius + (flow - 0.5) * (18.0 + bandN * 14.0);
+  pos.y = (bandN - 0.5) * 13.2 + wave * (1.5 + bandN * 1.4) + (local - 0.5) * 1.2;
+  pos.z = mix(-31.0, -4.8, aDepthSeed) + wave * 1.2 + sin(uTime * (0.018 + hash11(seed) * 0.032) + seed) * 1.0;
+
+  float twinkle = pow(0.5 + 0.5 * sin(uTime * (0.22 + hash11(seed * 4.0) * 0.44) + seed * 9.0), 5.0);
+  float ridge = exp(-pow((local - (0.42 + hash11(seed * 6.0) * 0.16)) / (0.22 + hash11(seed * 7.0) * 0.10), 2.0));
+  float dust = smoothstep(0.20, 0.98, hash11(seed * 8.0 + band));
+  vec3 cool = mix(vec3(0.34, 0.76, 1.0), vec3(0.60, 0.44, 1.0), bandN);
+  vec3 warm = vec3(1.0, 0.78, 0.58);
+  vec3 tint = max(uTintColor, vec3(0.08));
+  vColor = mix(cool, warm, ridge * 0.35 + uBass * 0.06);
+  vColor = mix(vColor, tint, 0.22);
+  vTwinkle = twinkle;
+  vAlpha = uAlpha * uParticleDim * dust * (0.10 + ridge * 0.52 + twinkle * 0.32 + uBeat * 0.05) * (0.88 + uEnergy * 0.18);
+
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  float depthSize = 30.0 / max(0.65, -mv.z);
+  float size = 1.10 + ridge * 2.40 + twinkle * 2.80 + uTreble * 0.80 + uBeat * 0.50;
+  gl_PointSize = clamp(size * depthSize * uPixel * uPointScale, 0.75, 5.60);
+  gl_Position = projectionMatrix * mv;
+}
+`;
+
+var backgroundStarRiverFs = `
+precision highp float;
+uniform sampler2D uDotTex;
+varying vec3 vColor;
+varying float vAlpha, vTwinkle;
+
+void main(){
+  vec4 tex = texture2D(uDotTex, gl_PointCoord);
+  if (tex.a < 0.02) discard;
+  vec3 col = clamp(vColor * (0.66 + vTwinkle * 0.72), vec3(0.0), vec3(1.45));
+  gl_FragColor = vec4(col, tex.a * vAlpha);
+}
+`;
+
+var backgroundStarRiverMaterial = new THREE.ShaderMaterial({
+  uniforms: backgroundStarRiverUniforms,
+  vertexShader: backgroundStarRiverVs,
+  fragmentShader: backgroundStarRiverFs,
+  transparent: true,
+  depthWrite: false,
+  depthTest: false,
+  blending: THREE.AdditiveBlending
+});
+var backgroundStarRiverParticles = new THREE.Points(buildBackgroundStarRiverGeometry(BACKGROUND_STAR_RIVER_COUNT), backgroundStarRiverMaterial);
+backgroundStarRiverParticles.frustumCulled = false;
+backgroundStarRiverParticles.renderOrder = -2;
+scene.add(backgroundStarRiverParticles);
+
+function backgroundStarRiverTargetAlpha() {
+  if (!fx || fx.backgroundStarRiver === false) return 0;
+  // 骷髅预设自带暗色氛围，压低星河；sonic 系预设自带地形背景，同理
+  if (Number(fx.preset) === SKULL_PRESET_INDEX) return 0.38;
+  if (typeof window !== 'undefined' && window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx)) return 0.28;
+  if (typeof window !== 'undefined' && window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) return 0.28;
+  return 0.34;
+}
+
+function updateBackgroundStarRiverState(dt) {
+  if (!backgroundStarRiverParticles || !backgroundStarRiverUniforms) return;
+  var target = backgroundStarRiverTargetAlpha();
+  var ease = target > backgroundStarRiverUniforms.uAlpha.value ? 0.085 : 0.16;
+  backgroundStarRiverUniforms.uAlpha.value += (target - backgroundStarRiverUniforms.uAlpha.value) * Math.min(1, ease * Math.max(1, (dt || 0.016) * 60));
+  backgroundStarRiverParticles.visible = backgroundStarRiverUniforms.uAlpha.value > 0.006;
+}
+
 console.log('v7 shell loaded, JS pending');
 
 // ============================================================
@@ -4881,12 +5007,8 @@ function updateLyricStarRiver(dt) {
     if (river.material.uniforms.uOpacity) river.material.uniforms.uOpacity.value = 0;
     return;
   }
-  // 背景星河开关（移植自上游）：关闭时星河光带完全隐藏
-  if (fx && fx.backgroundStarRiver === false) {
-    river.visible = false;
-    if (river.material.uniforms.uOpacity) river.material.uniforms.uOpacity.value = 0;
-    return;
-  }
+  // 背景星河开关（移植自上游）：门控对象是独立的整屏背景星河层（updateBackgroundStarRiverState），
+  // 不是这个歌词区光带 —— 此前误门控这里导致开关无效果，已撤回。
   var u = river.material.uniforms;
   var data = stageLyrics.current && stageLyrics.current.userData ? stageLyrics.current.userData.lyric : null;
   var targetW = data ? clampRange((data.textWorldW || data.worldW || 4.2) * 1.12 + 0.80, 2.25, 7.20) : 3.4;
@@ -27231,6 +27353,8 @@ function animate() {
   var shelfDimTarget = fx && fx.coverBackdropAdapt === false ? skullBackdropDim : (shouldDimWallpaperForShelf() ? 0.48 : skullBackdropDim);
   var shelfDimEase = shelfDimTarget < uniforms.uParticleDim.value ? 0.18 : 0.10;
   uniforms.uParticleDim.value += (shelfDimTarget - uniforms.uParticleDim.value) * Math.min(1, shelfDimEase * Math.max(1, dt * 60));
+  // 背景星河透明度推进（fx.backgroundStarRiver 门控，见 backgroundStarRiverTargetAlpha）
+  updateBackgroundStarRiverState(dt);
 
   // 通用转场脉冲: 只作为切换预设时的短促提亮。
   uniforms.uBurstAmt.value *= 0.90;
