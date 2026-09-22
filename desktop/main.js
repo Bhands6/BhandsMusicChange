@@ -139,12 +139,13 @@ if (forceSoftwareRendering) {
     else app.commandLine.appendSwitch(name, value);
   }
 }
-// 启动成功后清除崩溃标记，恢复正常硬件加速路径
-app.whenReady().then(() => {
-  setTimeout(() => {
-    try { if (gpuCrashGuardFile && fs.existsSync(gpuCrashGuardFile)) fs.unlinkSync(gpuCrashGuardFile); } catch (e) {}
-  }, 9000);
-});
+// 启动成功（主窗口加载完成）后清除崩溃标记，恢复正常硬件加速路径。
+// 判定用 did-finish-load（见下方主窗口创建处）而不是固定延时，避免窗口加载慢时误清除；
+// 另加 30s 兜底，防止事件未触发导致标记永久残留（那会一直停留在软件渲染）。
+function clearGpuCrashGuard() {
+  try { if (gpuCrashGuardFile && fs.existsSync(gpuCrashGuardFile)) fs.unlinkSync(gpuCrashGuardFile); } catch (e) {}
+}
+app.whenReady().then(() => { setTimeout(clearGpuCrashGuard, 30000); });
 
 // 请求单实例锁，防止多开
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -2375,6 +2376,8 @@ async function createWindow() {
 
   // 页面加载完成后发送窗口状态 + 推送系统设置
   mainWindow.webContents.once('did-finish-load', () => {
+    // 主窗口加载完成 = 启动成功，清除 GPU 崩溃标记（恢复正常硬件加速路径）
+    if (typeof clearGpuCrashGuard === 'function') clearGpuCrashGuard();
     sendWindowState(mainWindow);
     // 启动后推送系统设置到渲染进程
     const sysSettings = readSystemSettings();
