@@ -25749,7 +25749,11 @@ function drawBhandsMusicSplashWebgl(elapsed) {
     splashCtx = splashCanvas.getContext('2d');
   }
   function resize() {
-    splashPixelRatio = Math.min(1.6, Math.max(1, window.devicePixelRatio || 1));
+    // DPR 上限按渲染路径区分（对齐 Web 版 SplashCanvas）：
+    //   WebGL 路径 1.25 —— 全屏 shader 像素量比 1.6 少约 39%，启动页动画明显更丝滑；
+    //   2D 回退路径 1.6 —— CPU 绘制时高 DPR 影响较小，保持清晰度。
+    var splashDpr = Math.max(1, window.devicePixelRatio || 1);
+    splashPixelRatio = splashGl ? Math.min(1.25, splashDpr) : Math.min(1.6, splashDpr);
     splashW = window.innerWidth;
     splashH = window.innerHeight;
     splashCanvas.width = Math.max(1, Math.floor(splashW * splashPixelRatio));
@@ -26066,6 +26070,20 @@ function armSplashSoundFallback() {
  * 关闭启动页。
  * @param {{instant?: boolean}} [opts] instant=true 时不播退场动画、立刻进主页（秒启动用，对齐上游 dismissSplash({instant:true})）
  */
+// 启动预解析延迟到 splash 动画结束后执行：
+// 原实现在启动 900ms 后触发，与 5.2s 的品牌字动画重叠——预解析的网络请求 + 音频探测
+// 抢占主线程，导致启动页动画掉帧（用户反馈“不够丝滑”，Web 版无此桌面版特性）。
+var startupPreparseDone = false;
+function runStartupPreparse() {
+  if (startupPreparseDone) return;
+  startupPreparseDone = true;
+  try { preparseRestoredSongSource(); } catch (e) { console.warn('[StartupPreparse] 触发失败:', e && e.message); }
+}
+function requestStartupPreparseAfterSplash() {
+  if (startupPreparseDone) return;
+  // 兜底：9s 后无论如何执行（splash 长时间未被点击进入等极端情况）
+  setTimeout(runStartupPreparse, 9000);
+}
 function dismissSplash(opts) {
   var instant = !!(opts && opts.instant);
   var s = document.getElementById('splash');
@@ -26098,6 +26116,7 @@ function dismissSplash(opts) {
     document.body.classList.remove('splash-active');
     document.body.classList.remove('splash-revealing');
     flushStartupAutoplayAfterSplash();  // 启动自动播放：splash 结束即发起（恢复态已在 restore 时排队）
+    setTimeout(runStartupPreparse, 700);  // 启动页动画结束后再预解析（保证动画期间主线程空闲）
     markAppPerf('home-revealed');
     if (s && s.parentNode) s.style.display = 'none';
     requestAnimationFrame(function(){
@@ -26726,8 +26745,10 @@ async function restoreLastPlaybackSession() {
     console.log('[SessionRestore] 已恢复上次播放列表: ' + rebuilt.length + ' 首, 当前: ' + (current.name || ''));
     // 启动自动播放：恢复完成即排队（splash 期间挂起，dismissSplash 时自动发起静默续播）
     scheduleStartupAutoplayFromSnapshot('startup');
-    // 恢复态音源预解析：后台请求不播放，点播放时跳过解析等待（延迟避开启动加载高峰）
-    setTimeout(function () { preparseRestoredSongSource(); }, 900);
+    // 恢复态音源预解析：后台请求不播放，点播放时跳过解析等待。
+    // 触发时机改由 splash 动画结束时驱动（requestStartupPreparseAfterSplash），
+    // 避免与启动页动画抢主线程（9s 兜底）。
+    requestStartupPreparseAfterSplash();
     return true;
   } catch (e) {
     console.warn('[SessionRestore] 恢复失败:', e);
