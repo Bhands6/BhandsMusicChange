@@ -26096,15 +26096,13 @@ function applySplashBackground(mode) {
   var isVideo = mode === 'video';
   document.body.classList.toggle('splash-bg-video', isVideo);
   var v = document.getElementById('splash-bg-video');
+  // 注意：不要动 splashAnimating —— 它参与启动页状态机（ready/进入/退出时序），
+  // 停掉会导致启动页卡住无法进入（2026-09-22 实测踩坑）。这里只切显隐与视频播放。
   try {
     if (isVideo) {
-      splashAnimating = false;                    // 停 canvas 动画，省性能
       if (v) { v.currentTime = 0; v.play().catch(function () {}); }
     } else {
       if (v) { try { v.pause(); } catch (e) {} }
-      splashAnimating = true;                     // 恢复 canvas 动画
-      splashStartedAt = performance.now();
-      if (typeof drawBhandsMusicSplash === 'function') drawBhandsMusicSplash();
     }
   } catch (e) {}
   var btns = document.querySelectorAll('#startup-bg-seg button[data-startup-bg]');
@@ -26125,12 +26123,12 @@ function previewSplashBackground() {
   document.body.classList.add('splash-active');
   document.body.classList.remove('splash-revealing');
   splashStartedAt = performance.now();
-  if (!document.body.classList.contains('splash-bg-video')) {
-    splashAnimating = true;
-    if (typeof drawBhandsMusicSplash === 'function') drawBhandsMusicSplash();
-  } else {
+  if (document.body.classList.contains('splash-bg-video')) {
     var v = document.getElementById('splash-bg-video');
     if (v) { try { v.currentTime = 0; v.play().catch(function () {}); } catch (e) {} }
+  } else if (typeof drawBhandsMusicSplash === 'function') {
+    splashAnimating = true;
+    drawBhandsMusicSplash();
   }
   var content = s.querySelector('.splash-content');
   if (content) { content.style.opacity = ''; content.style.transform = ''; content.style.transition = ''; }
@@ -26159,9 +26157,8 @@ function previewSplashBackground() {
     v.load();
     if (document.body.classList.contains('splash-bg-video')) v.play().catch(function () {});
   };
+  // 只在真正报错时回退（不在启动时检查 networkState —— 加载尚未开始时它可能为 3，会误判）
   v.addEventListener('error', tryFallback, true);
-  v.addEventListener('stalled', function () { if (v.networkState === 3) tryFallback(); }, true);
-  if (v.error || v.networkState === 3) tryFallback();
 })();
 // 启动时应用已保存的启动页背景（在 splash 首次显示前生效）
 try { applySplashBackground(readSplashBackground()); } catch (e) {}
