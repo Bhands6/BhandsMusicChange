@@ -529,7 +529,10 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 /* 登录后账号入口为纯头像圆形按钮（不再显示昵称胶囊）；VIP/SVIP 徽章挂头像正下方 */
 /* :not(.multi-account) —— 双平台模式（.multi-account）保留原胶囊布局不受影响 */
 #user-btn.logged-in:not(.multi-account){position:relative!important;overflow:visible!important;width:44px!important;height:44px!important;min-width:0!important;padding:0!important;border-radius:50%!important;gap:0!important}
-#user-btn.logged-in:not(.multi-account) #user-avatar{width:100%!important;height:100%!important;border-radius:50%!important;display:block!important}
+#user-btn.logged-in:not(.multi-account) #user-avatar{width:40px!important;height:40px!important;border-radius:50%!important;display:block!important}
+/* 头像外圈光环：与主页按钮同款（金色边框 42% + 18px 外发光），颜色跟随「主页图标」配色变量 */
+#user-btn.logged-in:not(.multi-account){border-color:rgba(var(--home-icon-rgb),.42)!important;box-shadow:var(--saved-button-glass-shadow),0 0 18px rgba(var(--home-icon-rgb),.10)!important}
+#user-btn.logged-in:not(.multi-account):hover{border-color:rgba(var(--home-icon-rgb),.68)!important;box-shadow:var(--saved-button-glass-shadow),0 0 22px rgba(var(--home-icon-rgb),.18)!important}
 #user-vip-tag{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);font-size:8px;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:2}
 .account-source-dot{width:7px;height:7px;border-radius:50%;background:var(--source-local);box-shadow:0 0 12px currentColor;flex-shrink:0}
 .account-source-dot.netease{background:var(--source-netease);color:var(--source-netease)}

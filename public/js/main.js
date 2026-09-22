@@ -23342,8 +23342,9 @@ function applyUserBtnAvatarLayout() {
   btn.style.setProperty('flex', '0 0 auto', 'important');
   var img = document.getElementById('user-avatar');
   if (img) {
-    img.style.setProperty('width', '42px', 'important');
-    img.style.setProperty('height', '42px', 'important');
+    // 头像 40px（按钮 44px 内容区 42px）：留 1px 空隙让外圈光环与头像分离可见
+    img.style.setProperty('width', '40px', 'important');
+    img.style.setProperty('height', '40px', 'important');
     img.style.setProperty('border-radius', '50%', 'important');
     img.style.setProperty('display', 'block', 'important');
     img.style.setProperty('flex', '0 0 auto', 'important');
