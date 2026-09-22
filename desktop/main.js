@@ -123,15 +123,19 @@ try {
 } catch (e) { /* 标记不可用时按正常流程 */ }
 const forceSoftwareRendering = gpuCrashGuardTripped || process.env.BHANDSMUSIC_NO_GPU === '1';
 if (forceSoftwareRendering) {
-  // 完整的软件渲染组合：仅 disable-gpu 不足以阻止 Chromium 拉起 GPU 进程，
-  // 还需要 swiftshader 软件 GL 后端 + 关掉 GPU 沙箱（2026-09-22 实测）
-  app.disableHardwareAcceleration();
-  app.commandLine.appendSwitch('disable-gpu');
-  app.commandLine.appendSwitch('disable-gpu-compositing');
+  // 崩溃的是「独立 GPU 进程」（FATAL: GPU process isn't usable），因此：
+  // ① 首选 in-process-gpu —— 把 GPU 并入主进程，不再有独立进程可崩；
+  // ② 同时指定 swiftshader 软件 GL 作为后端兜底；
+  // ③ 关掉 GPU 沙箱，避免沙箱层再次拉起独立 GPU 进程。
+  // 注意：这里**不能**调用 app.disableHardwareAcceleration()——它等价于 --disable-gpu，
+  // 会与 in-process-gpu 互相抵消（实测 GPU 仍被独立拉起并崩溃）。
+  app.commandLine.appendSwitch('in-process-gpu');
   app.commandLine.appendSwitch('disable-gpu-sandbox');
+  // ② 兜底：软件渲染（若 in-process-gpu 仍不可用，Chromium 会走 swiftshader）
   app.commandLine.appendSwitch('use-angle', 'swiftshader');
   app.commandLine.appendSwitch('use-gl', 'swiftshader');
   app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
   if (process.env.BHANDSMUSIC_NO_GPU === '1') console.warn('[GPU] BHANDSMUSIC_NO_GPU=1，已强制软件渲染');
 } else {
   for (const [name, value] of CHROMIUM_PERFORMANCE_SWITCHES) {

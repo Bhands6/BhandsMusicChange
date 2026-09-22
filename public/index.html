@@ -94,9 +94,6 @@ try {
 <!-- 应用启动时显示的动画过渡页面，包含品牌标识和粒子动画 -->
 <div id="splash">
   <canvas id="splash-canvas"></canvas>
-  <!-- 启动页背景视频层（可选，由「启动与退出 → 启动页背景」控制显隐） -->
-  <video id="splash-bg-video" class="splash-bg-video" autoplay loop muted playsinline preload="auto"
-    src="media/splash-bg.mp4" data-cdn-src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260418_063509_7d167302-4fd4-480b-8260-18ab572333d4.mp4"></video>
   <div class="splash-bg-noise"></div>
 
   <!-- 主内容 -->
@@ -622,11 +619,6 @@ try {
         <div class="fx-toggle" id="t-startupAutoplay" onclick="toggleStartupAutoplay()" title="打开软件自动续播上次歌曲（从上次进度继续，解析全程静默）"><span>启动自动播放</span><span class="dot"></span></div>
       </div>
       <div class="fx-section-label">恢复播放位置</div>
-      <div class="fx-section-label">启动页背景</div>
-      <div class="fx-seg" id="startup-bg-seg" title="选择启动页的背景样式（点击选项立即预览）">
-        <button data-startup-bg="legacy" class="active" onclick="setSplashBackground('legacy')">星河粒子</button>
-        <button data-startup-bg="video" onclick="setSplashBackground('video')">滑雪视频</button>
-      </div>
       <div class="fx-seg" id="startup-resume-mode-seg" title="控制恢复上次播放时从哪里开始">
         <button data-startup-resume-mode="resume" class="active" onclick="setStartupResumeMode('resume')">按上次进度</button>
         <button data-startup-resume-mode="restart" onclick="setStartupResumeMode('restart')">重播整首</button>

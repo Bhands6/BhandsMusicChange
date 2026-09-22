@@ -149,7 +149,6 @@ var FX_CONSOLE_LAYOUT = [
         fxConsoleItem('t-rememberClose', '记住关闭选择', '记住关闭行为 最小化托盘 不再询问', true, '', true),
         fxConsoleItem('t-startupFastSkip', '秒启动跳过启动页', '快速启动'),
         fxConsoleItem('t-startupAutoplay', '启动自动播放', '打开软件继续播放'),
-        fxConsoleItem('startup-bg-seg', '启动页背景', '启动页 背景 视频 滑雪 星河 粒子 网格'),
         fxConsoleItem('startup-resume-mode-seg', '恢复播放位置', '按上次进度 重播整首')
       ] },
       { key: 'output', title: '播放输出', hint: '音频输出设备和路由面板', items: [
