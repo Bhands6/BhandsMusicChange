@@ -1156,7 +1156,11 @@ html.simple-mode-preload #top-right #fx-fab{display:flex!important}
 body.controls-visible #fx-fab-hide-btn,
 body.desktop-shell.diy-mode.controls-visible #fx-fab-hide-btn{bottom:139px}
 body.immersive-mode #fx-fab-hide-btn{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
-body.desktop-shell.diy-mode #fx-panel{top:64px;bottom:132px;max-height:none}
+/* top 需避开右上角按钮行（desktop-shell 下 #top-right top:58px + 44px = 底部 102px）：
+   面板顶部留 12px 间距，不再遮挡视觉控制台/主页/头像按钮 */
+body.desktop-shell.diy-mode #fx-panel{top:114px;bottom:132px;max-height:none}
+/* 全屏下按钮行 top:64px（底部 108px）→ 面板再下移 */
+body.desktop-shell.desktop-fullscreen.diy-mode #fx-panel{top:120px}
 body.desktop-shell.diy-mode #fx-fab{bottom:24px}
 body.desktop-shell.diy-mode #fx-fab-hide-btn{bottom:37px}
 body.controls-visible #fx-fab,
@@ -1164,14 +1168,14 @@ body.desktop-shell.diy-mode.controls-visible #fx-fab{bottom:126px}
 body.desktop-shell.diy-mode #bottom-bar,
 body.desktop-shell.diy-mode #bottom-bar.stage-mode{left:50%;width:min(1080px,calc(100vw - 72px))}
 @media (max-height:760px){
-  body.desktop-shell.diy-mode #fx-panel{top:56px;bottom:116px;width:min(410px,calc(100vw - 48px));padding:14px}
+  body.desktop-shell.diy-mode #fx-panel{top:114px;bottom:116px;width:min(410px,calc(100vw - 48px));padding:14px}
   body.desktop-shell.diy-mode #fx-fab{bottom:22px}
   body.desktop-shell.diy-mode #fx-fab-hide-btn{bottom:35px}
   body.desktop-shell.diy-mode.controls-visible #fx-fab{bottom:112px}
   body.desktop-shell.diy-mode.controls-visible #fx-fab-hide-btn{bottom:125px}
 }
 @media (max-width:980px){
-  body.desktop-shell.diy-mode #fx-panel{left:18px;right:18px;width:auto;top:62px;bottom:132px}
+  body.desktop-shell.diy-mode #fx-panel{left:18px;right:18px;width:auto;top:114px;bottom:132px}
   body.desktop-shell.diy-mode #fx-panel.show,
   body.desktop-shell.diy-mode #fx-panel.peek{right:18px}
 }
