@@ -512,7 +512,13 @@ async function parseMusic(params) {
       if (pending === 0 && !settled) settleFallback();
     }
 
-    availableStrategies.forEach(function (strategy) {
+    availableStrategies.forEach(function (strategy, launchIdx) {
+      // 会员窗口（kugouVipBoost 激活时）：按排序错峰启动——第一名（会员 FLAC）独享
+      // 约 300ms 先手窗口，避免被 405ms 级的 unblock/kuwo mp3 抢跑（实测「沧海一粟」
+      // unblock 405ms 先胜、kugou flac 慢一步没用上）。非会员模式保持全并发不变。
+      // 延迟上限 900ms：kugou flac 失败时其它源最多晚 0.9s 启动，可接受。
+      var launchDelay = (kugouVipBoost > 0 && launchIdx > 0) ? Math.min(launchIdx * 300, 900) : 0;
+      var launch = function () {
       strategy.parse(params).then(function (result) {
         noteStrategyResult(strategy.name, !!(result && result.url));
         if (!result || !result.url) {
@@ -559,6 +565,8 @@ async function parseMusic(params) {
         console.error('[MusicParser] 策略 ' + strategy.name + ' 异常:', error.message);
         onPendingDone();
       });
+      };
+      if (launchDelay > 0) { setTimeout(launch, launchDelay); } else { launch(); }
     });
   });
 }
