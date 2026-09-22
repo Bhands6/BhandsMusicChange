@@ -332,16 +332,22 @@ async function tryKugouLocalSongUrl(hash, albumId, timeoutMs) {
   if (!ready.ok) return '';
   const qualities = ['flac', '320', '128'];
   for (let i = 0; i < qualities.length; i++) {
+    const q = qualities[i];
     const j = await kugouService.apiGet(
       '/song/url?hash=' + encodeURIComponent(hash) + '&album_id=' + encodeURIComponent(albumId || '0') +
-      '&quality=' + qualities[i] + '&isFreePart=1',
+      '&quality=' + q + '&isFreePart=1',
       timeoutMs || 10000,
       { Cookie: cred.cookie }
     );
     if (!j) continue;
     const url = pickPlayUrl(j);
-    if (url) return url;
+    if (url) {
+      console.log('[KugouVIP] 会员音质命中: quality=' + q + ' url=' + url.slice(0, 80));
+      return url;
+    }
+    console.log('[KugouVIP] quality=' + q + ' 无地址' + (j && j.error_code ? '（error_code=' + j.error_code + '）' : '') + '，降档重试');
   }
+  console.log('[KugouVIP] 会员路径全部失败，回退免登录 128k');
   return '';
 }
 
