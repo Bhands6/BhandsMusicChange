@@ -114,7 +114,8 @@ body.desktop-shell.desktop-fullscreen #fullscreen-window-controls,html:fullscree
 body.fullscreen-diy-peek #fullscreen-diy-zone,#fullscreen-diy-zone:hover{pointer-events:auto}
 body.fullscreen-diy-peek #fullscreen-diy-btn,#fullscreen-diy-zone:hover #fullscreen-diy-btn{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
 body.desktop-shell.desktop-fullscreen #search-area.peek{top:24px}
-body.desktop-shell.desktop-fullscreen #top-right{top:50px}
+/* 全屏时窗口控制行（top:12px + 36px 按钮 = 底部 48px）与顶部按钮行拉开 16px 间距 */
+body.desktop-shell.desktop-fullscreen #top-right{top:64px}
 @media (max-width:720px){body.desktop-shell #top-right{right:12px;top:58px}body.desktop-shell #search-area.peek{top:58px}}
 @media (max-width:720px){#fullscreen-diy-zone{height:48px}#fullscreen-diy-btn{min-width:96px;height:32px}}
 
