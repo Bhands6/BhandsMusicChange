@@ -26766,6 +26766,8 @@ function toggleStartupAutoplay() {
 // 酷狗会员扫码登录（内置 KuGouMusicApi 服务，概念版平台）
 // ============================================================
 var kugouQrPollTimer = null;
+// 页面加载即拉取一次酷狗登录状态（控制台重组后由 fx-console-workspace 再次刷新）
+setTimeout(updateKugouLoginStatusText, 2000);
 function updateKugouLoginStatusText() {
   var el = document.getElementById('kugou-login-status');
   if (!el) return;

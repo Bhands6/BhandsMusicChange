@@ -436,6 +436,8 @@ function organizeFxConsoleWorkspace() {
   oldRoots.forEach(function (node) {
     if (node && node.isConnected && node.parentNode === panel && node !== toolbar && node !== removedStore && !node.classList.contains('fx-tab-page')) node.remove();
   });
+  // 重组完成：刷新依赖 DOM 的动态状态文案（如酷狗登录状态）
+  if (typeof updateKugouLoginStatusText === 'function') setTimeout(updateKugouLoginStatusText, 0);
   toolbar.querySelector('#fx-panel-tabs').addEventListener('click', function (e) {
     var btn = e.target && e.target.closest ? e.target.closest('[data-fx-tab]') : null;
     if (!btn) return;
