@@ -4706,7 +4706,7 @@ const server = http.createServer(async (req, res) => {
       const j = await kugouService.apiGet('/captcha/sent?mobile=' + encodeURIComponent(mobile), 12000, { Cookie: cookieHeader });
       // 接口成功时 status=1；data 里可能有验证码回显（测试模式）
       const ok = j && (Number(j.status) === 1 || (j.data && j.data.code));
-      console.log('[KugouLogin] 验证码发送: ' + JSON.stringify(j).slice(0, 150));
+      console.log('[KugouLogin] 验证码发送完整响应: ' + JSON.stringify(j));
       sendJSON(res, ok ? { success: true } : { error: '验证码发送失败' });
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
