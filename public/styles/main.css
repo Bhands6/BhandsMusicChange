@@ -154,6 +154,12 @@ body.idle-guide-dragging #canvas-container{cursor:grabbing}
 #splash.ready{cursor:pointer}
 #splash.exiting{pointer-events:none;opacity:0;transform:scale(1.018)}
 #splash-canvas{position:absolute;inset:0;z-index:1;opacity:1;transition:opacity 1100ms cubic-bezier(.22,1,.36,1),transform 1100ms cubic-bezier(.22,1,.36,1)}
+/* 启动页背景视频层（「启动与退出 → 启动页背景」选「滑雪视频」时启用）：
+   默认隐藏；启用时隐藏 canvas 与网格底，保留暗角(::after)与噪点保证文字可读 */
+.splash-bg-video{position:absolute;inset:0;z-index:1;width:100%;height:100%;object-fit:cover;display:none;background:#000}
+body.splash-bg-video .splash-bg-video{display:block}
+body.splash-bg-video #splash-canvas{display:none}
+body.splash-bg-video #splash::before{opacity:0;animation:none}
 #splash.exiting #splash-canvas{opacity:.30;transform:scale(1.012)}
 .splash-bg-noise{position:absolute;inset:0;z-index:3;opacity:.038;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");background-size:180px 180px;mix-blend-mode:screen;pointer-events:none}
 .splash-content{position:relative;z-index:10;display:flex;flex-direction:column;align-items:center;gap:16px;pointer-events:none;transform:translateY(4px);transition:opacity 680ms cubic-bezier(.22,1,.36,1),transform 860ms cubic-bezier(.22,1,.36,1)}

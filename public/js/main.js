@@ -26084,6 +26084,67 @@ function requestStartupPreparseAfterSplash() {
   // 兜底：9s 后无论如何执行（splash 长时间未被点击进入等极端情况）
   setTimeout(runStartupPreparse, 9000);
 }
+// ============================================================
+// 启动页背景选择（星河粒子 / 滑雪视频）
+// ============================================================
+var SPLASH_BG_STORE_KEY = 'bhandsmusic-splash-bg-v1';
+var splashPreviewTimer = null;
+function readSplashBackground() {
+  try { return localStorage.getItem(SPLASH_BG_STORE_KEY) === 'video' ? 'video' : 'legacy'; } catch (e) { return 'legacy'; }
+}
+function applySplashBackground(mode) {
+  var isVideo = mode === 'video';
+  document.body.classList.toggle('splash-bg-video', isVideo);
+  var v = document.getElementById('splash-bg-video');
+  try {
+    if (isVideo) {
+      splashAnimating = false;                    // 停 canvas 动画，省性能
+      if (v) { v.currentTime = 0; v.play().catch(function () {}); }
+    } else {
+      if (v) { try { v.pause(); } catch (e) {} }
+      splashAnimating = true;                     // 恢复 canvas 动画
+      splashStartedAt = performance.now();
+      if (typeof drawBhandsMusicSplash === 'function') drawBhandsMusicSplash();
+    }
+  } catch (e) {}
+  var btns = document.querySelectorAll('#startup-bg-seg button[data-startup-bg]');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', btns[i].getAttribute('data-startup-bg') === mode);
+}
+function setSplashBackground(mode) {
+  var m = mode === 'video' ? 'video' : 'legacy';
+  try { localStorage.setItem(SPLASH_BG_STORE_KEY, m); } catch (e) {}
+  applySplashBackground(m);
+  if (typeof showToast === 'function') showToast(m === 'video' ? '启动页背景：滑雪视频（已保存，立即预览）' : '启动页背景：星河粒子（已保存，立即预览）');
+  previewSplashBackground();
+}
+function previewSplashBackground() {
+  var s = document.getElementById('splash');
+  if (!s) return;
+  s.classList.remove('hide', 'exiting');
+  s.style.display = '';
+  document.body.classList.add('splash-active');
+  document.body.classList.remove('splash-revealing');
+  splashStartedAt = performance.now();
+  if (!document.body.classList.contains('splash-bg-video')) {
+    splashAnimating = true;
+    if (typeof drawBhandsMusicSplash === 'function') drawBhandsMusicSplash();
+  } else {
+    var v = document.getElementById('splash-bg-video');
+    if (v) { try { v.currentTime = 0; v.play().catch(function () {}); } catch (e) {} }
+  }
+  var content = s.querySelector('.splash-content');
+  if (content) { content.style.opacity = ''; content.style.transform = ''; content.style.transition = ''; }
+  var close = function () {
+    if (splashPreviewTimer) { clearTimeout(splashPreviewTimer); splashPreviewTimer = null; }
+    s.onclick = null;
+    dismissSplash({ instant: false });
+  };
+  s.onclick = close;
+  if (splashPreviewTimer) clearTimeout(splashPreviewTimer);
+  splashPreviewTimer = setTimeout(close, 4600);   // 预览约 4.6s 后自动收起（点击可提前）
+}
+// 启动时应用已保存的启动页背景（在 splash 首次显示前生效）
+try { applySplashBackground(readSplashBackground()); } catch (e) {}
 function dismissSplash(opts) {
   var instant = !!(opts && opts.instant);
   var s = document.getElementById('splash');
