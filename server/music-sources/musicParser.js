@@ -9,7 +9,7 @@ const { parseFromGDMusic } = require('./gdmusic');
 const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
 const { parseFromCustomApi } = require('./customApi');
-const { parseFromKugou } = require('./kugou');
+const { parseFromKugou, readKugouVipCredentials } = require('./kugou');
 const { tryGoMusicSwitch } = require('./goMusicSwitch');
 const { probeAudio, acceptProbe } = require('./durationProbe');
 
@@ -453,10 +453,18 @@ async function parseMusic(params) {
   }
 
   // 获取可用策略并按优先级排序（冷却期策略加惩罚值排到队尾）
+  // 会员优先：已登录酷狗会员（扫码/验证码）时 kugou 策略提前（FLAC 无损 > 其它源的试听/128k）；
+  // 偏移量 1.0 让 kugou 排到 gdmusic(3.5)/goMusic(3.7)/unblock(4) 之前，
+  // 但仍在用户显式配置的 lxMusic(0)/customApi(1) 之后——显式配置的自定义源优先级更高
+  const kugouVip = readKugouVipCredentials();
+  const kugouVipBoost = (kugouVip && kugouVip.cookie) ? 1.0 : 0;
+  const strategyPriority = function (s) {
+    return (s.name === 'kugou' ? s.priority - kugouVipBoost : s.priority);
+  };
   const availableStrategies = ALL_STRATEGIES
     .filter(function (s) { return s.canHandle(params); })
     .map(function (s) { return { strategy: s, penalty: strategyCooldownPenalty(s.name) }; })
-    .sort(function (a, b) { return (a.strategy.priority + a.penalty) - (b.strategy.priority + b.penalty); })
+    .sort(function (a, b) { return (strategyPriority(a.strategy) + a.penalty) - (strategyPriority(b.strategy) + b.penalty); })
     .map(function (x) { return x.strategy; });
 
   if (availableStrategies.length === 0) {

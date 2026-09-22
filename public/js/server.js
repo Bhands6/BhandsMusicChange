@@ -74,6 +74,39 @@ const kugouQrSessions = new Map();
 /** 验证码登录会话的设备 cookie（发验证码与登录必须同一设备标识） */
 let kugouCellCookies = null;
 
+function kugouApiAppDir() {
+  if (!kugouApiState.appDir) {
+    // 开发态：项目根/vendor/kugou-api；打包态：app.asar → app.asar.unpacked
+    let dir = path.resolve(__dirname, '..', '..', 'vendor', 'kugou-api');
+    dir = dir.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
+    kugouApiState.appDir = dir;
+  }
+  return kugouApiState.appDir;
+}
+
+/** 懒启动/复用内置酷狗 API 服务（幂等，全进程共享状态） */
+function ensureKugouApi() {
+  if (!kugouApiState.ensured) {
+    kugouApiState.nodeExe = process.env.KUGOU_NODE_EXE || undefined;
+    kugouApiState.ensured = kugouService.ensureRunning({
+      appDir: kugouApiAppDir(),
+      nodeExe: kugouApiState.nodeExe,
+      dataDir: kugouApiAppDir(),
+      logFile: path.join(kugouApiAppDir(), 'kugou-api.log')
+    }).then((r) => {
+      if (!r.ok) kugouApiState.ensured = null; // 失败允许下次重试
+      return r;
+    }).catch((e) => {
+      kugouApiState.ensured = null;
+      return { ok: false, reason: e.message };
+    });
+  }
+  return kugouApiState.ensured;
+}
+
+// 预启动内置酷狗 API 服务（fire-and-forget）：消除第一首歌解析时的冷启动等待
+ensureKugouApi();
+
 /* ==================== 服务器配置 ==================== */
 const PORT = process.env.PORT || 3000;           // 监听端口
 const HOST = process.env.HOST || '0.0.0.0';     // 监听地址
@@ -4559,34 +4592,6 @@ const server = http.createServer(async (req, res) => {
   //    否则服务端报 20010（二维码无效）——这里是踩过的坑，cookie 必须按 key 保存/回放。
   // ⚠️ kugouApiState / kugouQrSessions 定义在模块顶层（createServer 回调之外）——
   //    放在回调内会被每次请求重建，create 存的会话立刻丢失（实测踩坑：session=无）。
-
-  function kugouApiAppDir() {
-    if (!kugouApiState.appDir) {
-      // 开发态：项目根/vendor/kugou-api；打包态：app.asar → app.asar.unpacked
-      let dir = path.resolve(__dirname, '..', '..', 'vendor', 'kugou-api');
-      dir = dir.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
-      kugouApiState.appDir = dir;
-    }
-    return kugouApiState.appDir;
-  }
-  async function ensureKugouApi() {
-    if (!kugouApiState.ensured) {
-      kugouApiState.nodeExe = process.env.KUGOU_NODE_EXE || undefined;
-      kugouApiState.ensured = kugouService.ensureRunning({
-        appDir: kugouApiAppDir(),
-        nodeExe: kugouApiState.nodeExe,
-        dataDir: kugouApiAppDir(),
-        logFile: path.join(kugouApiAppDir(), 'kugou-api.log')
-      }).then((r) => {
-        if (!r.ok) kugouApiState.ensured = null; // 失败允许下次重试
-        return r;
-      }).catch((e) => {
-        kugouApiState.ensured = null;
-        return { ok: false, reason: e.message };
-      });
-    }
-    return kugouApiState.ensured;
-  }
 
   // GET /api/kugou/login/qr/create - 生成酷狗扫码登录二维码（并保存会话 cookie）
   // ⚠️ 必须走完整三步链路：qr/key 拿 key → /login/qr/create 把 key 转成授权链接二维码
