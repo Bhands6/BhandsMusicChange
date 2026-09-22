@@ -369,7 +369,13 @@ function serveStatic(res, filePath) {
   const ext = path.extname(filePath);
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); res.end('Not Found'); return; }
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'text/plain' });
+    // no-cache：本地服务，每次校验（可 304）——保证用户刷新后拿到最新前端代码。
+    // 之前无缓存头时 Chromium 会做启发式缓存（按 Last-Modified 的 10%），
+    // 导致改了 CSS/JS 后普通刷新仍用旧版本（2026-09-22 实测踩坑）。
+    res.writeHead(200, {
+      'Content-Type': MIME[ext] || 'text/plain',
+      'Cache-Control': 'no-cache',
+    });
     res.end(data);
   });
 }

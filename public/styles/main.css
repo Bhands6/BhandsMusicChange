@@ -526,6 +526,11 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 #user-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.1)}
 #user-vip-tag{font-size:9px;padding:2px 6px;border-radius:3px;background:linear-gradient(135deg,#fff3c2,var(--champagne),#c9963d);color:#201303;font-weight:800;letter-spacing:.5px;box-shadow:0 0 12px rgba(244,210,138,.24)}
 #user-vip-tag.qq{background:linear-gradient(135deg,#e7fff9,#00f5d4,#61a8ff);color:#03100f;box-shadow:0 0 12px rgba(0,245,212,.22)}
+/* 登录后账号入口为纯头像圆形按钮（不再显示昵称胶囊）；VIP/SVIP 徽章挂头像正下方 */
+/* :not(.multi-account) —— 双平台模式（.multi-account）保留原胶囊布局不受影响 */
+#user-btn.logged-in:not(.multi-account){position:relative!important;overflow:visible!important;width:44px!important;height:44px!important;min-width:0!important;padding:0!important;border-radius:50%!important;gap:0!important}
+#user-btn.logged-in:not(.multi-account) #user-avatar{width:100%!important;height:100%!important;border-radius:50%!important;display:block!important}
+#user-vip-tag{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);font-size:8px;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:2}
 .account-source-dot{width:7px;height:7px;border-radius:50%;background:var(--source-local);box-shadow:0 0 12px currentColor;flex-shrink:0}
 .account-source-dot.netease{background:var(--source-netease);color:var(--source-netease)}
 .account-source-dot.qq{background:var(--source-qq);color:var(--source-qq)}

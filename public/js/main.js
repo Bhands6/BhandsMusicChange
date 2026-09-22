@@ -23311,11 +23311,50 @@ function startQQLoginStatusAutoRefresh() {
     refreshQQLoginStatus().catch(function(e){ console.warn('QQ login auto refresh failed:', e); });
   }, 45000);
 }
+function clearUserBtnInlineLayout() {
+  // 清掉头像模式的 inline 布局（切回登录/双平台态时恢复 CSS 默认）
+  var btn = document.getElementById('user-btn');
+  if (!btn) return;
+  ['width', 'height', 'min-width', 'padding', 'border-radius', 'position', 'overflow', 'gap', 'flex'].forEach(function (k) {
+    btn.style.removeProperty(k);
+  });
+  var im = document.getElementById('user-avatar');
+  if (im) {
+    ['width', 'height', 'border-radius', 'display', 'flex'].forEach(function (k) { im.style.removeProperty(k); });
+  }
+}
+function applyUserBtnAvatarLayout() {
+  // 头像模式布局用 inline style 直接落定：
+  // CSS 覆盖（含 !important 规则）在本项目样式表里被更早的 `#user-btn.logged-out` 规则
+  // 意外压住（2026-09-22 实测：matches 为 false 却应用了该规则的值），inline 优先级最高、可靠。
+  var btn = document.getElementById('user-btn');
+  if (!btn) return;
+  // inline !important 兜底：CSS 规则（#user-btn.logged-in:not(.multi-account)）已能实现同样效果，
+  // 这里再落一层 inline 保证任何级联环境下都稳定生效（尺寸 44px 圆形、头像填满内容区 42px）
+  btn.style.setProperty('width', '44px', 'important');
+  btn.style.setProperty('height', '44px', 'important');
+  btn.style.setProperty('min-width', '0', 'important');
+  btn.style.setProperty('padding', '0', 'important');
+  btn.style.setProperty('border-radius', '50%', 'important');
+  btn.style.setProperty('position', 'relative', 'important');
+  btn.style.setProperty('overflow', 'visible', 'important');
+  btn.style.setProperty('gap', '0', 'important');
+  btn.style.setProperty('flex', '0 0 auto', 'important');
+  var img = document.getElementById('user-avatar');
+  if (img) {
+    img.style.setProperty('width', '42px', 'important');
+    img.style.setProperty('height', '42px', 'important');
+    img.style.setProperty('border-radius', '50%', 'important');
+    img.style.setProperty('display', 'block', 'important');
+    img.style.setProperty('flex', '0 0 auto', 'important');
+  }
+}
 function renderUserBtn() {
   var btn = document.getElementById('user-btn');
   if (!btn) return;
   btn.classList.remove('multi-account');
   if (dualAccountMode && hasAnyPlatformLogin()) {
+    clearUserBtnInlineLayout();
     activeAccountProvider = firstLoggedProvider();
     btn.classList.add('logged-in', 'multi-account');
     btn.classList.remove('logged-out');
@@ -23328,10 +23367,12 @@ function renderUserBtn() {
     btn.classList.add('logged-in');
     btn.classList.remove('logged-out');
     btn.title = dualAccountMode ? '账号信息 · 已启用双平台展示' : ((st.nickname || meta.label) + ' · 账号信息');
+    // 只显示头像（昵称见 title 悬停提示）；VIP/SVIP 徽章定位在头像正下方
     btn.innerHTML = '<img id="user-avatar" src="' + providerAvatarSrc(activeAccountProvider, st) + '">' +
-                    '<span>' + escHtml(st.nickname || meta.label) + '</span>' +
                     providerVipBadge(activeAccountProvider, st, 'user-vip-tag');
+    applyUserBtnAvatarLayout();
   } else {
+    clearUserBtnInlineLayout();
     btn.classList.remove('logged-in');
     btn.classList.add('logged-out');
     btn.title = '登录账号';
