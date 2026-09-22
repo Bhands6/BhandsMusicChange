@@ -71,6 +71,13 @@ body{font-family:'Readex Pro',system-ui,-apple-system,sans-serif;background:#000
 /* 切到启动页模式时，控制条自动淡化避免干扰 */
 body.mode-splash .mode-switch{opacity:.45}
 body.mode-splash .mode-switch:hover{opacity:1}
+/* 纯视频背景模式：隐藏全部文字层，只看视频原貌 */
+body.mode-clean .hero-nav,
+body.mode-clean .hero-title,
+body.mode-clean .hero-desc,
+body.mode-clean .stat,
+body.mode-clean .fade-bottom,
+body.mode-clean .enter-hint{display:none!important}
 body.mode-splash .hero-nav{display:none}
 body.mode-splash .enter-hint{display:block}
 </style>
@@ -79,6 +86,7 @@ body.mode-splash .enter-hint{display:block}
 <div class="mode-switch" id="modeSwitch">
   <button data-mode="full" class="on">完整 hero</button>
   <button data-mode="splash">启动页版</button>
+  <button data-mode="clean">纯视频背景</button>
   <span class="sep"></span>
   <button id="replayBtn">重播</button>
 </div>
@@ -147,11 +155,13 @@ body.mode-splash .enter-hint{display:block}
   var sw = document.getElementById('modeSwitch');
   function setMode(mode) {
     document.body.classList.toggle('mode-splash', mode === 'splash');
+    document.body.classList.toggle('mode-clean', mode === 'clean');
     var btns = sw.querySelectorAll('button[data-mode]');
     for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-mode') === mode);
   }
   var q = new URLSearchParams(location.search);
-  setMode(q.get('mode') === 'splash' ? 'splash' : 'full');
+  var initMode = q.get('mode');
+  setMode(initMode === 'splash' ? 'splash' : (initMode === 'clean' ? 'clean' : 'full'));
   sw.addEventListener('click', function (e) {
     var b = e.target.closest('button[data-mode]');
     if (b) { setMode(b.getAttribute('data-mode')); return; }
