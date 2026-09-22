@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>启动页背景特效 · 三方案预览</title>
+<style>
+:root{--accent:#f4d28a;--accent-rgb:244,210,138}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#08090c;color:#e8ecef;font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;overflow:hidden}
+.wrap{display:flex;flex-direction:column;height:100%}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(12,14,18,.92);flex:0 0 auto;flex-wrap:wrap}
+.tabs{display:flex;gap:6px}
+.tabs button{font-family:inherit;font-size:12.5px;padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:rgba(255,255,255,.62);cursor:pointer;transition:all .2s}
+.tabs button:hover{background:rgba(255,255,255,.09);color:#fff}
+.tabs button.on{background:rgba(var(--accent-rgb),.13);border-color:rgba(var(--accent-rgb),.5);color:var(--accent)}
+.meta{display:flex;align-items:center;gap:10px;flex:1;min-width:220px;font-size:12px;color:rgba(255,255,255,.5)}
+.meta .t{color:#fff;font-weight:500}
+.meta .chip{padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);font-size:11px}
+.meta .sw{display:inline-flex;gap:3px;align-items:center}
+.meta .sw i{width:11px;height:11px;border-radius:50%;display:block}
+.acts{display:flex;gap:8px;align-items:center}
+.acts button{font-family:inherit;font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.75);cursor:pointer;transition:all .2s}
+.acts button:hover{background:rgba(255,255,255,.10);color:#fff}
+.acts .hint{font-size:11px;color:rgba(255,255,255,.35)}
+.stage{flex:1;position:relative;background:#000}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);font-size:12px;pointer-events:none;z-index:5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="tabs" id="tabs">
+      <button data-i="1" class="on">① 奇点绽放</button>
+      <button data-i="2">② 数据深渊</button>
+      <button data-i="3">③ 量子裂变</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div class="acts">
+      <span class="hint">快捷键 1 / 2 / 3 切换 · R 重播</span>
+      <button id="replay">重播</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="loading" id="loading">加载中…</div>
+    <iframe id="stage" title="效果预览"></iframe>
+  </div>
+</div>
+<script>
+var PLANS = {
+  1: {
+    name: '奇点绽放', en: 'Singularity Bloom',
+    theme: '黑洞 / 宇宙奇点',
+    peak: 't≈3.3s',
+    peakDesc: '白金闪光 + 余晖环',
+    colors: ['#FFD700', '#2680FF', '#8040FF'],
+    calc: '中（旋转矩阵 ×2）',
+    fidelity: '★★★★☆'
+  },
+  2: {
+    name: '数据深渊', en: 'Data Abyss',
+    theme: '赛博数据风暴',
+    peak: 't≈3.1s',
+    peakDesc: '故障爆裂 + RGB 偏移',
+    colors: ['#00FF80', '#00CCFF', '#FF0066'],
+    calc: '低（纯 2D 函数）',
+    fidelity: '★★★★★'
+  },
+  3: {
+    name: '量子裂变', en: 'Quantum Fission',
+    theme: '能量汇聚 / 爆裂',
+    peak: 't≈3.0s',
+    peakDesc: '冲击环 + 晶体碎片',
+    colors: ['#FF3366', '#00FFCC', '#FFCC50'],
+    calc: '中（6 射线 × 投影）',
+    fidelity: '★★★☆☆'
+  }
+};
+var current = 1;
+var iframe = document.getElementById('stage');
+var loading = document.getElementById('loading');
+var metaEl = document.getElementById('meta');
+
+function renderMeta() {
+  var p = PLANS[current];
+  metaEl.innerHTML =
+    '<span class="t">' + p.name + '</span>' +
+    '<span style="color:rgba(255,255,255,.35)">' + p.en + '</span>' +
+    '<span class="chip">' + p.theme + '</span>' +
+    '<span class="chip">高潮 ' + p.peak + ' · ' + p.peakDesc + '</span>' +
+    '<span class="chip">' + p.calc + '</span>' +
+    '<span class="chip">2D 还原 ' + p.fidelity + '</span>' +
+    '<span class="sw">' + p.colors.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join('') + '</span>';
+}
+
+function load(i) {
+  current = i;
+  var btns = document.querySelectorAll('#tabs button');
+  for (var k = 0; k < btns.length; k++) btns[k].classList.toggle('on', Number(btns[k].getAttribute('data-i')) === i);
+  renderMeta();
+  loading.style.display = 'flex';
+  iframe.src = 'effect-' + i + '.html?t=' + Date.now();
+}
+iframe.addEventListener('load', function () { loading.style.display = 'none'; });
+
+document.getElementById('tabs').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-i]');
+  if (b) load(Number(b.getAttribute('data-i')));
+});
+document.getElementById('replay').addEventListener('click', function () { load(current); });
+window.addEventListener('keydown', function (e) {
+  if (e.key === '1' || e.key === '2' || e.key === '3') load(Number(e.key));
+  else if (e.key === 'r' || e.key === 'R') load(current);
+});
+
+load(1);
+</script>
+</body>
+</html>

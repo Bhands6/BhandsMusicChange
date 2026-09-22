@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方案② 数据深渊 · Data Abyss</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000}
+#splash{position:fixed;inset:0;z-index:300;background:#030308;display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:1;transition:opacity 1180ms cubic-bezier(.16,1,.3,1)}
+#splash::before{content:'';position:absolute;inset:-5%;z-index:0;background:repeating-linear-gradient(0deg,rgba(0,255,136,.012) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,100,255,.01) 0 1px,transparent 1px 56px),linear-gradient(180deg,#030308 0%,#020610 50%,#010204 100%);filter:blur(.3px);animation:splash-breathe 6s ease-in-out infinite alternate;pointer-events:none}
+#splash::after{content:'';position:absolute;inset:0;z-index:2;background:radial-gradient(ellipse at 50% 50%,transparent 25%,rgba(0,0,0,.82) 100%);pointer-events:none}
+#splash-canvas{position:absolute;inset:0;z-index:1}
+.splash-bg-noise{position:absolute;inset:0;z-index:3;opacity:.042;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");background-size:180px 180px;mix-blend-mode:screen;pointer-events:none}
+@keyframes splash-breathe{0%{opacity:.75;transform:scale(1)}100%{opacity:1;transform:scale(1.025)}}
+</style>
+</head>
+<body>
+<div id="splash">
+  <canvas id="splash-canvas"></canvas>
+  <div class="splash-bg-noise"></div>
+</div>
+<script>
+var splashAnimating = true;
+var splashCanvas = null, splashCtx = null;
+var splashGl = null, splashGlProgram = null, splashGlBuffer = null, splashGlUniforms = null;
+var splashW = 0, splashH = 0;
+var splashRainCols = [];
+var splashPixelRatio = 1;
+var splashStartedAt = performance.now();
+var reduceSplashMotion = false;
+try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) reduceSplashMotion = true; } catch (e) {}
+
+function splashClamp01(v) { return Math.max(0, Math.min(1, v)); }
+function splashSmoothstep(a, b, x) { var t = splashClamp01((x - a) / Math.max(.0001, b - a)); return t * t * (3 - 2 * t); }
+function splashEaseOut(t) { t = splashClamp01(t); return 1 - Math.pow(1 - t, 3); }
+
+function initSplashWebgl(canvas) {
+  var gl = null;
+  try {
+    gl = canvas.getContext('webgl', {
+      alpha: true, antialias: false, depth: false, stencil: false,
+      premultipliedAlpha: false, preserveDrawingBuffer: false,
+      powerPreference: 'high-performance'
+    }) || canvas.getContext('experimental-webgl');
+  } catch (e) { gl = null; }
+  if (!gl) return false;
+
+  var vs = 'attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*.5+.5;gl_Position=vec4(aPos,0.,1.);}';
+
+  var fs = [
+    'precision highp float;varying vec2 vUv;uniform vec2 uRes;uniform float uT;',
+    'float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
+    'float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}',
+    'float ease(float v){v=clamp(v,0.,1.);return v*v*(3.-2.*v);}',
+    'void main(){',
+    '  vec2 p=vUv*2.-1.;p.x*=uRes.x/max(uRes.y,1.);float t=uT;',
+    '  float intro=ease(t/.5);float build=ease((t-.2)/1.3);',
+    '  float climax=exp(-pow((t-3.1)/.3,2.));float calm=1.-.3*ease((t-4.3)/.5);',
+    '  vec3 col=vec3(.004,.006,.012);',
+    '  float rainAcc=0.;',
+    '  for(int i=0;i<2;i++){float fi=float(i);',
+    '    float xS=35.+fi*25.;float xId=floor(p.x*xS);',
+    '    float spd=.4+hash(vec2(xId,fi))*1.2;float y=p.y*5.+t*spd+fi*50.;',
+    '    float yId=floor(y);float cb=hash(vec2(xId*7.3,yId+fi*37.));',
+    '    float vis=step(.52,cb)*step(.4,hash(vec2(xId,fi+5.)));',
+    '    float trail=smoothstep(1.,.1,fract(y));',
+    '    float xMask=smoothstep(.48,.35,abs(fract(p.x*xS)-.5));',
+    '    rainAcc+=vis*trail*xMask*(.3+.3*fi);}',
+    '  col+=vec3(0.,1.,.5)*rainAcc*.15*(.5+.5*(1.-build*.7));',
+    '  if(p.y<0.){float depth=-p.y+.15;',
+    '    float gx=abs(fract(p.x/max(depth,.03)*.3+.5)-.5)*2.;',
+    '    float gy=abs(fract(1./max(depth,.03)*.5+t*.2)-.5)*2.;',
+    '    float grid=max(1.-gx*12.,1.-gy*12.);',
+    '    grid*=smoothstep(0.,-.5,p.y)*smoothstep(-1.5,-.2,p.y);',
+    '    col+=vec3(0.,.1,.35)*max(grid,0.)*.4;}',
+    '  vec2 hp=p*mat2(cos(t*.3),-sin(t*.3),sin(t*.3),cos(t*.3));',
+    '  float hA=atan(hp.y,hp.x);float hSec=1.0472;',
+    '  float hAs=mod(hA+hSec*.5,hSec)-hSec*.5;',
+    '  float hD=abs(length(hp)*cos(hAs)-.25);',
+    '  float w1=.003/max(hD,.002)*build;',
+    '  vec2 hp2=p*mat2(cos(-t*.5),-sin(-t*.5),sin(-t*.5),cos(-t*.5))*1.5;',
+    '  float hA2=atan(hp2.y,hp2.x);float hAs2=mod(hA2+hSec*.5,hSec)-hSec*.5;',
+    '  float hD2=abs(length(hp2)*cos(hAs2)-.25*.6);',
+    '  float w2=.003/max(hD2,.002)*build*.5;',
+    '  col+=vec3(0.,.8,1.)*(w1+w2)*.2*calm;',
+    '  float coreG=.008/max(length(p),.02)*build;col+=vec3(.1,.5,.8)*coreG*.2;',
+    '  float scanB=exp(-pow((p.y-(fract(t*.15)*2.-1.))*20.,2.))*.3;col+=vec3(.3,.8,1.)*scanB*build;',
+    '  if(climax>.01){float gR=floor(p.y*25.+t*30.);',
+    '    float gS=(hash(vec2(gR,floor(t*20.)))-.5)*climax*.3;',
+    '    float gM=step(.3,hash(vec2(gR,7.)));',
+    '    col.r+=gS*gM;col.b+=gS*.5*gM;}',
+    '  col+=vec3(.3,.9,1.)*climax*exp(-length(p)*3.)*.3;col+=vec3(1.,0.,.4)*climax*.05;',
+    '  col*=.85+.15*sin(vUv.y*uRes.y*.8+t*30.);',
+    '  col*=.95+.05*sin(vUv.y*uRes.y*3.);',
+    '  col+=(noise(vUv*uRes*.5+t*12.)-.5)*.018;',
+    '  float vig=smoothstep(1.5,.3,length(p*vec2(.75,1.)));',
+    '  col*=.3+.85*vig;col+=vec3(.005,.008,.015)*(1.-vig);',
+    '  col*=intro*calm;col=1.-exp(-max(col,0.)*1.4);',
+    '  gl_FragColor=vec4(col,1.);',
+    '}'
+  ].join('\n');
+
+  function compile(type, src) {
+    var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(s)); gl.deleteShader(s); return null; }
+    return s;
+  }
+  var vS = compile(gl.VERTEX_SHADER, vs), fS = compile(gl.FRAGMENT_SHADER, fs);
+  if (!vS || !fS) return false;
+  var prog = gl.createProgram(); gl.attachShader(prog, vS); gl.attachShader(prog, fS); gl.linkProgram(prog);
+  gl.deleteShader(vS); gl.deleteShader(fS);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.warn(gl.getProgramInfoLog(prog)); gl.deleteProgram(prog); return false; }
+  splashGl = gl; splashGlProgram = prog; splashGlBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, splashGlBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  splashGlUniforms = {
+    pos: gl.getAttribLocation(prog, 'aPos'),
+    res: gl.getUniformLocation(prog, 'uRes'),
+    tim: gl.getUniformLocation(prog, 'uT')
+  };
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  return true;
+}
+
+function drawSplashWebgl(elapsed) {
+  var gl = splashGl; if (!gl || !splashGlProgram || !splashGlUniforms) return;
+  gl.viewport(0, 0, splashCanvas.width, splashCanvas.height);
+  gl.useProgram(splashGlProgram); gl.bindBuffer(gl.ARRAY_BUFFER, splashGlBuffer);
+  gl.enableVertexAttribArray(splashGlUniforms.pos);
+  gl.vertexAttribPointer(splashGlUniforms.pos, 2, gl.FLOAT, false, 0, 0);
+  gl.uniform2f(splashGlUniforms.res, splashCanvas.width, splashCanvas.height);
+  gl.uniform1f(splashGlUniforms.tim, elapsed);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+(function initSplashCanvas() {
+  splashCanvas = document.getElementById('splash-canvas'); if (!splashCanvas) return;
+  if (!reduceSplashMotion && initSplashWebgl(splashCanvas)) { splashCtx = null; }
+  else { splashCtx = splashCanvas.getContext('2d'); }
+  function resize() {
+    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    splashPixelRatio = splashGl ? Math.min(1.25, dpr) : Math.min(1.6, dpr);
+    splashW = window.innerWidth; splashH = window.innerHeight;
+    splashCanvas.width = Math.max(1, Math.floor(splashW * splashPixelRatio));
+    splashCanvas.height = Math.max(1, Math.floor(splashH * splashPixelRatio));
+    if (splashCtx) splashCtx.setTransform(splashPixelRatio, 0, 0, splashPixelRatio, 0, 0);
+    if (splashGl) splashGl.viewport(0, 0, splashCanvas.width, splashCanvas.height);
+    splashRainCols = [];
+    var rc = reduceSplashMotion ? 30 : 80;
+    for (var i = 0; i < rc; i++)
+      splashRainCols.push({
+        x: Math.random() * splashW,
+        y: Math.random() * splashH * 1.5 - splashH * .5,
+        speed: 1 + Math.random() * 3,
+        alpha: .1 + Math.random() * .3
+      });
+  }
+  resize(); window.addEventListener('resize', resize); drawSplash();
+})();
+
+function drawSplash() {
+  if (!splashAnimating || (!splashCtx && !splashGl)) return;
+  requestAnimationFrame(drawSplash);
+  var elapsed = (performance.now() - splashStartedAt) / 1000;
+  if (splashGl && splashGlProgram) { drawSplashWebgl(elapsed); return; }
+
+  var ctx = splashCtx, W = splashW, H = splashH, t = elapsed;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#030308'; ctx.fillRect(0, 0, W, H);
+  var intro = splashSmoothstep(0, .5, t), build = splashSmoothstep(.2, 1.5, t);
+  var climax = Math.exp(-Math.pow((t - 3.1) / .3, 2));
+
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (var i = 0; i < splashRainCols.length; i++) {
+    var rc = splashRainCols[i]; rc.y += rc.speed;
+    if (rc.y > H + 200) rc.y = -200;
+    for (var seg = 0; seg < 15; seg++) {
+      var sy = rc.y - seg * 12; if (sy < -10 || sy > H + 10) continue;
+      var sa = (1 - seg / 15) * rc.alpha * intro;
+      ctx.fillStyle = 'rgba(0,255,136,' + sa.toFixed(3) + ')';
+      ctx.fillRect(rc.x, sy, 2, 8);
+    }
+  }
+  ctx.restore();
+
+  ctx.save(); ctx.strokeStyle = 'rgba(0,100,255,.15)'; ctx.lineWidth = 1;
+  var hy = H * .55;
+  for (var gi = -8; gi <= 8; gi++) { ctx.beginPath(); ctx.moveTo(W * .5 + gi * 30, hy); ctx.lineTo(W * .5 + gi * 200, H); ctx.stroke(); }
+  for (var gj = 0; gj < 8; gj++) {
+    var gy = hy + (H - hy) * Math.pow(gj / 8, 2) + t * 20 % 40;
+    ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+  }
+  ctx.restore();
+
+  var cx = W * .5, cy = H * .45, hexR = 60 * build;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,200,255,' + (.4 * build * intro) + ')';
+  ctx.lineWidth = 1.5; ctx.shadowColor = 'rgba(0,200,255,.3)'; ctx.shadowBlur = 10;
+  ctx.beginPath();
+  for (var vi = 0; vi <= 6; vi++) {
+    var va = vi * Math.PI / 3 + t * .3;
+    vi === 0 ? ctx.moveTo(cx + Math.cos(va) * hexR, cy + Math.sin(va) * hexR) : ctx.lineTo(cx + Math.cos(va) * hexR, cy + Math.sin(va) * hexR);
+  }
+  ctx.stroke();
+  ctx.beginPath();
+  for (var vi2 = 0; vi2 <= 6; vi2++) {
+    var va2 = -vi2 * Math.PI / 3 + t * .5;
+    vi2 === 0 ? ctx.moveTo(cx + Math.cos(va2) * hexR * .6, cy + Math.sin(va2) * hexR * .6) : ctx.lineTo(cx + Math.cos(va2) * hexR * .6, cy + Math.sin(va2) * hexR * .6);
+  }
+  ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
+
+  if (climax > .01) {
+    for (var g = 0; g < 10; g++) {
+      var gy2 = Math.random() * H, gw = Math.random() * 200 + 50, gx = Math.random() * (W - gw);
+      ctx.fillStyle = (Math.random() > .5 ? 'rgba(255,0,100,' : 'rgba(0,200,255,') + (climax * .3) + ')';
+      ctx.fillRect(gx, gy2, gw, 2 + Math.random() * 4);
+    }
+  }
+
+  ctx.save(); ctx.globalAlpha = .1; ctx.fillStyle = '#000';
+  for (var sy2 = 0; sy2 < H; sy2 += 3) ctx.fillRect(0, sy2, W, 1);
+  ctx.restore();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>方案③ 量子裂变 · Quantum Fission</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000}
+#splash{position:fixed;inset:0;z-index:300;background:#020406;display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:1;transition:opacity 1180ms cubic-bezier(.16,1,.3,1)}
+#splash::before{content:'';position:absolute;inset:-6%;z-index:0;background:radial-gradient(ellipse at 50% 50%,rgba(80,20,40,.08) 0%,transparent 55%),repeating-linear-gradient(45deg,rgba(255,80,120,.008) 0 1px,transparent 1px 68px),repeating-linear-gradient(-45deg,rgba(0,255,200,.006) 0 1px,transparent 1px 72px),linear-gradient(180deg,#020406 0%,#050308 50%,#010102 100%);filter:blur(.4px);animation:splash-breathe 7s ease-in-out infinite alternate;pointer-events:none}
+#splash::after{content:'';position:absolute;inset:0;z-index:2;background:radial-gradient(ellipse at 50% 50%,transparent 28%,rgba(0,0,0,.80) 100%);pointer-events:none}
+#splash-canvas{position:absolute;inset:0;z-index:1}
+.splash-bg-noise{position:absolute;inset:0;z-index:3;opacity:.035;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");background-size:180px 180px;mix-blend-mode:screen;pointer-events:none}
+@keyframes splash-breathe{0%{opacity:.7;transform:scale(1)}100%{opacity:1;transform:scale(1.03)}}
+</style>
+</head>
+<body>
+<div id="splash">
+  <canvas id="splash-canvas"></canvas>
+  <div class="splash-bg-noise"></div>
+</div>
+<script>
+var splashAnimating = true;
+var splashCanvas = null, splashCtx = null;
+var splashGl = null, splashGlProgram = null, splashGlBuffer = null, splashGlUniforms = null;
+var splashW = 0, splashH = 0;
+var splashShards = [];
+var splashPixelRatio = 1;
+var splashStartedAt = performance.now();
+var reduceSplashMotion = false;
+try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) reduceSplashMotion = true; } catch (e) {}
+
+function splashClamp01(v) { return Math.max(0, Math.min(1, v)); }
+function splashSmoothstep(a, b, x) { var t = splashClamp01((x - a) / Math.max(.0001, b - a)); return t * t * (3 - 2 * t); }
+function splashEaseOut(t) { t = splashClamp01(t); return 1 - Math.pow(1 - t, 3); }
+
+function initSplashWebgl(canvas) {
+  var gl = null;
+  try {
+    gl = canvas.getContext('webgl', {
+      alpha: true, antialias: false, depth: false, stencil: false,
+      premultipliedAlpha: false, preserveDrawingBuffer: false,
+      powerPreference: 'high-performance'
+    }) || canvas.getContext('experimental-webgl');
+  } catch (e) { gl = null; }
+  if (!gl) return false;
+
+  var vs = 'attribute vec2 aPos;varying vec2 vUv;void main(){vUv=aPos*.5+.5;gl_Position=vec4(aPos,0.,1.);}';
+
+  var fs = [
+    'precision highp float;varying vec2 vUv;uniform vec2 uRes;uniform float uT;',
+    'float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
+    'float noise(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),u.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);}',
+    'float ease(float v){v=clamp(v,0.,1.);return v*v*(3.-2.*v);}',
+    'void main(){',
+    '  vec2 p=vUv*2.-1.;p.x*=uRes.x/max(uRes.y,1.);float t=uT;',
+    '  float intro=ease(t/.5);float conv=ease((t-.1)/2.2);',
+    '  float climax=exp(-pow((t-3.0)/.3,2.));float expand=ease((t-2.9)/1.5);',
+    '  float calm=1.-.35*ease((t-4.5)/.5);float r=length(p);float ang=atan(p.y,p.x);',
+    '  vec3 col=vec3(.003,.004,.01);',
+    '  float rays=0.;',
+    '  for(int i=0;i<6;i++){float fi=float(i);float ra=fi*1.0472+t*.1;',
+    '    vec2 rd=vec2(cos(ra),sin(ra));',
+    '    float rc=dot(p,rd);float cc=dot(p,vec2(-rd.y,rd.x));',
+    '    float rw=.03*(1.-clamp(rc/1.2,0.,1.))*conv;',
+    '    float rg=rw/max(abs(cc),.004);',
+    '    rg*=smoothstep(1.2,.3,rc)*smoothstep(0.,.1,rc);',
+    '    float flow=.5+.5*sin(rc*15.+t*5.+fi);',
+    '    rays+=rg*flow*(.5+.5*hash(vec2(fi,0.)));}',
+    '  col+=mix(vec3(1.,.2,.4),vec3(0.,1.,.8),sin(ang*2.+t*.5)*.5+.5)*rays*.05*conv;',
+    '  float waves=0.;',
+    '  for(int i=0;i<4;i++){float fi=float(i);float wa=fi*1.5708+t*.2;',
+    '    vec2 wd=vec2(cos(wa),sin(wa));',
+    '    float wc=dot(p,wd);float wcr=dot(p,vec2(-wd.y,wd.x));',
+    '    float wavy=.03*sin(wc*8.+t*3.+fi*2.);',
+    '    float wd2=abs(wcr-wavy);',
+    '    float wg=.005/max(wd2,.004)*smoothstep(.8,.2,wc)*smoothstep(0.,.05,wc);',
+    '    waves+=wg;}',
+    '  col+=vec3(1.,.5,.2)*waves*.03*conv;',
+    '  float coreSz=.02+.03*conv+.08*climax;',
+    '  float coreG=coreSz/max(r,.005)*(.5+.5*sin(t*3.));',
+    '  col+=vec3(1.,.9,.7)*coreG*.15*conv;',
+    '  float flare=exp(-r*8.)*(.3+.7*conv+2.*climax);col+=vec3(1.)*flare*.2;',
+    '  for(int i=0;i<3;i++){float fi=float(i);float ringT=t-2.9-fi*.15;',
+    '    if(ringT>0.){float ringR=ringT*(1.2+fi*.3);',
+    '      float ringD=abs(r-ringR);float ringW=.015+ringT*.01;',
+    '      float ring=ringW/max(ringD,.006);ring*=exp(-ringT*1.5)*ease(ringT*5.);',
+    '      col+=mix(vec3(1.,.8,.3),vec3(0.,1.,.8),fi*.33)*ring*.06;}}',
+    '  if(expand>0.){float shardAcc=0.;',
+    '    for(int i=0;i<8;i++){float fi=float(i);',
+    '      float sa=fi*.785+hash(vec2(fi,0.))*.5;float ss=.8+hash(vec2(fi,1.))*.6;',
+    '      float sd=expand*ss;vec2 sDir=vec2(cos(sa),sin(sa));',
+    '      float sCo=dot(p,sDir);float sCr=dot(p,vec2(-sDir.y,sDir.x));',
+    '      float sLen=.15*expand;',
+    '      float alongS=smoothstep(sd-sLen*.5,sd-sLen*.5+.02,sCo)*(1.-smoothstep(sd+sLen*.5-.02,sd+sLen*.5,sCo));',
+    '      float sW=.004*max(0.,1.-abs(sCo-sd)/max(sLen*.5,.001));',
+    '      float shard=alongS*sW/max(abs(sCr),.002);',
+    '      shardAcc+=shard*(.5+.5*hash(vec2(fi,2.)));}',
+    '    col+=mix(vec3(0.,1.,.8),vec3(1.,.2,.4),.5)*shardAcc*.04*expand*(1.-expand*.3);}',
+    '  col+=vec3(1.)*climax*.5;col+=vec3(1.,.8,.5)*climax*exp(-r*2.)*.3;',
+    '  float dust=0.;',
+    '  for(int i=0;i<2;i++){float fi=float(i);vec2 dp=p*(25.+fi*15.)+t*vec2(.03+fi*.02,.02+fi*.01);',
+    '    float d=hash(floor(dp));float tw=.5+.5*sin(t*(1.+fi*.5)+d*30.);',
+    '    dust+=step(.96,d)*tw*smoothstep(.2,0.,length(fract(dp)-.5));}',
+    '  col+=vec3(.5,.6,.8)*dust*.1;',
+    '  col*=.93+.07*sin(vUv.y*uRes.y*.65+t*40.);',
+    '  col+=(noise(vUv*uRes*.5+t*15.)-.5)*.015;',
+    '  float vig=smoothstep(1.5,.2,length(p*vec2(.8,1.)));',
+    '  col*=.3+.85*vig;col+=vec3(.008,.005,.012)*(1.-vig);',
+    '  col*=intro*calm;col=1.-exp(-max(col,0.)*(1.3+.4*climax));',
+    '  gl_FragColor=vec4(col,1.);',
+    '}'
+  ].join('\n');
+
+  function compile(type, src) {
+    var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn(gl.getShaderInfoLog(s)); gl.deleteShader(s); return null; }
+    return s;
+  }
+  var vS = compile(gl.VERTEX_SHADER, vs), fS = compile(gl.FRAGMENT_SHADER, fs);
+  if (!vS || !fS) return false;
+  var prog = gl.createProgram(); gl.attachShader(prog, vS); gl.attachShader(prog, fS); gl.linkProgram(prog);
+  gl.deleteShader(vS); gl.deleteShader(fS);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { console.warn(gl.getProgramInfoLog(prog)); gl.deleteProgram(prog); return false; }
+  splashGl = gl; splashGlProgram = prog; splashGlBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, splashGlBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  splashGlUniforms = {
+    pos: gl.getAttribLocation(prog, 'aPos'),
+    res: gl.getUniformLocation(prog, 'uRes'),
+    tim: gl.getUniformLocation(prog, 'uT')
+  };
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
+  return true;
+}
+
+function drawSplashWebgl(elapsed) {
+  var gl = splashGl; if (!gl || !splashGlProgram || !splashGlUniforms) return;
+  gl.viewport(0, 0, splashCanvas.width, splashCanvas.height);
+  gl.useProgram(splashGlProgram); gl.bindBuffer(gl.ARRAY_BUFFER, splashGlBuffer);
+  gl.enableVertexAttribArray(splashGlUniforms.pos);
+  gl.vertexAttribPointer(splashGlUniforms.pos, 2, gl.FLOAT, false, 0, 0);
+  gl.uniform2f(splashGlUniforms.res, splashCanvas.width, splashCanvas.height);
+  gl.uniform1f(splashGlUniforms.tim, elapsed);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+(function initSplashCanvas() {
+  splashCanvas = document.getElementById('splash-canvas'); if (!splashCanvas) return;
+  if (!reduceSplashMotion && initSplashWebgl(splashCanvas)) { splashCtx = null; }
+  else { splashCtx = splashCanvas.getContext('2d'); }
+  function resize() {
+    var dpr = Math.max(1, window.devicePixelRatio || 1);
+    splashPixelRatio = splashGl ? Math.min(1.25, dpr) : Math.min(1.6, dpr);
+    splashW = window.innerWidth; splashH = window.innerHeight;
+    splashCanvas.width = Math.max(1, Math.floor(splashW * splashPixelRatio));
+    splashCanvas.height = Math.max(1, Math.floor(splashH * splashPixelRatio));
+    if (splashCtx) splashCtx.setTransform(splashPixelRatio, 0, 0, splashPixelRatio, 0, 0);
+    if (splashGl) splashGl.viewport(0, 0, splashCanvas.width, splashCanvas.height);
+    splashShards = [];
+    var sc = reduceSplashMotion ? 10 : 34;
+    var colors = ['rgba(255,50,100,', 'rgba(0,255,200,', 'rgba(255,200,80,'];
+    for (var i = 0; i < sc; i++) {
+      splashShards.push({
+        angle: (i / sc) * Math.PI * 2 + (Math.random() - .5) * .3,
+        dist: .4 + Math.random() * .8,
+        len: 28 + Math.random() * 70,
+        w: 1.5 + Math.random() * 4,
+        speed: .3 + Math.random() * .5,
+        phase: Math.random() * Math.PI * 2,
+        color: colors[i % 3],
+        alpha: .12 + Math.random() * .28
+      });
+    }
+  }
+  resize(); window.addEventListener('resize', resize); drawSplash();
+})();
+
+function drawSplash() {
+  if (!splashAnimating || (!splashCtx && !splashGl)) return;
+  requestAnimationFrame(drawSplash);
+  var elapsed = (performance.now() - splashStartedAt) / 1000;
+  if (splashGl && splashGlProgram) { drawSplashWebgl(elapsed); return; }
+
+  var ctx = splashCtx, W = splashW, H = splashH, t = elapsed;
+  var cx = W * .5, cy = H * .5;
+  ctx.clearRect(0, 0, W, H);
+
+  var bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, W * .7);
+  bg.addColorStop(0, '#030508'); bg.addColorStop(1, '#010102');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  var intro = splashSmoothstep(0, .5, t);
+  var conv = splashSmoothstep(.1, 2.3, t);
+  var climax = Math.exp(-Math.pow((t - 3.0) / .3, 2));
+  var expand = splashSmoothstep(2.9, 4.4, t);
+  var calm = 1 - .35 * splashSmoothstep(4.5, 5.0, t);
+
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  var rayColors = [
+    'rgba(255,50,100,', 'rgba(0,255,200,', 'rgba(255,200,80,',
+    'rgba(255,50,100,', 'rgba(0,255,200,', 'rgba(255,200,80,'
+  ];
+  for (var ri = 0; ri < 6; ri++) {
+    var ra = ri * Math.PI / 3 + t * .1;
+    var rx = Math.cos(ra), ry = Math.sin(ra);
+    var segLen = W * .55 * conv;
+    var flow = .5 + .5 * Math.sin(t * 5 + ri);
+    var rAlpha = .08 * conv * flow * intro;
+    if (rAlpha <= 0) continue;
+    var rg = ctx.createLinearGradient(cx, cy, cx + rx * segLen, cy + ry * segLen);
+    rg.addColorStop(0, rayColors[ri] + rAlpha.toFixed(3) + ')');
+    rg.addColorStop(.6, rayColors[ri] + (rAlpha * .4).toFixed(3) + ')');
+    rg.addColorStop(1, rayColors[ri] + '0)');
+    ctx.strokeStyle = rg;
+    ctx.lineWidth = 3 * (1 - expand * .5) * conv;
+    ctx.shadowColor = rayColors[ri] + '.15)';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + rx * segLen, cy + ry * segLen);
+    ctx.stroke();
+  }
+  ctx.shadowBlur = 0;
+
+  var corePulse = .5 + .5 * Math.sin(t * 3);
+  var coreR = (12 + 20 * conv + 30 * climax) * calm;
+  var cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreR * 3);
+  cg.addColorStop(0, 'rgba(255,245,220,' + (.7 * conv * corePulse * intro * calm) + ')');
+  cg.addColorStop(.3, 'rgba(255,180,100,' + (.15 * conv * intro * calm) + ')');
+  cg.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = cg;
+  ctx.fillRect(cx - coreR * 3, cy - coreR * 3, coreR * 6, coreR * 6);
+
+  if (climax > .01) {
+    ctx.fillStyle = 'rgba(255,255,255,' + (climax * .35) + ')';
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  for (var ringI = 0; ringI < 3; ringI++) {
+    var ringT = t - 2.9 - ringI * .15;
+    if (ringT <= 0 || ringT > 2) continue;
+    var ringR = ringT * Math.max(W, H) * (.3 + ringI * .1);
+    var ringA = Math.exp(-ringT * 1.5) * splashSmoothstep(0, .2, ringT) * .25;
+    if (ringA < .005) continue;
+    var ringCol = ['rgba(255,200,80,', 'rgba(0,255,200,', 'rgba(130,80,255,'][ringI];
+    ctx.beginPath(); ctx.arc(cx, cy, ringR, 0, Math.PI * 2);
+    ctx.strokeStyle = ringCol + ringA.toFixed(3) + ')';
+    ctx.lineWidth = 2 + ringT * 2;
+    ctx.shadowColor = ringCol + '.4)';
+    ctx.shadowBlur = 18;
+    ctx.stroke(); ctx.shadowBlur = 0;
+  }
+
+  if (expand > .01) {
+    var shardGlobal = expand * (1 - expand * .3) * calm * intro;
+    for (var si = 0; si < splashShards.length; si++) {
+      var sh = splashShards[si];
+      var travel = expand * sh.dist * Math.max(W, H) * .5;
+      var sdx = Math.cos(sh.angle + Math.sin(t * .3) * .05);
+      var sdy = Math.sin(sh.angle + Math.sin(t * .3) * .05);
+      var sx = cx + sdx * travel + Math.sin(t * 1.7 + sh.phase) * 6;
+      var sy = cy + sdy * travel + Math.cos(t * 1.3 + sh.phase) * 6;
+      var sa = sh.alpha * shardGlobal * (.6 + .4 * Math.sin(t * 5 + sh.phase));
+      if (sa <= 0) continue;
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(Math.atan2(sdy, sdx));
+      ctx.fillStyle = sh.color + sa.toFixed(3) + ')';
+      ctx.shadowColor = sh.color + Math.min(.3, sa * 1.5).toFixed(3) + ')';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.moveTo(-sh.len * .5, -sh.w * .5);
+      ctx.lineTo(sh.len * .5, -sh.w * .2);
+      ctx.lineTo(sh.len * .5 + sh.w, sh.w * .3);
+      ctx.lineTo(-sh.len * .5 + sh.w * .2, sh.w * .5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = .06;
+  ctx.fillStyle = '#000';
+  for (var sy2 = (t * 30) % 4; sy2 < H; sy2 += 4) ctx.fillRect(0, sy2, W, 1);
+  ctx.restore();
+}
+</script>
+</body>
+</html>
