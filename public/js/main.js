@@ -47,7 +47,7 @@ var LYRIC_LAYOUT_STORE_KEY = 'bhandsmusic-lyric-layout-v1';
 var VISUAL_PRESET_SCHEMA = 'skull-preset-v2';
 // 视觉预设索引上限：presetMeta 定义在文件后部，而启动恢复（readSavedPlaybackVisualPreset /
 // readSavedLyricLayout）先于其执行，故此处给初始化期兜底值；presetMeta 定义后按其长度校准
-var VISUAL_PRESET_INDEX_MAX = 8;
+var VISUAL_PRESET_INDEX_MAX = 17;
 // 歌词显示模式合法值：启动恢复（734 行附近）先于 6300 行区的显示模式函数区执行，
 // 故常量定义在文件头部（normalizeLyricDisplayMode 依赖）
 var STAGE_LYRIC_DISPLAY_MODES = { single: 1, dual: 1, triple: 1, cinema: 1, custom: 1 };
@@ -3163,10 +3163,13 @@ function makeDotTexture() {
   return tex;
 }
 var dotTexture = makeDotTexture();
+var glyphAtlasTexture = (typeof WebFxPresets !== 'undefined' && WebFxPresets.makeGlyphAtlasTexture)
+  ? WebFxPresets.makeGlyphAtlasTexture(THREE)
+  : makeDotTexture();
 
 // ============================================================
 //  主粒子系统
-//   - 5 个 preset, 每个预设走完全不同的 pos 计算
+//   - 预设 0–5 原 shader + 9–17 Web 移植（极光…字符雨）；6–8 为安魂/音域回响独立层
 //   - 共享: 封面色采样, 鼠标交互, 粒子大小限制
 // ============================================================
 var PLANE_SIZE = 4.8;
@@ -3225,6 +3228,8 @@ function applyCoverParticleResolution(value, opts) {
   if (bloomParticles) bloomParticles.geometry = nextGeo;
   if (oldGeo && oldGeo !== nextGeo) oldGeo.dispose();
   uniforms.uBurstAmt.value = Math.max(uniforms.uBurstAmt.value, 0.18);
+  if (uniforms.uGrid) uniforms.uGrid.value = grid;
+  if (typeof WebFxPresets !== 'undefined') WebFxPresets.state.activeGrid = grid;
   if (opts.reload !== false) scheduleCoverResolutionReload();
 }
 
@@ -3320,7 +3325,17 @@ var uniforms = {
   uParticleDim:{ value: 1 },          // 覆盖层打开时只压低粒子背景, 不影响 3D 卡片
   uFloatAlpha: { value: 0 },          // 空场/浮空粒子透明度
   uLoading:    { value: 0 },          // 加载动画混合度 0..1 (1 = 完全聚成圆环)
+  // Web 移植特效（预设 9–17）
+  uBurstAge:   { value: 0 },
+  uGalaxyAge:  { value: 0 },
+  uMeteorSize: { value: 140 },
+  uGrid:       { value: GRID_X },
+  uJellyAura:  { value: 240 },
+  uResolution: { value: new THREE.Vector2(1, 1) },
+  uGlyphAtlas: { value: null },
 };
+uniforms.uGlyphAtlas.value = glyphAtlasTexture;
+uniforms.uGrid.value = GRID_X;
 installRenderPowerHooks();
 applyRendererPowerMode();
 
@@ -3334,6 +3349,8 @@ uniform float uVinylSpin;
 uniform float uColorBoost, uScatter, uCoverRes, uBgFade;
 uniform float uHasCover, uHasDepth, uEdgeEnabled, uAiBoost;
 uniform float uMouseActive, uPixel, uColorMixT, uLoading;
+uniform float uBurstAge, uGalaxyAge, uMeteorSize, uGrid, uJellyAura;
+uniform vec2 uResolution;
 uniform sampler2D uCoverTex, uPrevCoverTex, uEdgeTex, uRippleTex;
 uniform int uRippleCount;
 uniform vec2 uMouseXY, uHandXY;
@@ -3343,7 +3360,16 @@ uniform float uTintStrength;
 attribute vec2 aUv;
 attribute float aRand;
 varying vec3 vColor;
-varying float vBright, vRipple, vEdgeBoost, vAlpha, vSourceLum;
+// ANGLE/D3D11 下 MAX_VARYING_VECTORS=8，多个 varying float 不会合并；打包省槽位
+varying vec4 vPack0;   // .x=vBright .y=vRipple .z=vEdgeBoost .w=vAlpha
+varying vec4 vPack1;   // .x=vSourceLum .y=vMeteor .z=拖尾方向角 .w=尺寸档位/字形索引
+varying vec2 vMeteorCenter;
+#define vBright    vPack0.x
+#define vRipple    vPack0.y
+#define vEdgeBoost vPack0.z
+#define vAlpha     vPack0.w
+#define vSourceLum vPack1.x
+#define vMeteor    vPack1.y
 
 #define PI 3.14159265359
 
@@ -3383,6 +3409,9 @@ float snoise(vec3 v){
 float hash11(float p) {
   return fract(sin(p * 127.1) * 43758.5453123);
 }
+
+// ---- Web 移植特效常量 / 辅助（极光…字符雨）----
+${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_CONSTANTS : ''}
 
 vec2 safeCoverUv(vec2 uv) {
   return clamp(uv, vec2(0.0012), vec2(0.9988));
@@ -3443,6 +3472,18 @@ void main(){
   float lumVal   = edge.a;
   float maxRippleAmp = 0.0;
   float rippleZ = 0.0;
+  // Web 移植：桌面 9–17 映射到 Web 分支索引 6–14；6–8 走壁纸底
+  float uEff = uPreset;
+  if (uPreset > 8.5) uEff = uPreset - 3.0;
+  else if (uPreset > 5.5) uEff = 5.0;
+  float galaxyStar = 1.0;
+  float galaxyTwinkle = 0.5;
+  float galaxyCore = 1.0;
+  vMeteor = 0.0;
+  vMeteorCenter = vec2(0.0);
+  vPack1.z = 0.0;
+  vPack1.w = 0.0;
+  float sizeOverride = -1.0;
 
   vec3 defaultColor = mix(
     vec3(0.36, 0.28, 0.72),
@@ -3600,11 +3641,9 @@ void main(){
   }
 
   // ====================================================
-  //  Preset 5: WALLPAPER PULSE
-  //  Layered music-particle wallpaper: aurora ribbons, depth sparks,
-  //  and cover-colored audio flow.
+  //  Preset 5: WALLPAPER PULSE + 桌面 6–8（安魂/音域回响）主粒子底
   // ====================================================
-  else {
+  else if (uPreset < 8.5) {
     float bassGlow = smoothstep(0.07, 0.78, uBass) * 0.34 + uBeat * 0.014;
     float midGlow = smoothstep(0.07, 0.62, uMid) * 0.42;
     float highGlow = smoothstep(0.04, 0.46, uTreble) * 0.46;
@@ -3675,6 +3714,9 @@ void main(){
     }
   }
 
+  // ---- Web 移植 9 预设分支（uEff = 6..14）----
+${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_BRANCHES : ''}
+
   // ====================================================
   //  鼠标交互 (仅 SILK)
   // ====================================================
@@ -3738,7 +3780,7 @@ void main(){
   vColor = mix(vColor, tintedColor, clamp(uTintStrength, 0.0, 1.0) * (1.0 - blackParticleGuard));
 
   vBright = 0.82 + maxRippleAmp * 0.55 + uBass * 0.10 + edgeBoost * 0.30 + uEnergy * 0.05 + uBurstAmt * 0.40;
-  if (uPreset > 4.5) {
+${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_BRIGHT_PATCH : '  if (uPreset > 4.5) {'}
     vBright = 0.94 + maxRippleAmp * 0.34 + uBass * 0.020 + uEnergy * 0.026 + uBurstAmt * 0.025;
   } else if (uPreset > 3.5) {
     vBright = 0.94 + maxRippleAmp * 0.64 + uBass * 0.08 + edgeBoost * 0.12 + uEnergy * 0.05 + uBeat * 0.16 + uBurstAmt * 0.16;
@@ -3785,45 +3827,108 @@ void main(){
   float depthSize = 36.0 / max(0.5, -mvPos.z);
   float audioBoost = 1.0 + maxRippleAmp * 0.7 + edgeBoost * 0.55 + uBeat * 0.30 + uBurstAmt * 0.5;
   float sz = clamp(depthSize * audioBoost, 1.05, 4.95);
-  if (uPreset > 4.5) {
+${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_SIZE_PATCH : '  if (uPreset > 4.5) {'}
     float flowDrive = uBass * 0.070 + uMid * 0.046 + uTreble * 0.060 + uBurstAmt * 0.090 + uBeat * 0.055;
     sz = clamp(depthSize * (1.05 + flowDrive), 1.00, 5.45);
   } else if (uPreset > 3.5) {
     float ringDrive = uBass * 0.30 + uMid * 0.18 + uTreble * 0.22 + uBeat * 0.30;
     sz = clamp(depthSize * (0.90 + ringDrive * 0.62), 1.05, 3.90);
   }
+  if (sizeOverride > 0.0) sz = sizeOverride;
   // 加载态下粒子稍大
   sz = mix(sz, sz * loadingMistSize, uLoading);
   gl_PointSize = sz * uPixel * uPointScale;
   gl_Position = projectionMatrix * mvPos;
+  vMeteorCenter = (gl_Position.xy / gl_Position.w * 0.5 + 0.5) * uResolution;
 }
 `;
 
 // ----- 片元 Shader -----
 var fs = `
 precision highp float;
-uniform sampler2D uDotTex;
-uniform float uAlpha, uPreset, uParticleDim;
+uniform sampler2D uDotTex, uGlyphAtlas;
+uniform float uAlpha, uPreset, uParticleDim, uMeteorSize;
 varying vec3 vColor;
-varying float vBright, vRipple, vEdgeBoost, vAlpha, vSourceLum;
+varying vec4 vPack0;
+varying vec4 vPack1;
+varying vec2 vMeteorCenter;
+#define vBright    vPack0.x
+#define vRipple    vPack0.y
+#define vEdgeBoost vPack0.z
+#define vAlpha     vPack0.w
+#define vSourceLum vPack1.x
+#define vMeteor    vPack1.y
 
 void main(){
-  vec4 tex = texture2D(uDotTex, gl_PointCoord);
-  if (tex.a < 0.02) discard;
+  if (vMeteor > 0.002) {
+    vec2 vMeteorAxis = vec2(cos(vPack1.z), sin(vPack1.z));
+    vec2 d = gl_FragCoord.xy - vMeteorCenter;
+    float along = dot(d, vMeteorAxis);
+    float perp  = dot(d, vec2(-vMeteorAxis.y, vMeteorAxis.x));
+    float L  = max(uMeteorSize, 1.0) * 0.82;
+    float hf = L * 0.5;
+    float axialT = (hf - along) / L;
+    float u  = clamp(axialT, 0.0, 1.0);
+    float wMax = max(uMeteorSize * 0.013, 1.4);
+    float profileW = 0.62 + 0.38 * sin(u * 3.14159 * 0.92) - 0.38 * u;
+    float w  = wMax * clamp(profileW, 0.10, 1.2);
+    float headCut = clamp(1.0 + axialT * 14.0, 0.0, 1.0);
+    w *= mix(0.20, 1.0, headCut);
+    float cc = perp / max(w, 0.0001);
+    float tail = 1.0 - u;
+    float prof = tail * tail * tail * tail * headCut;
+    float body = exp(-cc * cc) * prof;
+    float ha = along - hf;
+    float hr = max(uMeteorSize * 0.018, 1.5);
+    float headW = max(wMax * 0.62, 0.8);
+    float head = exp(-(ha * ha) / (hr * hr) - (perp * perp) / (headW * headW)) * headCut;
+    float a = clamp(body * 0.90 + head * 0.50, 0.0, 1.0) * vMeteor * uAlpha;
+    if (a < 0.004) discard;
+    vec3 col = mix(vColor, vec3(1.0), clamp(prof * 0.30 + head * 0.95, 0.0, 1.0));
+    gl_FragColor = vec4(col * (0.95 + head * 0.45), a);
+    return;
+  }
   vec3 col = vColor * vBright;
-  col = mix(col, col * 1.3 + vec3(0.05), vEdgeBoost * 0.35);
-  col = mix(col, col * 1.2, vRipple * 0.4);
-  float keepBlack = 1.0 - smoothstep(0.025, 0.115, vSourceLum);
-  float nonBlack = 1.0 - keepBlack;
-  float dotDist = length(gl_PointCoord - vec2(0.5)) * 2.0;
-  float readableRim = smoothstep(0.44, 0.94, dotDist) * (1.0 - smoothstep(0.94, 1.08, dotDist)) * tex.a;
-  float outLum = dot(col, vec3(0.299, 0.587, 0.114));
-  float lightParticle = smoothstep(0.50, 0.82, outLum) * nonBlack;
-  float darkParticle = (1.0 - smoothstep(0.20, 0.50, outLum)) * nonBlack;
-  col = mix(col, vec3(0.0), readableRim * lightParticle * 0.38);
-  col = mix(col, vec3(1.0), readableRim * darkParticle * 0.20);
+  float spriteAlpha;
+  if (uPreset > 16.5) {
+    float g = clamp(vPack1.w, 0.0, 80.0);
+    float gx = mod(g, 9.0);
+    float gy = floor(g / 9.0);
+    vec2 auv = vec2((gx + gl_PointCoord.x) / 9.0, 1.0 - (gy + gl_PointCoord.y) / 9.0);
+    vec4 tex = texture2D(uGlyphAtlas, auv);
+    spriteAlpha = tex.a;
+    if (spriteAlpha < 0.02) discard;
+    col = mix(col, col * 1.3 + vec3(0.04), vRipple * 0.35);
+  } else if (uPreset > 13.5) {
+    float d = distance(gl_PointCoord, vec2(0.5));
+    spriteAlpha = pow(max(0.0, 1.0 - d), 2.6);
+    if (spriteAlpha < 0.004) discard;
+    col = mix(col, col * 1.25 + vec3(0.04), vRipple * 0.3);
+  } else if (uPreset > 12.5 && uPreset < 13.5) {
+    float d = distance(gl_PointCoord, vec2(0.5));
+    spriteAlpha = pow(max(0.0, 1.0 - d), 8.0);
+    if (spriteAlpha < 0.004) discard;
+    col = mix(col, col * 1.2, vRipple * 0.4);
+  } else {
+    vec4 tex = texture2D(uDotTex, gl_PointCoord);
+    if (tex.a < 0.02) discard;
+    spriteAlpha = tex.a;
+    col = mix(col, col * 1.3 + vec3(0.05), vEdgeBoost * 0.35);
+    col = mix(col, col * 1.2, vRipple * 0.4);
+    float keepBlack = 1.0 - smoothstep(0.025, 0.115, vSourceLum);
+    float nonBlack = 1.0 - keepBlack;
+    float dotDist = length(gl_PointCoord - vec2(0.5)) * 2.0;
+    float readableRim = smoothstep(0.44, 0.94, dotDist) * (1.0 - smoothstep(0.94, 1.08, dotDist)) * tex.a;
+    float rimKeep = (uPreset > 3.5 && uPreset < 4.5) ? 0.30 : 1.0;
+    readableRim *= rimKeep;
+    float outLum = dot(col, vec3(0.299, 0.587, 0.114));
+    float lightParticle = smoothstep(0.50, 0.82, outLum) * nonBlack;
+    float darkParticle = (1.0 - smoothstep(0.20, 0.50, outLum)) * nonBlack;
+    col = mix(col, vec3(0.0), readableRim * lightParticle * 0.38);
+    col = mix(col, vec3(1.0), readableRim * darkParticle * 0.20);
+  }
   col = clamp(col, vec3(0.0), vec3(1.6));
-  gl_FragColor = vec4(col, tex.a * uAlpha * uParticleDim * vAlpha);
+  gl_FragColor = vec4(col, spriteAlpha * uAlpha * uParticleDim * vAlpha);
 }
 `;
 
@@ -3840,18 +3945,38 @@ precision highp float;
 uniform sampler2D uDotTex;
 uniform float uAlpha, uBloomStrength, uPreset, uParticleDim;
 varying vec3 vColor;
-varying float vBright, vRipple, vEdgeBoost, vAlpha, vSourceLum;
+varying vec4 vPack0;
+varying vec4 vPack1;
+#define vBright    vPack0.x
+#define vRipple    vPack0.y
+#define vEdgeBoost vPack0.z
+#define vAlpha     vPack0.w
+#define vSourceLum vPack1.x
+#define vMeteor    vPack1.y
 
 void main(){
-  vec4 tex = texture2D(uDotTex, gl_PointCoord);
-  if (tex.a < 0.01) discard;
-  float soft = tex.a * tex.a;
+  float soft;
+  if (uPreset > 13.5 && uPreset < 16.5) {
+    float d = distance(gl_PointCoord, vec2(0.5));
+    soft = pow(max(0.0, 1.0 - d), 2.6);
+    if (soft < 0.004) discard;
+  } else if (uPreset > 12.5 && uPreset < 13.5) {
+    float d = distance(gl_PointCoord, vec2(0.5));
+    soft = pow(max(0.0, 1.0 - d), 8.0);
+    if (soft < 0.004) discard;
+  } else {
+    vec4 tex = texture2D(uDotTex, gl_PointCoord);
+    if (tex.a < 0.01) discard;
+    soft = tex.a * tex.a;
+  }
   vec3 col = vColor * (0.55 + vBright * 0.62);
   col = mix(col, col + vec3(0.22, 0.18, 0.10), vEdgeBoost * 0.35);
   col = clamp(col, vec3(0.0), vec3(1.8));
   float pulse = 1.0 + vRipple * 0.65;
   float keepBlack = 1.0 - smoothstep(0.025, 0.115, vSourceLum);
   float bloomKeep = 1.0 - keepBlack * 0.92;
+  bloomKeep *= 1.0 - vMeteor * 0.92;
+  bloomKeep *= 1.0 - step(16.5, uPreset);
   gl_FragColor = vec4(col, soft * uAlpha * uBloomStrength * uParticleDim * pulse * 0.55 * vAlpha * bloomKeep);
 }
 `;
@@ -6810,6 +6935,53 @@ function unparkAllLyricLines() {
       m.userData.parked = false;
       m.userData.age = 0;
     }
+  }
+}
+/** 只回收「停驻」上文行（普通退场行不动），供行数切换后按历史重建 */
+function disposeParkedLyricLines() {
+  if (!Array.isArray(stageLyrics.outgoing)) return;
+  for (var i = stageLyrics.outgoing.length - 1; i >= 0; i--) {
+    var m = stageLyrics.outgoing[i];
+    if (m && m.userData && m.userData.parked) {
+      disposeLyricMesh(m);
+      stageLyrics.outgoing.splice(i, 1);
+    }
+  }
+}
+/**
+ * 按当前行号 + 新的 park 槽位数，从歌词历史重建上方停驻行。
+ * 行数切换时不能只 unpark 旧上文：那会把「前面的歌词」全部退场且不会自动回来，
+ * 必须从 lyricsLines[currentIdx-rank] 补建。push 顺序从远到近，
+ * 与 showStageLine 自然滚动时的 outgoing 顺序一致（expire 从头卸下最旧）。
+ */
+function rebuildParkedLyricLines(idx) {
+  disposeParkedLyricLines();
+  var keep = stageLyricParkCount();
+  if (keep <= 0) return;
+  if (typeof idx !== 'number' || idx < 0) {
+    if (stageLyrics.current && stageLyrics.current.userData && typeof stageLyrics.current.userData.lineIdx === 'number') {
+      idx = stageLyrics.current.userData.lineIdx;
+    } else {
+      return;
+    }
+  }
+  if (!Array.isArray(lyricsLines) || !lyricsLines.length) return;
+  for (var rank = keep; rank >= 1; rank--) {
+    var lineIdx = idx - rank;
+    if (lineIdx < 0) continue;
+    var line = lyricsLines[lineIdx];
+    if (!line || !line.text) continue;
+    var mesh = buildLyricMesh(String(line.text), true);
+    if (!mesh) continue;
+    mesh.userData.parked = true;
+    mesh.userData.lineIdx = lineIdx;
+    mesh.userData.age = 0.42;
+    var ps = parkLyricStyleFor(rank);
+    mesh.position.set(0, ps.y, ps.z);
+    mesh.scale.setScalar(ps.scale);
+    stageLyrics.outgoing.push(mesh);
+    if (stageLyrics.group) stageLyrics.group.add(mesh);
+    syncMeshTranslation(mesh, line, 'parked');
   }
 }
 // 多行歌词布局样式：当前行居中，上下按档位递减（rank/slot 1 起计；公式与上游 cinema 两档吻合，更高档平滑外推）
@@ -17278,6 +17450,7 @@ async function playQueueAt(idx, opts) {
   if (!opts.preserveHomeState) homeSuppressed = false;
   currentIdx = idx;
   trackSwitchToken++;
+  if (typeof WebFxPresets !== 'undefined') WebFxPresets.onTrackSwitch(uniforms, uniforms.uTime.value);
   // cuefield：普通切歌清空自动过渡状态；automix 自己的 handoff 调用则保住正在交接的 B deck
   if (typeof resetCuefieldAutoMix === 'function') {
     resetCuefieldAutoMix(opts.cuefieldAutoMix ? 'cuefield-handoff' : 'track-switch',
@@ -18226,9 +18399,13 @@ function syncLyricDisplayModeSeg() {
   }
 }
 function refreshStageLyricDisplayMode() {
-  // 行数变化：停驻/预告整体退场重建，当前行保留（tick 主分支按新槽位数自动同步）
-  unparkAllLyricLines();
+  // 行数变化：上方停驻行按歌词历史重建（不能只 unpark —— 前文会消失且不会自动回来），
+  // 预告行按新槽位重建，当前行保留。
+  rebuildParkedLyricLines(stageLyrics.currentIdx);
   clearUpcomingLyricLines();
+  if (stageLyricUpcomingCount() > 0 && stageLyrics.currentIdx >= 0 && lyricsLines.length) {
+    syncUpcomingLyricLines(stageLyrics.currentIdx);
+  }
   if (stageLyrics.current && stageLyrics.current.userData) stageLyrics.current.userData.age = 0.48;
 }
 // 控制台"歌词行数"五态切换（对齐上游 setLyricDisplayMode）
@@ -19230,6 +19407,9 @@ var presetMeta = [
   { name: '音域回响', nameHtml: '音域回响 <span class="pc-name-en">Sonic-Topography</span>', desc: '作者 Ajin', descHtml: '作者 <span class="pc-author-ajin">Ajin</span>' },
   { name: '音域回响', nameHtml: '音域回响 <span class="pc-name-en">Wallpaper Engine</span>', desc: '作者 CmzYa' },
 ];
+if (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_META) {
+  for (var wfi = 0; wfi < WebFxPresets.PRESET_META.length; wfi++) presetMeta.push(WebFxPresets.PRESET_META[wfi]);
+}
 var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 5-2 8 0s5 2 8 0M3 10c3-2 5-2 8 0s5 2 8 0M3 18c3-2 5-2 8 0s5 2 8 0"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
@@ -19241,7 +19421,10 @@ var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 12c2-2.5 4-2.5 6 0s4 2.5 6 0 4-2.5 6 0"/><path d="M3 6c2-2 4-2 6 0s4 2 6 0 4-2 6 0"/><circle cx="18" cy="5" r="1.2" fill="currentColor"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"/><path d="M5 15c1.4-4 2.8-4 4.2 0s2.8 4 4.2 0 2.8-4 4.6 0"/><path d="M4 10c2-2 4-2 6 0s4 2 6 0 3-2 4 0"/><path d="M7 6h10"/><circle cx="18.2" cy="5.8" r="1.35" fill="currentColor"/></svg>',
 ];
-var presetDisplayOrder = [0, 6, 7, 8, 5, 4, 2, 1, 3];
+if (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_ICONS) {
+  for (var wfic = 0; wfic < WebFxPresets.PRESET_ICONS.length; wfic++) presetIcons.push(WebFxPresets.PRESET_ICONS[wfic]);
+}
+var presetDisplayOrder = [0, 6, 7, 8, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 // presetMeta 已就绪：校准头部兜底的预设索引上限（启动恢复读取端使用），新增预设时只需维护 presetMeta 本身
 VISUAL_PRESET_INDEX_MAX = presetMeta.length - 1;
 var lyricColorPresets = [
@@ -20388,17 +20571,43 @@ function setPreset(p, opts) {
   if (changed && prev === SKULL_PRESET_INDEX && p !== SKULL_PRESET_INDEX) clearSkullPresetResidue();
   if (p === SKULL_PRESET_INDEX) loadSkullParticleAsset();
   uniforms.uPreset.value = p;
+  if (typeof WebFxPresets !== 'undefined') {
+    WebFxPresets.onPresetChanged(prev, p, {
+      material: material,
+      boostGrid: function (mul) {
+        var base = coverParticleGridForResolution(fx.coverResolution);
+        var next = mul === 1 ? base : (Math.round(base * mul) | 1);
+        if (next === GRID_X) return false;
+        var oldGeo = geo;
+        var nextGeo = buildCoverParticleGeometry(next);
+        geo = nextGeo;
+        GRID_X = GRID_Y = next;
+        PCOUNT = next * next;
+        if (particles) particles.geometry = nextGeo;
+        if (bloomParticles) bloomParticles.geometry = nextGeo;
+        if (oldGeo && oldGeo !== nextGeo) oldGeo.dispose();
+        uniforms.uGrid.value = next;
+        return true;
+      }
+    });
+  }
   refreshPresetGrid();
   if (changed && !opts.skipTransition) triggerPresetParticleTransition(prev, p);
   // 每个预设对应的相机基线 (改 userOrbit)
   if (changed && !opts.preserveCamera && p !== 5) {
-    if (p === 1)      { orbit.userRadius = 6.2; orbit.userPhi = 0.03; orbit.userTheta = 0.0; orbit.baselineRadius = 6.2; orbit.baselinePhi = 0.03; }
+    var webCam = (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_CAMERA) ? WebFxPresets.PRESET_CAMERA[p] : null;
+    if (webCam) {
+      orbit.userRadius = webCam.radius; orbit.userPhi = webCam.phi; orbit.userTheta = 0.0;
+      orbit.baselineRadius = webCam.radius; orbit.baselinePhi = webCam.phi;
+      orbit.baselineTheta = 0.0;
+    } else if (p === 1)      { orbit.userRadius = 6.2; orbit.userPhi = 0.03; orbit.userTheta = 0.0; orbit.baselineRadius = 6.2; orbit.baselinePhi = 0.03; }
     else if (p === 2) { orbit.userRadius = 7.0; orbit.userPhi = 0.15; orbit.userTheta = 0.0; orbit.baselineRadius = 7.0; orbit.baselinePhi = 0.15; }
     else if (p === 3) { orbit.userRadius = 8.0; orbit.userPhi = 0.05; orbit.userTheta = 0.0; orbit.baselineRadius = 8.0; orbit.baselinePhi = 0.05; }
     else if (p === 4) { orbit.userRadius = 6.5; orbit.userPhi = 0.04; orbit.userTheta = 0.0; orbit.baselineRadius = 6.5; orbit.baselinePhi = 0.04; }
     else if (p === 6) { orbit.userRadius = 7.4; orbit.userPhi = 0.10; orbit.userTheta = 0.18; orbit.baselineRadius = 7.4; orbit.baselinePhi = 0.10; }
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
+    if (webCam) orbit.baselineTheta = 0.0;
   }
   if (changed && !opts.silent) showToast('视觉预设: ' + presetMeta[p].name);
   var shouldCommitPlaybackPreset = !!opts.commitPlaybackPreset || !opts.noSave;
@@ -27576,7 +27785,7 @@ function animate() {
   bass = Math.min(0.90, smoothBass * 1.05 + beatPulse * 0.18) * fx.intensity;
   mid  = Math.min(0.72, smoothMid * 1.12) * fx.intensity;
   treble = Math.min(0.62, smoothTreb * 1.20) * fx.intensity;
-  if (fx.preset >= 4) {
+  if (fx.preset >= 4 && !(typeof WebFxPresets !== 'undefined' && WebFxPresets.isWebFxPreset(fx.preset))) {
     var wallpaperAudio = fx.preset === 5;
     var ringBass = smoothBass * (wallpaperAudio ? 1.10 : 1.58) + beatPulse * (wallpaperAudio ? 0.18 : 0.42) - smoothMid * 0.16 - smoothTreb * 0.06;
     var ringMid = smoothMid * (wallpaperAudio ? 1.16 : 1.82) - smoothBass * 0.14 - smoothTreb * 0.07;
@@ -27590,6 +27799,9 @@ function animate() {
       treble = Math.min(treble, 0.36 * fx.intensity);
       beatPulse *= 0.34;
     }
+  } else if (typeof WebFxPresets !== 'undefined' && WebFxPresets.isWebFxPreset(fx.preset)) {
+    var wfa = WebFxPresets.remapAudio(fx.preset, smoothBass, smoothMid, smoothTreb, fx.intensity);
+    if (wfa) { bass = wfa.bass; mid = wfa.mid; treble = wfa.treble; }
   }
   if (djMode.active) {
     bass = Math.min(1.00, bass * 1.06 + beatPulse * 0.085);
@@ -27610,6 +27822,14 @@ function animate() {
   uniforms.uEnergy.value = audioEnergy;
   uniforms.uMouseXY.value.set(mouseWorld.x, mouseWorld.y);
   uniforms.uMouseActive.value = mouseActive ? 1 : 0;
+  if (typeof WebFxPresets !== 'undefined') {
+    WebFxPresets.tickAges(uniforms, uniforms.uTime.value);
+    var dbSize = renderer.getSize ? renderer.getSize(new THREE.Vector2()) : new THREE.Vector2(window.innerWidth, window.innerHeight);
+    var maxPointSize = (renderer.capabilities && renderer.capabilities.maxPointSize) || 1024;
+    uniforms.uResolution.value.set(dbSize.x * (renderer.getPixelRatio ? renderer.getPixelRatio() : 1), dbSize.y * (renderer.getPixelRatio ? renderer.getPixelRatio() : 1));
+    uniforms.uMeteorSize.value = Math.min(dbSize.y * 0.22, maxPointSize);
+    uniforms.uJellyAura.value = Math.min(dbSize.y * 0.25, maxPointSize);
+  }
   var sonicPresetActiveEarly = !!(window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) || !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
   var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58 : (sonicPresetActiveEarly ? 0.82 : 1);
   // 封面粒子避光：关闭时悬浮层展开不再压低背景粒子

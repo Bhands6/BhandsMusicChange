@@ -8,14 +8,15 @@ var FX_CONSOLE_TABS = [
   { key: 'system', label: '系统' }
 ];
 
-function fxConsoleItem(ref, title, aliases, history, label, fullRow) {
+function fxConsoleItem(ref, title, aliases, history, label, fullRow, desc) {
   return {
     ref: ref,
     title: title,
     aliases: aliases || '',
     history: history !== false,
     label: label || '',
-    fullRow: fullRow === true   // 整行开关：独占一行（不与相邻开关并排 2 列）
+    fullRow: fullRow === true,   // 整行开关：独占一行（不与相邻开关并排 2 列）
+    desc: desc || ''             // 分区标题下的一行功能介绍（可选）
   };
 }
 
@@ -38,7 +39,7 @@ var FX_CONSOLE_LAYOUT = [
         fxConsoleItem('lyric-source-seg', '歌词来源', '原词 自定义歌词', false),
         fxConsoleItem('lyric-display-mode-seg', '歌词行数', '单行 双行 三行 沉浸 自定义', true, '歌词行数'),
         fxConsoleItem('fx-lyriccustomlines', '显示行数', '自定义歌词行数'),
-        fxConsoleItem('lyric-translation-mode-seg', '双语翻译', '译文 当前 双行 多行 关闭'),
+        fxConsoleItem('lyric-translation-mode-seg', '双语翻译', '译文 当前 双行 多行 关闭 翻译歌词', false, '双语翻译', false, '在原词下方叠加译文歌词。关闭=不显示 · 当前=仅当前行 · 双行=当前+下一句 · 多行=上下文全开'),
         fxConsoleItem('fx-lyrictranslationgap', '译文间距', '翻译距离'),
         fxConsoleItem('fx-lyrictranslationscale', '译文字号', '翻译大小'),
         fxConsoleItem('fx-lyrictranslationopacity', '译文透明', '翻译透明度')
@@ -318,6 +319,12 @@ function fxConsoleAppendItem(body, tabMeta, groupMeta, item, state) {
     labelNode.className = 'fx-section-label';
     labelNode.textContent = item.label;
     body.appendChild(labelNode);
+  }
+  if (item.desc) {
+    var descNode = document.createElement('div');
+    descNode.className = 'fx-section-desc';
+    descNode.textContent = item.desc;
+    body.appendChild(descNode);
   }
   if (node.classList.contains('fx-toggle')) {
     // fullRow 开关独占一行（单列容器），且结束当前 grid —— 后续开关另起 2 列网格

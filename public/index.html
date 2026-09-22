@@ -354,6 +354,7 @@ try {
       </div>
       <div class="fx-slider"><label>显示行数</label><input id="fx-lyriccustomlines" type="range" min="1" max="10" step="1"><output></output></div>
       <div class="fx-section-label">双语翻译</div>
+      <div class="fx-section-desc">在原词下方叠加译文歌词。关闭=不显示 · 当前=仅当前行 · 双行=当前+下一句 · 多行=上下文全开</div>
       <div class="fx-seg lyric-translation-mode-seg" id="lyric-translation-mode-seg">
         <button type="button" data-translation="off" class="active" onclick="setLyricTranslationMode('off')">关闭</button>
         <button type="button" data-translation="current" onclick="setLyricTranslationMode('current')">当前</button>
@@ -1148,6 +1149,7 @@ try {
 <script src="js/fx-console-workspace.js"></script>          <!-- 视觉控制台工作台（移植自上游：6 tab + 搜索 + 撤销/历史），须在 main.js 前加载 -->
 <script src="sonic-topography-preset.js"></script>          <!-- 预设7 音域回响 Sonic-Topography（作者 Ajin，移植自上游） -->
 <script src="sonic-workshop-preset.js"></script>            <!-- 预设8 音域回响 Wallpaper Engine（作者 CmzYa，WE 创意工坊 iframe 桥接） -->
+<script src="js/web-fx-presets.js"></script>               <!-- Web 移植 9 粒子特效（极光/万花筒/迸发/声波地形/螺旋星云/水母花/玫瑰/心跳/字符雨） -->
 <script src="js/main.js"></script>
 </body>
 </html>
