@@ -55,3 +55,6 @@ vendor/go-music-api/
 
 # 内置酷狗 API 服务源码：开发态 git clone，打包前由 fetch 脚本拉取，不入库
 vendor/kugou-api/
+
+# 启动页背景视频（21MB，不入库；build/fetch-splash-video.js 按需拉取，运行时 CDN 回退）
+public/media/*.mp4

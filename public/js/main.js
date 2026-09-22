@@ -26143,6 +26143,26 @@ function previewSplashBackground() {
   if (splashPreviewTimer) clearTimeout(splashPreviewTimer);
   splashPreviewTimer = setTimeout(close, 4600);   // 预览约 4.6s 后自动收起（点击可提前）
 }
+// 启动页背景视频：优先本地 media/splash-bg.mp4（不入库，由 build/fetch-splash-video.js 拉取）；
+// 本地缺失或加载失败时回退 CDN 地址（data-cdn-src），保证首次运行也能出效果。
+(function initSplashBgVideoFallback() {
+  var v = document.getElementById('splash-bg-video');
+  if (!v) return;
+  var fallback = v.getAttribute('data-cdn-src');
+  if (!fallback) return;
+  var applied = false;
+  var tryFallback = function () {
+    if (applied || !fallback) return;
+    applied = true;
+    console.warn('[SplashBG] 本地视频不可用，回退 CDN 源');
+    v.src = fallback;
+    v.load();
+    if (document.body.classList.contains('splash-bg-video')) v.play().catch(function () {});
+  };
+  v.addEventListener('error', tryFallback, true);
+  v.addEventListener('stalled', function () { if (v.networkState === 3) tryFallback(); }, true);
+  if (v.error || v.networkState === 3) tryFallback();
+})();
 // 启动时应用已保存的启动页背景（在 splash 首次显示前生效）
 try { applySplashBackground(readSplashBackground()); } catch (e) {}
 function dismissSplash(opts) {
