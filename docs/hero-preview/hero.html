@@ -62,11 +62,27 @@ body{font-family:'Readex Pro',system-ui,-apple-system,sans-serif;background:#000
 .fade-bottom{pointer-events:none;position:absolute;bottom:0;left:0;right:0;height:192px;background:linear-gradient(to bottom,transparent,#000)}
 .enter-hint{display:none;position:absolute;left:50%;bottom:36px;transform:translateX(-50%);font-size:11px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.62);text-shadow:0 0 18px rgba(244,210,138,.24),0 0 34px rgba(122,215,194,.12);animation:enter-pulse 1.8s ease-in-out infinite alternate}
 @keyframes enter-pulse{0%{opacity:.46}100%{opacity:.78}}
+/* 预览控制条（悬浮，不影响观看） */
+.mode-switch{position:fixed;z-index:50;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:6px;border-radius:9999px;background:rgba(10,11,14,.78);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);box-shadow:0 10px 30px rgba(0,0,0,.45);font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.mode-switch button{font-family:inherit;font-size:12px;padding:6px 13px;border-radius:9999px;border:0;background:transparent;color:rgba(255,255,255,.62);cursor:pointer;transition:all .18s}
+.mode-switch button:hover{background:rgba(255,255,255,.10);color:#fff}
+.mode-switch button.on{background:rgba(244,210,138,.16);color:#f4d28a}
+.mode-switch .sep{width:1px;height:16px;background:rgba(255,255,255,.14);margin:0 2px}
+/* 切到启动页模式时，控制条自动淡化避免干扰 */
+body.mode-splash .mode-switch{opacity:.45}
+body.mode-splash .mode-switch:hover{opacity:1}
 body.mode-splash .hero-nav{display:none}
 body.mode-splash .enter-hint{display:block}
 </style>
 </head>
 <body>
+<div class="mode-switch" id="modeSwitch">
+  <button data-mode="full" class="on">完整 hero</button>
+  <button data-mode="splash">启动页版</button>
+  <span class="sep"></span>
+  <button id="replayBtn">重播</button>
+</div>
+
 <section class="hero">
   <video class="hero-video" autoplay loop muted playsinline
     src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260418_063509_7d167302-4fd4-480b-8260-18ab572333d4.mp4"></video>
@@ -127,10 +143,20 @@ body.mode-splash .enter-hint{display:block}
 
 <script>
 (function () {
-  var q = new URLSearchParams(location.search);
-  var mode = q.get('mode') || 'full';
-  if (mode === 'splash') document.body.classList.add('mode-splash');
   var v = document.querySelector('.hero-video');
+  var sw = document.getElementById('modeSwitch');
+  function setMode(mode) {
+    document.body.classList.toggle('mode-splash', mode === 'splash');
+    var btns = sw.querySelectorAll('button[data-mode]');
+    for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-mode') === mode);
+  }
+  var q = new URLSearchParams(location.search);
+  setMode(q.get('mode') === 'splash' ? 'splash' : 'full');
+  sw.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-mode]');
+    if (b) { setMode(b.getAttribute('data-mode')); return; }
+    if (e.target.id === 'replayBtn' && v) { v.currentTime = 0; v.play().catch(function () {}); }
+  });
   if (v) { v.play().catch(function () {}); }
 })();
 </script>
