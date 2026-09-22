@@ -271,6 +271,17 @@ function applyFxFabAutoHideState(opts) {
     btn.title = fxFabAutoHide ? '取消自动隐藏视觉控制台' : '自动隐藏视觉控制台';
   }
 }
+// 视觉控制台入口（右上角）：点击打开/收起控制台
+// （原右下角悬浮入口靠靠近右下角 hover 触发，没有 click 绑定；移入右上角后需要显式点击）
+(function () {
+  var fab = document.getElementById('fx-fab');
+  if (!fab || fab.__clickBound) return;
+  fab.__clickBound = true;
+  fab.addEventListener('click', function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (typeof toggleFxPanel === 'function') toggleFxPanel();
+  });
+})();
 function toggleFxFabAutoHide(e) {
   if (e && e.stopPropagation) e.stopPropagation();
   fxFabAutoHide = !fxFabAutoHide;
@@ -338,7 +349,7 @@ function isDiyMode() {
   return !!diyPlayerMode;
 }
 function syncDiyModeButton() {
-  ['diy-mode-btn', 'fullscreen-diy-btn'].forEach(function(id) {
+  ['t-diyMode', 'fullscreen-diy-btn'].forEach(function(id) {
     var btn = document.getElementById(id);
     if (!btn) return;
     btn.classList.toggle('on', diyPlayerMode);
@@ -367,7 +378,7 @@ function applyDiyMode(on, opts) {
   }
   if (opts.toast) showToast(diyPlayerMode ? 'DIY 玩家模式已开启' : '已切回简约模式');
   if (opts.animate && window.gsap) {
-    ['diy-mode-btn', 'fullscreen-diy-btn'].forEach(function(id) {
+    ['t-diyMode', 'fullscreen-diy-btn'].forEach(function(id) {
       var btn = document.getElementById(id);
       if (btn) window.gsap.fromTo(btn, { scale: 0.94 }, { scale: 1, duration: 0.34, ease: 'back.out(1.8)', overwrite: true });
     });
@@ -22316,8 +22327,10 @@ function toggleFxPanel(force) {
   var el = document.getElementById('fx-panel');
   if (!el) return;
   if (!diyPlayerMode && force !== false) {
-    showToast('开启 DIY 玩家模式后可打开视觉控制台');
-    return;
+    // 右上角入口在简约模式下也可见：点击自动进入 DIY 玩家模式再打开控制台
+    // （原右下角悬浮入口仅 DIY 模式显示，移入右上角后成为默认可见的主入口）
+    toggleDiyMode();
+    if (!diyPlayerMode) { showToast('开启 DIY 玩家模式后可打开视觉控制台'); return; }
   }
   var currentlyOpen = el.classList.contains('show') || el.classList.contains('peek');
   if (peekTimers && peekTimers.fx) { clearTimeout(peekTimers.fx); peekTimers.fx = null; }
@@ -22328,6 +22341,16 @@ function toggleFxPanel(force) {
     setTimeout(function(){ el.classList.remove('closing'); }, 280);
     var fab = document.getElementById('fx-fab');
     if (fab) fab.classList.remove('active');
+    return;
+  }
+  // 已打开时点击同一入口 → 收起（toggle 语义；原实现只负责打开，
+  // 收起依赖鼠标移开/点外部，右上角常显入口需要显式切换）
+  if (currentlyOpen && force === undefined) {
+    el.classList.remove('show', 'peek');
+    el.classList.add('closing');
+    setTimeout(function(){ el.classList.remove('closing'); }, 280);
+    var fabBtn = document.getElementById('fx-fab');
+    if (fabBtn) fabBtn.classList.remove('active');
     return;
   }
   el.classList.remove('show', 'closing');
@@ -24412,18 +24435,18 @@ var visualGuideSteps = [
     body: '右侧 3D 歌单架和 DIY 玩家模式是进阶入口；先播放一首歌，再慢慢调视觉效果。'
   },
   {
-    selector: '#diy-mode-btn',
-    kicker: '06 / DIY',
-    title: '高级功能在 DIY 玩家模式',
-    body: '视觉控制台、上传/封面、自定义歌词、音质和更多面板都会在这里展开。'
+    selector: '#fx-fab',
+    kicker: '06 / Visual Lab',
+    title: '视觉控制台在右上角',
+    body: '点击主页按钮左边的按钮弹出视觉控制台：粒子、歌词、镜头、音源和更多设置都在里面。'
   }
 ];
 var visualGuideStepsDiy = [
   {
-    selector: '#diy-mode-btn',
-    kicker: '01 / DIY',
-    title: 'DIY 玩家模式已展开',
-    body: '这里可以随时切回默认模式。DIY 模式会显示完整控制台、上传、视觉面板和高级调参。'
+    selector: '#fx-fab',
+    kicker: '01 / Visual Lab',
+    title: '视觉控制台入口',
+    body: '右上角主页按钮左边的按钮可以随时打开/收起视觉控制台；DIY 模式开关也在控制台里。'
   },
   {
     selector: '#search-box',
