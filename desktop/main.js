@@ -101,10 +101,50 @@ const CHROMIUM_PERFORMANCE_SWITCHES = [
   ['force_high_performance_gpu'],                   // 强制使用高性能独立显卡
   ['use-angle', 'd3d11'],                           // 使用 ANGLE D3D11 后端（Windows 图形兼容层）
 ];
-for (const [name, value] of CHROMIUM_PERFORMANCE_SWITCHES) {
-  if (value == null) app.commandLine.appendSwitch(name);
-  else app.commandLine.appendSwitch(name, value);
+// ── GPU 崩溃自动降级（2026-09-22）────────────────────────────
+// 下面这批开关会「强制」启用硬件加速与高性能独显；当机器 GPU 环境异常时
+// （驱动更新/独显被禁/被占用），GPU 进程会反复崩溃并触发
+// `FATAL: GPU process isn't usable. Goodbye.` 直接退出 —— 表现为「没有界面出来」。
+// 用「崩溃标记」实现自动降级：启动前打标记 → 正常启动后清除；
+// 下次启动若发现标记仍在，说明上次 GPU 崩了，本次自动改用软件渲染。
+// ⚠️ 软件渲染时必须同时跳过下面那批强制 GPU 开关，否则它们会把 GPU 进程
+//    重新拉起来并继续崩溃（disableHardwareAcceleration 不足以覆盖它们）。
+// 手动逃生：环境变量 BHANDSMUSIC_NO_GPU=1 可强制软件渲染。
+let gpuCrashGuardTripped = false;
+let gpuCrashGuardFile = null;
+try {
+  gpuCrashGuardFile = path.join(app.getPath('userData'), '.gpu-crash-guard');
+  if (fs.existsSync(gpuCrashGuardFile)) {
+    gpuCrashGuardTripped = true;
+    console.warn('[GPU] 检测到上次启动 GPU 进程崩溃，本次自动切换到软件渲染');
+  } else {
+    fs.writeFileSync(gpuCrashGuardFile, String(Date.now()));
+  }
+} catch (e) { /* 标记不可用时按正常流程 */ }
+const forceSoftwareRendering = gpuCrashGuardTripped || process.env.BHANDSMUSIC_NO_GPU === '1';
+if (forceSoftwareRendering) {
+  // 完整的软件渲染组合：仅 disable-gpu 不足以阻止 Chromium 拉起 GPU 进程，
+  // 还需要 swiftshader 软件 GL 后端 + 关掉 GPU 沙箱（2026-09-22 实测）
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+  app.commandLine.appendSwitch('use-angle', 'swiftshader');
+  app.commandLine.appendSwitch('use-gl', 'swiftshader');
+  app.commandLine.appendSwitch('enable-unsafe-swiftshader');
+  if (process.env.BHANDSMUSIC_NO_GPU === '1') console.warn('[GPU] BHANDSMUSIC_NO_GPU=1，已强制软件渲染');
+} else {
+  for (const [name, value] of CHROMIUM_PERFORMANCE_SWITCHES) {
+    if (value == null) app.commandLine.appendSwitch(name);
+    else app.commandLine.appendSwitch(name, value);
+  }
 }
+// 启动成功后清除崩溃标记，恢复正常硬件加速路径
+app.whenReady().then(() => {
+  setTimeout(() => {
+    try { if (gpuCrashGuardFile && fs.existsSync(gpuCrashGuardFile)) fs.unlinkSync(gpuCrashGuardFile); } catch (e) {}
+  }, 9000);
+});
 
 // 请求单实例锁，防止多开
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
