@@ -25433,16 +25433,22 @@ window.addEventListener('mousemove', function(e){
   var inSearchPanel = saOn && ex >= saRect.left - 24 && ex <= saRect.right + 24 && ey >= saRect.top - 22 && ey <= saRect.bottom + 42;
   if (ey < 66 || inSearchPanel || searchFocused || uploadTipOpen) setPeek(sa, true, 'search');
   else if (saOn && !emptyHomeActive) setPeek(sa, false, 'search');
-  // 控制台: 右下角触发；一旦面板出现，就按真实面板矩形保留显示
+  // 控制台: 仅由右上角入口点击打开（toggleFxPanel）。
+  // 原设计是「鼠标靠近右下角 fx-fab 自动 peek」——入口移到右上角后，鼠标悬停按钮
+  // 会误触发弹出（用户要求改为点击才弹），因此移除 inFxFab / inFxBridge 的 hover 触发；
+  // 保留 inFxPanel：面板已打开时鼠标在面板内维持显示，移开自动收起。
   var fpOn = fp.classList.contains('peek') || fp.classList.contains('show');
   var fpRect = fp.getBoundingClientRect();
-  var fab = document.getElementById('fx-fab');
-  var fabRect = fab ? fab.getBoundingClientRect() : { left:W, right:W, top:H, bottom:H };
-  var inFxPanel = fpOn && ex >= fpRect.left - 24 && ex <= fpRect.right + 24 && ey >= fpRect.top - 24 && ey <= fpRect.bottom + 24;
-  var inFxFab = ex >= fabRect.left - 18 && ex <= fabRect.right + 18 && ey >= fabRect.top - 18 && ey <= fabRect.bottom + 18;
-  var inFxBridge = fpOn && ex >= Math.min(fpRect.left, fabRect.left) - 18 && ex <= W && ey >= fpRect.bottom - 10 && ey <= fabRect.bottom + 18;
-  if (!diyPlayerMode) inFxPanel = inFxFab = inFxBridge = false;
-  if (inFxFab || inFxPanel || inFxBridge) setPeek(fp, true, 'fx');
+  var fabEl = document.getElementById('fx-fab');
+  var fabRect = fabEl ? fabEl.getBoundingClientRect() : null;
+  // 维持区域 = 面板矩形 ∪「右上角入口 → 面板」的右侧过渡竖条
+  // （入口在右上角、面板在右侧中部，鼠标从按钮移向面板的途中不能提前收起）
+  var inFxPanel = fpOn && (
+    (ex >= fpRect.left - 24 && ex <= fpRect.right + 24 && ey >= fpRect.top - 24 && ey <= fpRect.bottom + 24) ||
+    (fabRect && ex >= fabRect.left - 24 && ex <= W && ey >= fabRect.top - 24 && ey <= Math.max(fpRect.bottom, fabRect.bottom) + 24)
+  );
+  if (!diyPlayerMode) inFxPanel = false;
+  if (inFxPanel) setPeek(fp, true, 'fx');
   else if (fpOn) setPeek(fp, false, 'fx');
   // 歌单/队列 DOM 面板只在左侧明确停留时出现，避免和右侧 3D 架抢焦点
   var ppOn = pp.classList.contains('peek');
