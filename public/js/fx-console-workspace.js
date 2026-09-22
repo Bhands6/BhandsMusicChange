@@ -142,9 +142,6 @@ var FX_CONSOLE_LAYOUT = [
   {
     key: 'system',
     groups: [
-      { key: 'ui-mode', title: '界面模式', hint: 'DIY 玩家模式与界面简化', open: false, items: [
-        fxConsoleItem('t-diyMode', 'DIY 玩家模式', 'DIY 玩家 简约 模式 完整控制台 上传 封面 高级调参')
-      ] },
       { key: 'startup', title: '启动与退出', hint: '关闭窗口行为和恢复播放方式', open: true, items: [
         fxConsoleItem('close-behavior-seg', '关闭窗口', '直接退出 后台托盘'),
         fxConsoleItem('t-rememberClose', '记住关闭选择', '记住关闭行为 最小化托盘 不再询问', true, '', true),

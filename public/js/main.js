@@ -11567,7 +11567,8 @@ function canShowShelfHoverCueAt(e) {
   if (!e) return false;
   if (!shelfHoverCue.guide) return false;
   if (document.body.classList.contains('splash-active')) return false;
-  if (visualGuideActive || emptyHomeActive || homeForcedOpen) return false;
+  // 引导「3D 歌单架」步骤需要预览可见，不能被 visualGuideActive 自己挡住
+  if (!shelfHoverCue.guide && (visualGuideActive || emptyHomeActive || homeForcedOpen)) return false;
   if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
   if (shelfPinnedOpen) return false;
   if (shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return false;
@@ -15047,7 +15048,12 @@ function isPointNearHomeContent(x, y) {
   var selectors = [
     '.home-card',
     '.home-tile',
-    '.home-chip'
+    '.home-chip',
+    '.home-hero',
+    '#hero-daily-bg',
+    '.home-hero-actions',
+    '.home-rail',
+    '.home-section-head'
   ];
   for (var i = 0; i < selectors.length; i++) {
     var nodes = document.querySelectorAll(selectors[i]);
@@ -15097,6 +15103,8 @@ function isHomeBlankDismissClick(e) {
   var home = document.getElementById('empty-home');
   if (!home) return false;
   var homeRect = home.getBoundingClientRect();
+  // 上方空白条：主页顶边以上的空域（Logo/搜索/窗口钮已在 blocked 里排除）
+  if (y < homeRect.top) return true;
   if (!isPointInsideRectWithPad(x, y, homeRect, 0)) return false;
   if (isPointNearHomeContent(x, y)) return false;
   return true;
@@ -24784,7 +24792,25 @@ function prepareVisualGuideStep(step) {
   var bottom = document.getElementById('bottom-bar');
   var fxPanel = document.getElementById('fx-panel');
   var playlistPanel = document.getElementById('playlist-panel');
-  if (typeof setShelfGuideCueActive === 'function') setShelfGuideCueActive(step && step.target === 'shelf');
+  var wantShelf = !!(step && step.target === 'shelf');
+  if (typeof setShelfGuideCueActive === 'function') setShelfGuideCueActive(wantShelf);
+  // 引导最后一步临时打开 3D 歌单架；完成后若不是用户本来就开着，再关掉
+  if (wantShelf) {
+    if (visualGuideState && visualGuideState.shelfOpenedForGuide == null) {
+      visualGuideState.shelfWasPinned = !!shelfPinnedOpen;
+      visualGuideState.shelfOpenedForGuide = false;
+      visualGuideState.shelfModeBeforeGuide = (shelfManager && shelfManager.getMode) ? shelfManager.getMode() : null;
+    }
+    // 仅在非 side 时临时切到 side 演示；完成后按 shelfModeBeforeGuide 还原（含 off/隐藏）
+    if (shelfManager && shelfManager.setMode && (!shelfManager.getMode || shelfManager.getMode() !== 'side')) {
+      try { shelfManager.setMode('side'); } catch (err) {}
+    }
+    if (!shelfPinnedOpen) {
+      if (typeof setShelfPinnedOpen === 'function') setShelfPinnedOpen(true, true);
+      if (visualGuideState) visualGuideState.shelfOpenedForGuide = true;
+    }
+    if (typeof dismissHomePage === 'function' && emptyHomeActive) dismissHomePage({ reason: 'guide-shelf' });
+  }
   if (step && step.selector === '#search-box') setPeek(search, true, 'search');
   if (step && step.selector === '#playlist-panel') setPeek(playlistPanel, true, 'pl');
   else if (playlistPanel && !visualGuideState.plWasPeek) setPeek(playlistPanel, false, 'pl');
@@ -24827,13 +24853,25 @@ function guideTargetRect(step) {
     var stageTop = Math.max(116, innerHeight * 0.32 - stageH * 0.5);
     return { left: stageLeft, top: stageTop, width: stageW, height: stageH, right: stageLeft + stageW, bottom: stageTop + stageH };
   }
-  if (step && step.target === 'shelf' && typeof shelfCueRect === 'function') {
-    var shelfRect = shelfCueRect();
-    var shelfLeft = shelfRect.left;
-    var shelfTop = shelfRect.top - 26;
-    var shelfRight = Math.min(innerWidth - 12, shelfRect.right + 18);
-    var shelfBottom = shelfRect.bottom + 26;
-    return { left: shelfLeft, top: shelfTop, width: shelfRight - shelfLeft, height: shelfBottom - shelfTop, right: shelfRight, bottom: shelfBottom };
+  if (step && step.target === 'shelf') {
+    var shelfContentOpen = !!(typeof shelfManager !== 'undefined' && shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent());
+    // 货架已打开时：圈住真实卡片列/详情，而不是右侧 hover 热区（否则聚焦框会飘在空处）
+    if (shelfPinnedOpen || shelfContentOpen) {
+      var openEdge = Math.min(390, Math.max(210, innerWidth * 0.22));
+      var openLeft = shelfContentOpen ? Math.max(12, innerWidth * 0.04) : Math.max(12, innerWidth - openEdge - 24);
+      var openTop = Math.max(88, innerHeight * 0.20);
+      var openRight = Math.min(innerWidth - 10, innerWidth - 6);
+      var openBottom = Math.min(innerHeight - 72, innerHeight * 0.86);
+      return { left: openLeft, top: openTop, width: openRight - openLeft, height: openBottom - openTop, right: openRight, bottom: openBottom };
+    }
+    if (typeof shelfCueRect === 'function') {
+      var shelfRect = shelfCueRect();
+      var shelfLeft = shelfRect.left;
+      var shelfTop = shelfRect.top - 26;
+      var shelfRight = Math.min(innerWidth - 12, shelfRect.right + 18);
+      var shelfBottom = shelfRect.bottom + 26;
+      return { left: shelfLeft, top: shelfTop, width: shelfRight - shelfLeft, height: shelfBottom - shelfTop, right: shelfRight, bottom: shelfBottom };
+    }
   }
   if (step && step.selector === '#bottom-bar') {
     var bar = document.getElementById('bottom-bar');
@@ -24930,6 +24968,28 @@ function closeVisualGuide(markSeen) {
   var fxPanel = document.getElementById('fx-panel');
   var playlistPanel = document.getElementById('playlist-panel');
   if (typeof setShelfGuideCueActive === 'function') setShelfGuideCueActive(false);
+  // 3D 歌单架本身（不是详情）：引导前隐藏/关闭的，完成后必须整架收起
+  if (visualGuideState) {
+    var restoreMode = visualGuideState.shelfModeBeforeGuide;
+    var wasHidden = !visualGuideState.shelfWasPinned && (restoreMode == null || restoreMode === 'off' || restoreMode !== 'side');
+    if (visualGuideState.shelfOpenedForGuide || wasHidden) {
+      if (shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent() && typeof safeShelfCloseContent === 'function') {
+        safeShelfCloseContent('guide-complete');
+      }
+      if (typeof setShelfPinnedOpen === 'function') setShelfPinnedOpen(false, true);
+      if (shelfManager && shelfManager.setMode && restoreMode && restoreMode !== 'side') {
+        try { shelfManager.setMode(restoreMode); } catch (err) {}
+      }
+      shelfHoverCue.target = 0;
+      shelfHoverCue.value = 0;
+      shelfHoverCue.guide = false;
+      shelfHoverCue.zoneActive = false;
+      shelfVisibility = 0;
+    }
+    visualGuideState.shelfOpenedForGuide = false;
+    visualGuideState.shelfWasPinned = false;
+    visualGuideState.shelfModeBeforeGuide = null;
+  }
   if (search && !visualGuideState.searchWasPeek && document.activeElement !== $input) setPeek(search, false, 'search');
   if (fxPanel && !visualGuideState.fxWasPeek) setPeek(fxPanel, false, 'fx');
   if (playlistPanel && !visualGuideState.plWasPeek) setPeek(playlistPanel, false, 'pl');
