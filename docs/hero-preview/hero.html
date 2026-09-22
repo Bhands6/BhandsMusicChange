@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>securify hero · 背景预览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:'Readex Pro',system-ui,-apple-system,sans-serif;background:#000;color:#fff;-webkit-font-smoothing:antialiased}
+.hero{position:relative;height:100vh;width:100%;overflow:hidden;background:#000}
+.hero-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.hero-nav{position:absolute;z-index:20;top:0;left:0;right:0;padding:24px 24px 0}
+@media(min-width:768px){.hero-nav{padding:24px 40px 0}}
+.hero-nav-inner{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.pill{display:flex;align-items:center;background:rgba(23,23,23,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:9999px}
+.pill-brand{gap:8px;padding:12px 24px 12px 16px}
+.pill-brand svg{height:20px;width:20px;display:block}
+.pill-brand span{font-size:14px;font-weight:400;letter-spacing:-.01em}
+.pill-nav{display:none;gap:4px;padding:8px 12px}
+@media(min-width:768px){.pill-nav{display:flex}}
+.pill-nav a{color:#d4d4d4;text-decoration:none;font-size:14px;padding:8px 20px;border-radius:9999px;transition:color .2s}
+.pill-nav a:hover{color:#fff}
+.cta{background:#fff;color:#000;font-family:inherit;font-size:14px;font-weight:400;border:0;border-radius:9999px;padding:12px 24px;cursor:pointer;transition:background .2s}
+.cta:hover{background:#e5e5e5}
+.hero-content{position:relative;height:100%;width:100%}
+.hero-title{position:absolute;color:#fff;font-weight:500;letter-spacing:-.04em;line-height:.95;margin:0;font-size:14vw}
+@media(min-width:768px){.hero-title{font-size:13vw}}
+.t-protect{left:16px;top:18%}
+.t-your{right:16px;top:38%}
+.t-data{left:18%;top:58%}
+@media(min-width:768px){
+  .t-protect{left:40px}
+  .t-your{right:40px}
+  .t-data{left:28%}
+}
+.hero-desc{position:absolute;left:24px;top:46%;max-width:240px;font-size:15px;line-height:1.35;color:rgba(255,255,255,.9);margin:0}
+@media(min-width:768px){.hero-desc{left:40px}}
+.stat{position:absolute}
+.stat-row{display:flex;align-items:center;gap:12px}
+.stat-num{font-weight:500;letter-spacing:-.02em;font-size:36px}
+@media(min-width:768px){.stat-num{font-size:48px}}
+.stat-sub{font-size:12px;color:rgba(255,255,255,.7);margin-top:4px}
+@media(min-width:768px){.stat-sub{font-size:14px}}
+.divider{display:none;height:1px;width:96px;background:rgba(255,255,255,.4)}
+@media(min-width:768px){.divider{display:block}}
+.stat-tr{right:24px;top:14%}
+.stat-bl{left:24px;bottom:80px}
+.stat-br{right:24px;bottom:64px}
+@media(min-width:768px){
+  .stat-tr{right:96px}
+  .stat-bl{left:80px;bottom:96px}
+  .stat-br{right:80px;bottom:80px}
+}
+.stat-tr .stat-row{justify-content:flex-end}
+.stat-tr .stat-sub,.stat-br .stat-sub{text-align:right}
+.stat-br .stat-sub{text-align:right}
+.d-20{transform:rotate(20deg)}
+.d-m20{transform:rotate(-20deg)}
+.fade-bottom{pointer-events:none;position:absolute;bottom:0;left:0;right:0;height:192px;background:linear-gradient(to bottom,transparent,#000)}
+.enter-hint{display:none;position:absolute;left:50%;bottom:36px;transform:translateX(-50%);font-size:11px;font-weight:600;letter-spacing:.24em;text-transform:uppercase;color:rgba(255,255,255,.62);text-shadow:0 0 18px rgba(244,210,138,.24),0 0 34px rgba(122,215,194,.12);animation:enter-pulse 1.8s ease-in-out infinite alternate}
+@keyframes enter-pulse{0%{opacity:.46}100%{opacity:.78}}
+body.mode-splash .hero-nav{display:none}
+body.mode-splash .enter-hint{display:block}
+</style>
+</head>
+<body>
+<section class="hero">
+  <video class="hero-video" autoplay loop muted playsinline
+    src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260418_063509_7d167302-4fd4-480b-8260-18ab572333d4.mp4"></video>
+
+  <nav class="hero-nav">
+    <div class="hero-nav-inner">
+      <div class="pill pill-brand">
+        <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path fill="#ffffff" d="M 128 192 L 128 256 L 64.5 256 L 32 223 L 0 192 L 0 128 L 64 128 Z M 256 192 L 256 256 L 192.5 256 L 160 223 L 128 192 L 128 128 L 192 128 Z M 128 64 L 128 128 L 64.5 128 L 32 95 L 0 64 L 0 0 L 64 0 Z M 256 64 L 256 128 L 192.5 128 L 160 95 L 128 64 L 128 0 L 192 0 Z"/>
+        </svg>
+        <span>securify</span>
+      </div>
+      <div class="pill pill-nav">
+        <a href="#">platform</a>
+        <a href="#">solutions</a>
+        <a href="#">company</a>
+        <a href="#">support</a>
+      </div>
+      <button class="cta" type="button">get started</button>
+    </div>
+  </nav>
+
+  <div class="hero-content">
+    <h1 class="hero-title t-protect">protect</h1>
+    <h1 class="hero-title t-your">your</h1>
+    <h1 class="hero-title t-data">data</h1>
+
+    <p class="hero-desc">we can guarding your data with utmost care, empowering you with privacy everywhere</p>
+
+    <div class="stat stat-tr">
+      <div class="stat-row">
+        <div class="divider d-20"></div>
+        <div class="stat-num">+65k</div>
+      </div>
+      <div class="stat-sub">startups use</div>
+    </div>
+
+    <div class="stat stat-bl">
+      <div class="stat-row">
+        <div class="stat-num">+1.5b</div>
+        <div class="divider d-m20"></div>
+      </div>
+      <div class="stat-sub">gb data was protected</div>
+    </div>
+
+    <div class="stat stat-br">
+      <div class="stat-row">
+        <div class="divider d-m20"></div>
+        <div class="stat-num">+300k</div>
+      </div>
+      <div class="stat-sub">downloads</div>
+    </div>
+  </div>
+
+  <div class="fade-bottom"></div>
+  <div class="enter-hint">click to enter</div>
+</section>
+
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var mode = q.get('mode') || 'full';
+  if (mode === 'splash') document.body.classList.add('mode-splash');
+  var v = document.querySelector('.hero-video');
+  if (v) { v.play().catch(function () {}); }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>securify 背景 · 启动页预览</title>
+<style>
+:root{--accent:#f4d28a;--accent-rgb:244,210,138}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#08090c;color:#e8ecef;font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif;overflow:hidden}
+.wrap{display:flex;flex-direction:column;height:100%}
+.bar{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(12,14,18,.92);flex:0 0 auto;flex-wrap:wrap}
+.tabs{display:flex;gap:6px}
+.tabs button{font-family:inherit;font-size:12.5px;padding:7px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:rgba(255,255,255,.62);cursor:pointer;transition:all .2s}
+.tabs button:hover{background:rgba(255,255,255,.09);color:#fff}
+.tabs button.on{background:rgba(var(--accent-rgb),.13);border-color:rgba(var(--accent-rgb),.5);color:var(--accent)}
+.meta{display:flex;align-items:center;gap:8px;flex:1;min-width:200px;font-size:11.5px;color:rgba(255,255,255,.5);flex-wrap:wrap}
+.meta .t{color:#fff;font-weight:500;font-size:12.5px}
+.meta .chip{padding:2px 8px;border-radius:999px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);font-size:11px}
+.acts{display:flex;gap:8px;align-items:center}
+.acts button{font-family:inherit;font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:rgba(255,255,255,.75);cursor:pointer;transition:all .2s}
+.acts button:hover{background:rgba(255,255,255,.10);color:#fff}
+.acts .hint{font-size:11px;color:rgba(255,255,255,.35)}
+.stage{flex:1;position:relative;background:#000}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.3);font-size:12px;pointer-events:none;z-index:5}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bar">
+    <div class="tabs" id="tabs">
+      <button data-mode="full" class="on">完整 hero（landing 规格）</button>
+      <button data-mode="splash">启动页适配版</button>
+    </div>
+    <div class="meta" id="meta"></div>
+    <div class="acts">
+      <span class="hint">1 / 2 切换 · R 重播</span>
+      <button id="replay">重播</button>
+    </div>
+  </div>
+  <div class="stage">
+    <div class="loading" id="loading">加载视频中…</div>
+    <iframe id="stage" title="hero 预览"></iframe>
+  </div>
+</div>
+<script>
+var MODES = {
+  full: {
+    name: '完整 hero', desc: 'landing 规格原样',
+    chips: ['胶囊导航（logo + 4 链接 + cta）', '三行错落大字 protect / your / data', '3 处统计块 + 斜分隔线', '底部渐变遮罩']
+  },
+  splash: {
+    name: '启动页适配版', desc: '去掉导航与按钮',
+    chips: ['仅保留视频背景 + 大字 + 统计', '底部加 click to enter 脉冲提示', '适合作为启动页直接进入']
+  }
+};
+var current = 'full';
+var iframe = document.getElementById('stage');
+var loading = document.getElementById('loading');
+var metaEl = document.getElementById('meta');
+
+function renderMeta() {
+  var m = MODES[current];
+  metaEl.innerHTML = '<span class="t">' + m.name + '</span><span>' + m.desc + '</span>' +
+    m.chips.map(function (c) { return '<span class="chip">' + c + '</span>'; }).join('') +
+    '<span class="chip">视频：cloudfront · 循环 · object-cover</span>' +
+    '<span class="chip">字体：Readex Pro</span>';
+}
+function load(mode) {
+  current = mode;
+  var btns = document.querySelectorAll('#tabs button');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('on', btns[i].getAttribute('data-mode') === mode);
+  renderMeta();
+  loading.style.display = 'flex';
+  iframe.src = 'hero.html?mode=' + mode + '&t=' + Date.now();
+}
+iframe.addEventListener('load', function () { setTimeout(function () { loading.style.display = 'none'; }, 900); });
+document.getElementById('tabs').addEventListener('click', function (e) {
+  var b = e.target.closest('button[data-mode]');
+  if (b) load(b.getAttribute('data-mode'));
+});
+document.getElementById('replay').addEventListener('click', function () { load(current); });
+window.addEventListener('keydown', function (e) {
+  if (e.key === '1') load('full');
+  else if (e.key === '2') load('splash');
+  else if (e.key === 'r' || e.key === 'R') load(current);
+});
+load('full');
+</script>
+</body>
+</html>
