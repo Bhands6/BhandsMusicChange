@@ -25691,13 +25691,42 @@ function playlistPanelFocusPadding() {
 }
 function shouldClosePlaylistPanelFromPointer(ppOn, ex, ppRect) {
   if (!ppOn) return false;
-  if (isSecondaryLeftDisplaySeamGuardActive() && ex < SECONDARY_PLAYLIST_SEAM_CLOSE_X) return true;
-  return ex > ppRect.right + playlistPanelExitPadding();
+  // 鼠标不在歌单列表上就收起（是否在列表由调用方 inPanel 判定；常开由 setPeek 拦截）
+  return true;
 }
 function isPlaylistPanelFocusActive(inTrigger, inPanel, pp, ex, ppRect) {
-  if (isSecondaryLeftDisplaySeamGuardActive() && ex < SECONDARY_PLAYLIST_SEAM_CLOSE_X) return false;
-  return inTrigger || inPanel || (pp && pp.classList.contains('peek') && ex < ppRect.right + playlistPanelFocusPadding());
+  return !!(inTrigger || inPanel);
 }
+function collapsePlaylistPanelIfPointerGone() {
+  var pp = document.getElementById('playlist-panel');
+  if (!pp || !pp.classList.contains('peek')) {
+    // 即使面板已收起，也要把 queue 镜头焦点退掉，否则快速左甩后镜头不回正
+    if (typeof setFocusZone === 'function' && (!focusHover || !focusHover.wantType || focusHover.wantType === 'queue')) {
+      setFocusZone(null, true);
+    }
+    return;
+  }
+  if (playlistPanelPinned) return;
+  if (typeof visualGuideActive !== 'undefined' && visualGuideActive) return;
+  if (pp.matches(':hover')) return;
+  setPeek(pp, false, 'pl');
+  // 与 mousemove 收起路径一致：退出 queue focus，镜头插值回主姿态
+  if (typeof setFocusZone === 'function') {
+    if (!focusHover || !focusHover.wantType || focusHover.wantType === 'queue') setFocusZone(null, true);
+  }
+}
+// 快速从左/任意一侧甩出窗口时可能不再触发 mousemove，必须在离开文档时收起
+document.addEventListener('mouseleave', function (e) {
+  if (e && e.relatedTarget) return;
+  collapsePlaylistPanelIfPointerGone();
+});
+document.addEventListener('mouseout', function (e) {
+  if (e && (e.relatedTarget || e.toElement)) return;
+  collapsePlaylistPanelIfPointerGone();
+});
+window.addEventListener('blur', function () {
+  collapsePlaylistPanelIfPointerGone();
+});
 window.addEventListener('mousemove', function(e){
   var sa = document.getElementById('search-area');
   var fp = document.getElementById('fx-panel');
