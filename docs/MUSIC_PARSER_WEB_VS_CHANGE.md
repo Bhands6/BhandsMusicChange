@@ -3,7 +3,8 @@
 生成时间：2026-09-20
 对比范围：
 - Web 版：`BhandsMusic_Web/Bhands_Web/apps/server/src/services/`（`musicParser.ts` / `music-sources/*` / `durationProbe.ts`）+ `routes/music.ts`
-- 桌面版：`BhandsMusic/BhandsMusicChange/server/music-sources/*`（`musicParser.js` / `gdmusic.js` / `kugou.js` / `unblockMusic.js` / `lxMusicRunner.js` / `customApi.js` / `durationProbe.js`）+ `public/js/server.js` + `public/js/main.js`
+- 桌面版：`BhandsMusic/BhandsMusicChange/server/music-sources/*`（`musicParser.js` / `gdmusic.js` / `kugou.js` / `unblockMusic.js` / `lxMusicRunner.js` / `goMusicSwitch.js` / `durationProbe.js`）+ `public/js/server.js` + `public/js/main.js`
+  - 注：`customApi.js` 与 `custom` 策略已于 2026-09-23 整体移除（配置项 `customApiUrl` / `customApiMethod` 一并下线）。
 
 > 背景：桌面版最近两批提交（`b88ce4e` 播放提速批次 1、`258fe04` 移植 Web 版音源探测与竞速编排批次 2）正在把 Web 版的音源逻辑往桌面版搬，所以两边现在是「同源不同步」的状态。
 
@@ -23,6 +24,20 @@
 | 7 | 优先级注册表说明 | ✅ 已注明 | `musicParser.js` 的 `ParseStrategy` typedef 澄清 priority 在竞速下只影响排序/日志 |
 | 5 | LX 沙盒 worker 隔离 | ✅ 已改 | `lxMusicRunner.js` 重写为 worker_threads 沙盒（详见第 6 节） |
 | 6 | go-music-api 换源 | ✅ 已改 | 新增 `goMusicSwitch.js` + 接入 `musicParser` 策略链（详见第 9 节） |
+
+> **2026-09-23 追加：`unblockMusic` 退出默认音源。**
+> 直连 `parseFromUnblockMusic` 实测三首**完全不同**的歌——杨乃文「推开世界的门」/
+> 承桓「座位」/ 周杰伦「晴天」——返回的是**同一个** kuwo 资源 `M5000004Gmy54cGDqK`
+> （185336B ≈ 11s 试听垫片，期望时长却差着 70 秒），`data.platform` 恒为 `undefined`
+> （说明没走到任何 provider）。它每次解析都白跑一遍，结果必然被 `isHardRejected` 丢掉。
+> 改动：三处默认值（`server.js:134` / `server.js:4544` / `musicParser.js:459`）摘掉
+> `unblockMusic`，面板开关保留可手动勾选；`unblockMusic.js` 同时加「platform 缺失即判失败」，
+> 避免日志再打「解析成功」误导。
+>
+> 同日还做了两处桌面版内部调优（非 Web 差异）：
+> ① 候选预筛时长容差 `max(10s,12%)` → `max(8s,6%)`，修正它比外层 `acceptProbe`
+> 的 `max(5s,4%)` **还松**的倒挂（「座位」架子鼓版 225s vs 208s 因此白拿一次 FLAC 地址）；
+> ② 变体判定加通用后缀规则 `hasUnmatchedVariantSuffix`（枚举词表补不全「架子鼓版」这类）。
 
 验证：
 - 音源解析：4 个改动文件 `node --check` 通过；`musicParser` 模块可正常加载；垫片/回落/档位映射共 9 条断言全部通过（含「声明 185KB 垫片不再回落」与「未声明体积但探测出垫片也不回落」两条回归用例）。
@@ -63,9 +78,9 @@
 | 执行方式 | **全部策略并发竞速**，第一个「成功 + 通过探测校验」者胜出 | 同样**并发竞速**（批次 2 刚移植） |
 | 策略顺序 | 数组顺序只决定启动顺序，按**音质档位**分两套（无损档 gdmusic 优先，有损档 lx 优先） | 保留了**优先级注册表** `priority`（lx 0 / custom 1 / gdmusic 3 / kugou 3.5 / unblock 4），但注释明确说**并发下只影响日志，不影响启动顺序** |
 | 策略健康记忆 | 无（只有 per-song failedCache） | 有：`strategyFailStreak` 连败 2 次进 5 分钟冷却，加 100 惩罚值排队尾（并发下同样只记录不生效） |
-| 硬拒绝前置 | 有 `isHardRejected()`：声明大小 <400KB 且期望 ≥90s 的候选**直接丢弃且不进宽容回落** | **没有**——见第五节，这是移植缺口 |
-| 宽容回落 | 第一个「未通过校验但非硬拒绝」的候选 | 第一个「未通过 `acceptProbe`」的候选（含被大小拒绝的垫片） |
-| 成功缓存 | 10 分钟；key = `id_quality_vip_cookieMD5` | 30 分钟；key = `id_排序后的enabledSources` |
+| 硬拒绝前置 | 有 `isHardRejected()`：声明大小 <400KB 且期望 ≥90s 的候选**直接丢弃且不进宽容回落** | 已对齐（`musicParser.js` 的 `isHardRejected`，竞速回调里前置判断） |
+| 宽容回落 | 第一个「未通过校验但非硬拒绝」的候选 | 第一个「未通过 `acceptProbe`」且**非垫片**的候选（`isShimProbe` 命中的不进回落） |
+| 成功缓存 | 10 分钟；key = `id_quality_vip_cookieMD5` | 10 分钟；key = `id_quality_排序后的enabledSources`（2026-09-23 补回 quality —— 此前漏了这一维，导致切音质后第三方源在 TTL 内仍返回旧音质结果） |
 
 > 桌面版优先级注册表现在是「历史遗留的装饰」——迁移时没有把 Web 的「按音质档位决定顺序」逻辑一起搬，而是保留了旧的 priority 字段。
 
@@ -80,7 +95,7 @@
 | go-music-api 换源 | ✅ `goMusicSwitch.ts`（独立 Go 服务，酷狗/酷我/QQ/咪咕官方直链兜底） | ❌ 没有 | 桌面版缺少这一档高质量兜底 |
 | UnblockNeteaseMusic | ✅ 平台 `['kugou','kuwo']`（migu/pyncmd 实测 0/20 已移除，kuwo 21% 仅作兜底） | ✅ 平台默认 `['migu','kugou','kuwo','pyncmd']`（`.music-sources.json` 里配的是 `['migu','kugou','pyncmd']`） | 桌面版仍带 migu/pyncmd（Web 实测全失败） |
 | 酷狗直连 | ❌ | ✅ `kugou.js`（免登录搜索+128k 播放，移植自上游 Mineradio） | 桌面版独有 |
-| 自定义 API | ❌ | ✅ `customApi.js` | 桌面版独有 |
+| 自定义 API | ❌ | ❌（`customApi.js` 已于 2026-09-23 移除） | 曾为桌面版独有 |
 
 **GDMusic 音质档位处理也不一致：**
 - Web：`gdQualityOf(quality)` 按档位传 br（standard→128 / 无损三档→999 / 其他→320）。

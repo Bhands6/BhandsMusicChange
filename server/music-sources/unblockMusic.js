@@ -94,12 +94,23 @@ async function parseFromUnblockMusic(params) {
     try {
       const data = await match(parseInt(String(id), 10), platforms, songData);
       if (data && data.url) {
-        console.log('[UnblockMusic] 解析成功, 平台:', data.platform || 'unknown');
+        // ⚠️ platform 缺失 = unblock 内部没走到任何 provider，返回的是兜底资源。
+        // 2026-09-23 实测：三首完全不同的歌（杨乃文「推开世界的门」/ 承桓「座位」/
+        // 周杰伦「晴天」）全部返回**同一个** kuwo 资源 M5000004Gmy54cGDqK
+        //（185336B ≈ 11s 试听垫片，即 durationProbe 注释里那个 185KB 垫片），
+        // platform 一律是 undefined。这类结果必然被上游 isHardRejected 丢掉，
+        // 但日志会打印「解析成功」造成误判，所以这里直接判失败，
+        // 让它走正常的失败缓存 / 冷却路径。
+        if (!data.platform) {
+          console.warn('[UnblockMusic] 返回结果缺少 platform（未走到任何 provider），判定失败');
+          return null;
+        }
+        console.log('[UnblockMusic] 解析成功, 平台:', data.platform);
         return {
           url: data.url,
           br: data.br || 320000,
           size: data.size || 0,
-          platform: data.platform || 'unblockMusic'
+          platform: data.platform
         };
       }
       return null;

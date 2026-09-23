@@ -179,8 +179,12 @@ var FX_CONSOLE_LAYOUT = [
       ] },
       { key: 'bhands-advanced', title: '音源解析', hint: '音源开关与解析顺序', items: [
         fxConsoleItem('kugou-qr-login-row', '酷狗扫码登录', '酷狗 扫码 会员 登录 音质 概念版 FLAC'),
-        fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 UnblockMusic LX Music 酷狗 自定义 API 上传脚本'),
-        fxConsoleItem('source-parse-order-seg', '音源解析顺序', '会员 官方 第三方 优先 自动 换源 解析', true, '音源解析顺序')
+        // ⚠️ 不要在这里再单独注册 source-parse-order-seg：fxConsoleAppendItem 用的是
+        //    body.appendChild(node)，是「移动」而非复制，会把这个 seg 从 #fx-music-sources
+        //    内部拽到分组末尾 —— 结果是面板顶部留下一个没有控件的空标题，底部又补渲染
+        //    一份同名标题 + 控件（2026-09-23 修复）。解析顺序已并入本条的 aliases，
+        //    搜索「解析顺序 / 官方优先 / 第三方优先」仍能命中整块。
+        fxConsoleItem({ selector: '#fx-music-sources' }, '第三方音源', '音源开关 GD音乐台 GoMusic 换源 LX Music 酷狗 上传脚本 音源解析顺序 会员 官方 第三方 优先 自动 解析')
       ] },
       // 「实验功能」组已下线（2026-09-21 按用户要求移除）：
       // 唯一条目 t-wallpaperMode（完整桌面模式）移入 FX_CONSOLE_REMOVED_BLOCK_IDS 隐藏容器，

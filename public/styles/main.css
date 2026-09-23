@@ -695,6 +695,11 @@ body.home-controls-locked #bottom-bar{opacity:0!important;pointer-events:none!im
 .quality-option.active{color:#eaf2ff;border-color:rgba(157,184,207,.46);background:rgba(157,184,207,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
 .quality-option.locked{opacity:.42;cursor:not-allowed;transform:none!important}
 .quality-option.locked small::after{content:' · 需网易云SVIP';color:rgba(244,210,138,.88)}
+/* 只显示当前账号「存在」的档位（JS 设 option.hidden）。必须显式写：上面那条
+   .quality-option{display:flex} 是作者样式，会盖掉浏览器默认的 [hidden]{display:none} */
+.quality-option[hidden]{display:none!important}
+/* 注：.locked / 「需网易云SVIP」这套已废弃 —— index.html 里从来没有 data-svip 属性，
+   它从未生效过；现在改为按账号等级直接隐藏不可用档位（见 main.js availableQualityTiers）。*/
 #volume-slider{width:92px;accent-color:var(--fc-accent);cursor:pointer}
 #volume-value{width:34px;text-align:right;font-size:10px;color:rgba(255,255,255,.52);font-variant-numeric:tabular-nums}
 .mini-queue-popover{position:absolute;left:50%;bottom:calc(100% + 14px);width:min(420px,calc(100vw - 32px));max-height:min(420px,calc(100vh - 170px));padding:14px;border-radius:16px;border:1px solid rgba(255,255,255,.075);background:linear-gradient(145deg,rgba(18,18,23,.82),rgba(8,8,12,.88));backdrop-filter:blur(30px) saturate(1.08);-webkit-backdrop-filter:blur(30px) saturate(1.08);box-shadow:0 22px 70px rgba(0,0,0,.46),inset 0 1px 0 rgba(255,255,255,.065);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(12px) scale(.98);transition:opacity .22s,transform .22s;z-index:7;overflow:hidden}
@@ -1325,6 +1330,13 @@ body.sonic-workshop-active #album-bg,body.sonic-workshop-active #album-bg-next,b
 .fx-toggle.dev-locked:hover{background:rgba(255,255,255,.026);border-color:rgba(255,255,255,.07)}
 .fx-toggle.dev-locked .dot{background:rgba(255,255,255,.10);box-shadow:none}
 .fx-toggle.dev-locked.on{color:rgba(255,255,255,.38)!important;background:rgba(255,255,255,.018)!important;border-color:rgba(255,255,255,.045)!important}
+/* 两行式开关（酷狗扫码登录）：标签 + 状态点占一行，蓝色状态文案另起一行。
+   原来是单行 space-between 三列（标签/点/状态），而卡片只占 2 列网格的一半宽度
+   （实测 174px），状态文案一长就把「酷狗扫码登录」挤成「酷狗扫…」、状态自身也折成两行。 */
+.fx-toggle.fx-toggle-stacked{flex-wrap:wrap;justify-content:flex-start;row-gap:2px}
+.fx-toggle.fx-toggle-stacked>span:first-child{flex:1 1 auto}
+.fx-toggle.fx-toggle-stacked>.dot{flex:0 0 auto}
+.fx-toggle.fx-toggle-stacked>small{flex:0 0 100%;min-width:0;line-height:1.4;white-space:normal}
 .fx-dev-badge{display:inline-flex;align-items:center;margin-left:5px;padding:1px 5px;border-radius:999px;border:1px solid rgba(244,210,138,.28);background:rgba(244,210,138,.08);color:rgba(244,210,138,.76);font-style:normal;font-size:9px;font-weight:800;line-height:1.35;vertical-align:1px;letter-spacing:.05em}
 .fx-slider.dev-locked{opacity:.48;filter:saturate(.72)}
 .fx-slider.dev-locked input{cursor:not-allowed}

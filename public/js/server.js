@@ -129,17 +129,23 @@ const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json')
 
 /**
  * 默认音源配置
+ *
+ * ⚠️ unblockMusic 自 2026-09-23 起**不再进默认值**：实测（直连 parseFromUnblockMusic）
+ * 三首完全不同的歌——杨乃文「推开世界的门」/ 承桓「座位」/ 周杰伦「晴天」——返回的
+ * 是**同一个** kuwo 资源 M5000004Gmy54cGDqK（185336B ≈ 11s 试听垫片），
+ * data.platform 恒为 undefined（说明没走到任何 provider）。它每次解析都白跑一遍，
+ * 结果必然被 musicParser 的 isHardRejected 丢掉，是纯拖累。
+ * 面板上「UnblockMusic」开关仍在，用户想试可手动勾选。
  */
 const DEFAULT_MUSIC_SOURCES_CONFIG = {
-  enabledSources: ['gdmusic', 'unblockMusic', 'goMusic'],
+  enabledSources: ['gdmusic', 'goMusic'],
   quality: 'higher',
   lxMusicScripts: [],
   activeLxMusicApiId: null,
-  customApiUrl: '',
-  customApiMethod: 'GET',
-  unblockPlatforms: ['kugou', 'kuwo'],
-  // go-music-api 换源服务地址：留空则用环境变量 GO_MUSIC_API_URL 或默认 http://127.0.0.1:8080
-  goMusicApiUrl: ''
+  unblockPlatforms: ['kugou', 'kuwo']
+  // 2026-09-23 移除三个配置项：customApiUrl / customApiMethod（自定义 API 策略整体下线，
+  // 见 musicParser.js）与 goMusicApiUrl（面板入口早已删、无人能改）。
+  // go-music-api 的服务地址现在只看环境变量 GO_MUSIC_API_URL，留空即默认 127.0.0.1:8080。
 };
 
 /**
@@ -354,14 +360,56 @@ catch (e) { userCookie = ''; }
 function saveCookie(c) {
   userCookie = normalizeCookieHeader(c) || rawCookieFallback(c);
   try { fs.writeFileSync(COOKIE_FILE, userCookie); } catch (e) {}
+  // 登录态变了，官方源 URL 缓存必须作废：同一首歌「登录前 vs 登录后」拿到的
+  // 可能是试听片段 vs 完整版，而缓存 key 里的 svip 维度区分不了「VIP 用户
+  // 登录前后」（两种情况下 svipReady 都是 false）。见 songUrlCache 注释。
+  if (typeof songUrlCache !== 'undefined') songUrlCache.clear();
 }
 
 let qqCookie = '';
 try { if (fs.existsSync(QQ_COOKIE_FILE)) qqCookie = fs.readFileSync(QQ_COOKIE_FILE, 'utf8').trim(); }
 catch (e) { qqCookie = ''; }
+
+/* ---------- QQ 歌曲直链缓存 ----------
+ * 与网易云 songUrlCache 同一目的：前端有 **5 条路径**会打 /api/qq/song/url
+ * （播放主流程 main.js:17754 / 静默预解析 17763 / 手动重试 9041 / 节拍预取 27772 /
+ *   TRIAL 兜底 27789），而每条路径内部还会按音质档位**降级重试**
+ * —— 同一首歌几秒内被问十几次，每次都是一次完整的上游 CgiGetVkey 请求。
+ *
+ * 为什么复用 60 秒是安全的：purl 自带 vkey，而 **guid 与 uin 都写在 URL 查询串里**
+ * （sip + purl 直接拼出来的），所以缓存的 URL 是自洽的 —— 不需要和后续请求的
+ * 随机 guid 匹配，音频元素拿到的就是当初生成它的那一份。官方 vkey 本身有效期是小时级。
+ *
+ * key 必须含**登录态**：未登录（无 uin/musicKey）只能拿到试听 / 低码率，
+ * 登录后同一首歌的 vkey 与可播档位完全不同。mediaMid 也要进 key ——
+ * 它决定 filename，是上游选文件的依据（同一首歌不同媒体版本）。
+ * 只缓存**拿到 purl** 的结果：完全失败往往是上游临时抽风或版权限制，不该固化 60 秒。
+ */
+const QQ_SONG_URL_CACHE_TTL = 60 * 1000;
+const QQ_SONG_URL_CACHE_MAX = 300;
+const qqSongUrlCache = new Map();
+
+function readQqSongUrlCache(key) {
+  const hit = qqSongUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > QQ_SONG_URL_CACHE_TTL) { qqSongUrlCache.delete(key); return null; }
+  return hit.value;
+}
+
+function writeQqSongUrlCache(key, value) {
+  qqSongUrlCache.set(key, { at: Date.now(), value: value });
+  if (qqSongUrlCache.size > QQ_SONG_URL_CACHE_MAX) {
+    const oldest = qqSongUrlCache.keys().next().value;
+    if (oldest !== undefined) qqSongUrlCache.delete(oldest);
+  }
+}
+
 function saveQQCookie(c) {
   qqCookie = normalizeCookieHeader(c) || rawCookieFallback(c);
   try { fs.writeFileSync(QQ_COOKIE_FILE, qqCookie); } catch (e) {}
+  // 同网易云的 saveCookie：登录态一变，QQ 直链缓存必须作废。
+  // 未登录只能拿试听 / 低码率，登录后同一首歌的 vkey 完全不同（见上方注释）。
+  qqSongUrlCache.clear();
 }
 
 // ---------- 工具 ----------
@@ -1749,6 +1797,11 @@ function qualityCandidatesFrom(target, candidates) {
   if (start < 0) start = 0;
   return candidates.slice(start);
 }
+// 把网易云返回的 level 键翻成中文标签；未知档位返回 '' 由调用方兜底
+function neteaseQualityLabel(level) {
+  const hit = NETEASE_QUALITY_CANDIDATES.find(item => item.level === level);
+  return hit ? hit.label : '';
+}
 function hasNeteaseSvip(loginInfo) {
   return !!(loginInfo && loginInfo.loggedIn && (loginInfo.vipLevel === 'svip' || loginInfo.isSvip || Number(loginInfo.vipType || 0) >= 10));
 }
@@ -2850,6 +2903,16 @@ async function handleQQSongUrl(mid, mediaMid, qualityPreference) {
   const playbackKey = qqCookiePlaybackKey(cookieObj);
   const fileMediaMid = String(mediaMid || '').trim();
   const requestedQuality = normalizeQualityPreference(qualityPreference);
+
+  // 命中缓存直接返回（见 qqSongUrlCache 注释）。必须在音质归一化**之后**：
+  // 不同档位拿到的 filename 不同、结果也不同。
+  const cacheKey = songmid + '|' + fileMediaMid + '|' + requestedQuality + '|' + (uin && musicKey ? 'login' : 'guest');
+  const cachedQqUrl = readQqSongUrlCache(cacheKey);
+  if (cachedQqUrl) {
+    console.log('[QQSongUrl] 命中缓存:', songmid, cachedQqUrl.level || '');
+    return cachedQqUrl;
+  }
+
   const mediaIds = [];
   if (fileMediaMid) mediaIds.push(fileMediaMid);
   if (songmid && !mediaIds.includes(songmid)) mediaIds.push(songmid);
@@ -2884,7 +2947,7 @@ async function handleQQSongUrl(mid, mediaMid, qualityPreference) {
   if (purl) {
     const sip = (data.sip && data.sip[0]) || 'https://ws.stream.qqmusic.qq.com/';
     const fileMeta = fileCandidates.find(item => item.filename === info.filename) || {};
-    return {
+    const ok = {
       provider: 'qq',
       url: sip + purl,
       trial: false,
@@ -2895,6 +2958,9 @@ async function handleQQSongUrl(mid, mediaMid, qualityPreference) {
       filename: info.filename || '',
       requestedQuality,
     };
+    // 只缓存成功（拿到 purl）的结果 —— 失败往往是上游临时抽风或版权限制，不固化
+    writeQqSongUrlCache(cacheKey, ok);
+    return ok;
   }
   const restriction = classifyQQPlaybackRestriction(info, {
     hasSession: !!(uin && musicKey),
@@ -3229,13 +3295,52 @@ async function fetchMyPodcastItems(key, info, limit, offset) {
   return { itemType: 'radio', items: [] };
 }
 
+/* ---------- 官方源 URL 短期缓存（60 秒） ----------
+ * handleSongUrl 一次要沿音质档位链打上游（hires → lossless → exhigh → standard），
+ * 每轮最多 4 次请求。而它的调用点很多：
+ *   · `/api/song/url` 路由 —— 前端 6 个调用点（静默预解析 / 正式播放解析 /
+ *     音质降级重试 / TRIAL 兜底），同一首歌在几秒内被反复请求是常态；
+ *   · 天气电台的批量可播性探测（`filterLikelyPlayableWeatherSongs`，每批 4 首）。
+ * 2026-09-23 实测日志：一轮播放里 `[SongUrl] id: 2623517920` 出现 5 次、
+ * 4 个档位全是 TRIAL —— 合计约 20 次上游请求，其中绝大多数是重复的。
+ * 官方 URL 自带时效 token（有效数小时），60 秒内复用完全安全。
+ *
+ * key 必须含音质与 svip 状态：不同档位结果不同；天气电台探测传的是精简
+ * loginInfo（只有 loggedIn），svipReady 恒为 false，不加维度会和路由调用串味。
+ * 只缓存**拿到 url** 的结果（含 TRIAL）—— 完全失败往往是上游临时抽风，不该固化。
+ */
+const SONG_URL_CACHE_TTL = 60 * 1000;
+const SONG_URL_CACHE_MAX = 300;
+const songUrlCache = new Map();
+
+function readSongUrlCache(key) {
+  const hit = songUrlCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > SONG_URL_CACHE_TTL) { songUrlCache.delete(key); return null; }
+  return hit.value;
+}
+
+function writeSongUrlCache(key, value) {
+  songUrlCache.set(key, { at: Date.now(), value: value });
+  if (songUrlCache.size > SONG_URL_CACHE_MAX) {
+    const oldest = songUrlCache.keys().next().value;
+    if (oldest !== undefined) songUrlCache.delete(oldest);
+  }
+}
+
 // ---------- 业务: 取歌曲URL (探测试听) ----------
 //   返回 { url, trial, level, br }
 //   trial=true 表示这是试听片段 (freeTrialInfo 非空)
 async function handleSongUrl(id, loginInfo, qualityPreference) {
-  console.log('[SongUrl] id:', id, 'logged-in:', !!userCookie);
   const requestedQuality = normalizeQualityPreference(qualityPreference);
   const svipReady = hasNeteaseSvip(loginInfo);
+  const cacheKey = String(id) + '|' + requestedQuality + '|' + (svipReady ? 'svip' : 'novip');
+  const cached = readSongUrlCache(cacheKey);
+  if (cached) {
+    console.log('[SongUrl] 命中缓存:', id, cached.level || '', cached.trial ? '(TRIAL)' : '');
+    return cached;
+  }
+  console.log('[SongUrl] id:', id, 'logged-in:', !!userCookie);
   const qualities = qualityCandidatesFrom(requestedQuality, NETEASE_QUALITY_CANDIDATES)
     .filter(q => !q.svip || svipReady);
 
@@ -3256,17 +3361,29 @@ async function handleSongUrl(id, loginInfo, qualityPreference) {
       if (d) lastData = d;
       const url = d && d.url;
       const freeTrial = d && d.freeTrialInfo;
-      console.log('[SongUrl]', q.level, '->', url ? 'OK' : 'no url', freeTrial ? '(TRIAL)' : '');
+      // ⚠️ 档位必须取上游返回的 d.level（真实拿到的档位），不能用请求的 q.level。
+      // 网易云对没有权限的账号**不会**返回空 url，而是回一个降级后的可用 url：
+      //   实测无会员账号（vipType=0）请求 jymaster/hires/lossless/exhigh
+      //   → fee=8 的歌全部回 br=320000 level=exhigh type=mp3
+      //   → fee=1 的歌全部回 br=128012 level=standard + freeTrialInfo
+      // 用 q.level 会让前端把 320k 的 mp3 显示成「高清臻音」（Hi-Res 档）——
+      // 也就是「高清臻音 · 320 kbps」这种自相矛盾的文案。
+      const actualLevel = (d && d.level) || q.level;
+      const actualLabel = neteaseQualityLabel(actualLevel) || q.label;
+      console.log('[SongUrl]', q.level, '->', url ? 'OK' : 'no url', freeTrial ? '(TRIAL)' : '',
+        actualLevel !== q.level ? '(上游实为 ' + actualLevel + ')' : '');
       if (url && !freeTrial) {
-        return { url, trial: false, playable: true, level: q.level, quality: q.label, br: d.br, requestedQuality };
+        const hit = { url, trial: false, playable: true, level: actualLevel, quality: actualLabel, br: d.br, requestedQuality };
+        writeSongUrlCache(cacheKey, hit);
+        return hit;
       }
       if (url && freeTrial && !trialFallback) {
         trialFallback = {
           url,
           trial: true,
           playable: true,
-          level: q.level,
-          quality: q.label,
+          level: actualLevel,
+          quality: actualLabel,
           br: d.br,
           requestedQuality,
           trialInfo: freeTrial,
@@ -3278,7 +3395,10 @@ async function handleSongUrl(id, loginInfo, qualityPreference) {
       console.log('[SongUrl]', q.level, 'failed:', err.message);
     }
   }
-  if (trialFallback) return trialFallback;
+  if (trialFallback) {
+    writeSongUrlCache(cacheKey, trialFallback);
+    return trialFallback;
+  }
   const restriction = classifyNeteasePlaybackRestriction(lastData, loginInfo);
   return {
     url: null,
@@ -4534,11 +4654,10 @@ const server = http.createServer(async (req, res) => {
         album: meta.album,
         duration: meta.duration,
         quality: quality || config.quality || 'higher',
-        enabledSources: config.enabledSources || ['gdmusic', 'unblockMusic', 'goMusic'],
-        customApiUrl: config.customApiUrl || '',
-        customApiMethod: config.customApiMethod || 'GET',
-        unblockPlatforms: config.unblockPlatforms || ['kugou', 'kuwo'],
-        goMusicApiUrl: config.goMusicApiUrl || ''
+        // 兜底值与 DEFAULT_MUSIC_SOURCES_CONFIG 保持一致（unblockMusic 已摘掉，见该处注释）
+        enabledSources: config.enabledSources || ['gdmusic', 'goMusic'],
+        unblockPlatforms: config.unblockPlatforms || ['kugou', 'kuwo']
+        // customApiUrl / customApiMethod / goMusicApiUrl 三个入参已于 2026-09-23 移除
       });
 
       if (result && result.url) {
@@ -4546,6 +4665,9 @@ const server = http.createServer(async (req, res) => {
           url: result.url,
           source: result.source,
           quality: result.quality,
+          // 归一化档位键（'lossless'/'exhigh'/'standard'，与官方源 d.level 同语义）：
+          // 前端音质按钮在**非会员**时用它显示「实际解析出来的档位」
+          level: result.level,
           br: result.br
         });
       } else {
@@ -4578,10 +4700,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   // GET /api/parse/go-music/status - 探测 go-music-api 换源服务连通性（由服务端代探，避免浏览器跨域）
+  // 2026-09-23：面板上的「测试连接」按钮与 goMusicApiUrl 配置项已移除，本路由现在是个
+  // **只读诊断端点**（curl 用），地址固定取环境变量 GO_MUSIC_API_URL / 默认 127.0.0.1:8080。
   if (pn === '/api/parse/go-music/status' && req.method === 'GET') {
     try {
-      const config = readMusicSourcesConfig();
-      const probe = await probeGoMusicService(config.goMusicApiUrl || '');
+      const probe = await probeGoMusicService('');
       // 探活成功即清掉策略内的"服务离线"冷却，让用户测通后立刻恢复可用
       if (probe && probe.reachable) resetGoMusicServiceHealth();
       sendJSON(res, probe);
@@ -4784,14 +4907,9 @@ const server = http.createServer(async (req, res) => {
       const newConfig = { ...currentConfig };
       if (body.enabledSources !== undefined) newConfig.enabledSources = body.enabledSources;
       if (body.quality !== undefined) newConfig.quality = body.quality;
-      if (body.customApiUrl !== undefined) newConfig.customApiUrl = body.customApiUrl;
-      if (body.customApiMethod !== undefined) newConfig.customApiMethod = body.customApiMethod;
       if (body.unblockPlatforms !== undefined) newConfig.unblockPlatforms = body.unblockPlatforms;
-      if (body.goMusicApiUrl !== undefined) {
-        newConfig.goMusicApiUrl = body.goMusicApiUrl;
-        // 地址变了就重置服务健康记忆，让新地址立刻生效（否则可能还在冷却期）
-        resetGoMusicServiceHealth();
-      }
+      // customApiUrl / customApiMethod / goMusicApiUrl 三个分支已于 2026-09-23 移除：
+      // 界面上没有对应控件，留着只会让「谁能写这三个键」变得含糊。
       if (body.activeLxMusicApiId !== undefined) {
         newConfig.activeLxMusicApiId = body.activeLxMusicApiId;
         setActiveRunner(body.activeLxMusicApiId);
@@ -4909,6 +5027,26 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, { success: true, message: '缓存已清除' });
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
+    }
+    return;
+  }
+
+  // POST /api/parse/cache/clear-song - 清除单首歌的解析缓存
+  // 播放中断时由前端调用（第三方直链带时效 token，缓存里可能是一条已失效的死链）。
+  // clearCacheForSong 早就写好了但一直没人调用，这里把它接上。
+  if (pn === '/api/parse/cache/clear-song' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const id = body && body.id;
+      if (id === undefined || id === null || id === '') {
+        sendJSON(res, { success: false, error: '缺少歌曲 id' }, 400);
+        return;
+      }
+      clearCacheForSong(id);
+      sendJSON(res, { success: true, message: '该歌曲的解析缓存已清除' });
+    } catch (err) {
+      console.error('[ParseCacheClearSong]', err);
+      sendJSON(res, { success: false, error: err.message }, 500);
     }
     return;
   }

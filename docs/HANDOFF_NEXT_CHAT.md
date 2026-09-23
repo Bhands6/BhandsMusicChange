@@ -36,7 +36,7 @@ Get-Content RELEASE.md
 
 ## 本轮重点（2026-07-27）
 
-- 多音源解析系统集成：新增 `server/music-sources/` 目录，5 个模块（musicParser、gdmusic、unblockMusic、lxMusicRunner、customApi）。
+- 多音源解析系统集成：新增 `server/music-sources/` 目录（musicParser、gdmusic、unblockMusic、lxMusicRunner、goMusicSwitch、durationProbe、kugou）。原 `customApi` 模块已于 2026-09-23 随「自定义 API」功能一起移除。
 - 服务端 API：`/api/parse/music`、`/api/parse/config`、`/api/parse/lx/*`、`/api/parse/cache/*`。
 - 前端集成：`tryThirdPartyParse()` 调用，VIP 优先官方，非 VIP 优先第三方。
 - 音质降级：LX Music flac → 320k → 128k，GD音乐台 br=999 最高质量。

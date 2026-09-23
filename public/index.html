@@ -629,51 +629,37 @@ try {
 
   <!-- 第三方音源设置 -->
   <div class="fx-toggle" id="t-diyMode" onclick="toggleDiyMode()" title="DIY 玩家模式：展开完整控制台、上传/封面、自定义歌词与高级调参"><span>DIY 玩家模式</span><span class="dot"></span></div>
-  <div class="fx-toggle" id="kugou-qr-login-row" onclick="openKugouQrLogin()" title="扫码登录酷狗概念版，解锁会员音质（FLAC/320k）"><span>酷狗扫码登录</span><span class="dot"></span><small id="kugou-login-status" style="margin-left:8px;font-size:10px;color:rgba(255,255,255,.45)">未登录</small></div>
+  <div class="fx-toggle fx-toggle-stacked" id="kugou-qr-login-row" onclick="openKugouQrLogin()" title="扫码登录酷狗概念版，解锁会员音质（FLAC/320k）"><span>酷狗扫码登录</span><span class="dot"></span><small id="kugou-login-status" style="font-size:10px;color:rgba(255,255,255,.45)">未登录</small></div>
   <div class="fx-advanced" id="fx-music-sources">
     <div class="fx-advanced-head" onclick="document.getElementById('fx-music-sources').classList.toggle('open')">
       <span>第三方音源</span><span class="arrow">▶</span>
     </div>
     <div class="fx-advanced-body">
-      <div class="fx-section-label">音源解析顺序</div>
-      <div class="fx-seg" id="source-parse-order-seg" title="会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级">
-        <button data-parse-order="auto" type="button" class="active" onclick="setSourceParseOrder('auto')">自动</button>
-        <button data-parse-order="official" type="button" onclick="setSourceParseOrder('official')">官方优先</button>
-        <button data-parse-order="third-party" type="button" onclick="setSourceParseOrder('third-party')">第三方优先</button>
+      <!-- 非会员时整块隐藏：三档行为完全相同（见 main.js syncSourceParseOrderVisibility） -->
+      <div id="source-parse-order-block">
+        <div class="fx-section-label">音源解析顺序</div>
+        <div class="fx-seg" id="source-parse-order-seg" title="仅对网易云 / QQ 会员生效。会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级。非会员时三档行为一致（都直接走第三方），所以这块会自动隐藏。">
+          <button data-parse-order="auto" type="button" class="active" onclick="setSourceParseOrder('auto')">自动</button>
+          <button data-parse-order="official" type="button" onclick="setSourceParseOrder('official')">官方优先</button>
+          <button data-parse-order="third-party" type="button" onclick="setSourceParseOrder('third-party')">第三方优先</button>
+        </div>
       </div>
       <div class="fx-section-label">音源开关</div>
+      <div class="fx-section-desc">默认推荐：GD音乐台 + GoMusic 换源。酷狗音源要扫码登录会员才拿得到 FLAC；LX Music 属于自备脚本，上传脚本后按需开启。</div>
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 netease/joox 聚合搜索匹配，无损优先"><span>GD音乐台</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-goMusic" onclick="toggleMusicSource('goMusic')" title="go-music-api 智能换源 - 需本地运行该 Go 服务，用酷狗/酷我/QQ/咪咕官方音源兜底"><span>智能换源</span><span class="dot"></span></div>
+        <div class="fx-toggle" id="t-src-goMusic" onclick="toggleMusicSource('goMusic')" title="GoMusic 换源 - go-music-api 服务，需本地运行该 Go 服务，用酷狗/酷我/QQ/咪咕官方音源兜底"><span>GoMusic 换源</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-src-kugou" onclick="toggleMusicSource('kugou')" title="酷狗音源 - 免登录搜索匹配并解析标准音质（移植自上游 Mineradio）"><span>酷狗音源</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-src-lxMusic" onclick="toggleMusicSource('lxMusic')" title="LX Music 脚本 - 需要上传音源脚本，支持旧版与事件式脚本"><span>LX Music</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-unblockMusic" onclick="toggleMusicSource('unblockMusic')" title="UnblockNeteaseMusic - 通过酷狗/酷我平台匹配，128k 兜底"><span>UnblockMusic</span><span class="dot"></span></div>
-        <div class="fx-toggle" id="t-src-custom" onclick="toggleMusicSource('custom')" title="自定义 API - 填写第三方解析接口地址"><span>自定义 API</span><span class="dot"></span></div>
       </div>
-      <div class="fx-section-label">LX Music 脚本</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-        <button class="fx-mini-btn" onclick="uploadLxMusicScript()">上传脚本</button>
-        <span id="lx-script-status" style="font-size:11px;color:var(--c-text-dim,#888);">未加载</span>
-      </div>
-      <input type="file" id="lx-script-file-input" accept=".js,.txt" style="display:none" onchange="handleLxScriptUpload(event)">
-      <div id="lx-scripts-list" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;"></div>
-      <div class="fx-section-label">自定义 API 地址</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-        <input type="text" id="custom-api-url" placeholder="https://example.com/api/music" style="flex:1;height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);padding:0 8px;font-size:12px;outline:none;" onchange="saveCustomApiUrl()">
-        <select id="custom-api-method" style="height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);font-size:12px;padding:0 4px;" onchange="saveCustomApiUrl()">
-          <option value="GET">GET</option>
-          <option value="POST">POST</option>
-        </select>
-      </div>
-      <div class="fx-section-label">go-music-api 换源服务地址</div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-        <input type="text" id="go-music-api-url" placeholder="留空使用默认 http://127.0.0.1:8080" style="flex:1;height:28px;border-radius:6px;border:1px solid var(--c-border,rgba(255,255,255,.12));background:var(--c-bg-input,rgba(0,0,0,.2));color:var(--c-text,#fff);padding:0 8px;font-size:12px;outline:none;" onchange="saveGoMusicApiUrl()">
-        <button class="fx-mini-btn" onclick="testGoMusicService()">测试连接</button>
-      </div>
-      <div id="go-music-api-status" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;">未测试</div>
-      <div class="fx-section-label">其他</div>
-      <div style="display:flex;gap:8px;">
-        <button class="fx-mini-btn" onclick="clearParseCache()">清除解析缓存</button>
+      <div id="lx-script-block">
+        <div class="fx-section-label">LX Music 脚本</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+          <button class="fx-mini-btn" onclick="uploadLxMusicScript()">上传脚本</button>
+          <span id="lx-script-status" style="font-size:11px;color:var(--c-text-dim,#888);">未加载</span>
+        </div>
+        <input type="file" id="lx-script-file-input" accept=".js,.txt" style="display:none" onchange="handleLxScriptUpload(event)">
+        <div id="lx-scripts-list" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;"></div>
       </div>
     </div>
   </div>

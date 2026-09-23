@@ -13879,17 +13879,37 @@ function playbackQualityRank(value) {
 function playbackQualityWasDowngraded(requested, resolved) {
   return playbackQualityRank(resolved) < playbackQualityRank(requested);
 }
+// 与 server.js NETEASE_QUALITY_CANDIDATES 里 svip:true 的档位保持一致（目前只有超清母带）。
+// 这些档位对非 SVIP 账号是「必然拿不到」，不该按「故障降级」提示。
+var SVIP_ONLY_QUALITIES = ['jymaster'];
+var svipQualityNoticeShown = false;  // 会话级：同一句 SVIP 提示只弹一次
+function isSvipOnlyQuality(value) {
+  return SVIP_ONLY_QUALITIES.indexOf(normalizePlaybackQuality(value)) >= 0;
+}
 function playbackBitrateLabel(br) {
   br = Number(br) || 0;
   if (!br) return '';
   if (br >= 1000000) return (br / 1000000).toFixed(br >= 2000000 ? 1 : 2).replace(/\.0+$/, '') + ' Mbps';
   return Math.round(br / 1000) + ' kbps';
 }
+/**
+ * 「实际播放」的档位描述。
+ * ⚠️ 两个坑都踩过：
+ *  1. 旧写法兜底用的是 `playbackQuality`（用户自己的偏好）—— 第三方音源命中时
+ *     `data` 只有 `{url, source:'third-party'}`（main.js 播放主流程里构造），
+ *     没有 level/br，于是输出「请求 超清母带，实际播放 超清母带」这种废话。
+ *  2. `data.quality` 是**中文标签**（server.js 里的 `q.label`），不能喂给
+ *     `playbackQualityLabel()` —— 它期待 'hires'/'exhigh' 这类键，喂中文会一律
+ *     归一成「高清臻音」（'极高' 会被显示成 '高清臻音'）。
+ * @returns {string} 拿不到真实档位时返回 ''，调用方据此不下结论
+ */
 function playbackResolvedQualityText(data) {
   data = data || {};
-  var label = playbackQualityLabel(data.level || data.quality || playbackQuality);
+  var label = data.level ? playbackQualityLabel(data.level)
+    : (data.quality ? String(data.quality) : '');
   var br = playbackBitrateLabel(data.br);
-  return br ? (label + ' · ' + br) : label;
+  if (label && br) return label + ' · ' + br;
+  return label || br;
 }
 function readPlaybackQualityPreference() {
   try {
@@ -13901,18 +13921,96 @@ function readPlaybackQualityPreference() {
 function savePlaybackQualityPreference() {
   try { localStorage.setItem(PLAYBACK_QUALITY_STORE_KEY, playbackQuality); } catch (e) {}
 }
+/**
+ * 最近一次**实际解析出来**的播放档位。
+ * 用途：音质按钮的标签与面板高亮都显示它（= 当前真正生效的档位）。
+ * 拿不到真实档位（还没播过歌 / 本地曲目 / 服务端没回 level）时保持 null → 回退偏好。
+ * @type {{level: string, br: number, source: string}|null}
+ */
+var lastResolvedPlaybackQuality = null;
+
+/**
+ * 记录本次播放实际解析出的档位并刷新音质按钮。
+ * @param {Object} data 播放数据（官方源带 level/br；第三方源由 thirdPartyPlaybackData 带上）
+ */
+function noteResolvedPlaybackQuality(data) {
+  if (!data || !data.url) return;   // 没进入播放流程，不动
+  var level = String(data.level || '').toLowerCase();
+  var br = Number(data.br) || 0;
+  if (level && ['jymaster', 'hires', 'lossless', 'exhigh', 'standard'].indexOf(level) < 0) level = '';
+  if (!level && br > 0) {
+    // 只有码率时按码率估档（官方源偶尔只回 br；第三方源已在服务端归一化）
+    level = br >= 900000 ? 'lossless' : (br >= 256000 ? 'exhigh' : 'standard');
+  }
+  // 拿不到任何档位证据（本地曲目 / 服务端没回 level·br）→ 置空回退偏好，
+  // 否则按钮会一直挂着上一首的档位
+  var next = level ? { level: level, br: br, source: data.thirdPartySource || data.source || '' } : null;
+  var prev = lastResolvedPlaybackQuality;
+  if (!next && !prev) return;
+  if (next && prev && prev.level === next.level && prev.br === next.br && prev.source === next.source) return;
+  lastResolvedPlaybackQuality = next;
+  updatePlaybackQualityUi();
+}
+
+/**
+ * 当前账号实际「存在」的音质档位（从高到低）。音质面板只列这些，其余隐藏。
+ * 依据：网易云官方源的档位门槛 —— 超清母带要 SVIP；高清臻音要 VIP；
+ * 无会员时官方上限只有 320kbps（极高），但**第三方源**能给无损
+ * （`gdQualityOf`/`qualityOf` 把 lossless/hires/jymaster 都映射成 '999' 无损），
+ * 所以无会员保留「无损」这一档。
+ */
+function availableQualityTiers() {
+  var tiers = hasProviderSvip('netease', loginStatus)
+    ? ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
+    : (hasProviderVip('netease', loginStatus)
+      ? ['hires', 'lossless', 'exhigh', 'standard']
+      : ['lossless', 'exhigh', 'standard']);
+  // 正在播放的档位一定是「存在」的：万一它不在上面（例如非会员却拿到 hires），
+  // 补进来并按档位高低重排，避免出现「面板里没有任何一项被高亮」
+  var level = lastResolvedPlaybackQuality ? normalizePlaybackQuality(lastResolvedPlaybackQuality.level) : '';
+  if (level && tiers.indexOf(level) < 0) {
+    tiers = tiers.concat([level]).sort(function (a, b) { return playbackQualityRank(b) - playbackQualityRank(a); });
+  }
+  return tiers;
+}
+
+/**
+ * 把档位收敛到可用集合：本身可用就原样返回，否则降到可用集合里的最高档。
+ * 例：非会员 localStorage 里还存着 'jymaster' → 收敛成 'lossless'。
+ * 只影响**显示**，不改写 localStorage（用户升 SVIP 后原选择还在）。
+ */
+function convergeQuality(value, tiers) {
+  value = normalizePlaybackQuality(value);
+  return tiers.indexOf(value) >= 0 ? value : tiers[0];
+}
+
 function updatePlaybackQualityUi() {
   var label = document.getElementById('quality-btn-label');
   var btn = document.getElementById('quality-btn');
-  if (label) label.textContent = playbackQualityShortLabel(playbackQuality);
-  if (btn) btn.title = '音质: ' + playbackQualityLabel(playbackQuality);
+  var tiers = availableQualityTiers();
+  // 「当前生效的档位」—— 按钮标签与面板高亮共用同一个值，避免两处说法不一致：
+  //   有实际解析结果 → 用它（会员走官方源、非会员走第三方源，都是真实档位）
+  //   还没播过歌 / 拿不到真实档位 → 用偏好收敛到可用档位后的结果
+  var level = lastResolvedPlaybackQuality ? normalizePlaybackQuality(lastResolvedPlaybackQuality.level) : '';
+  var display = level || convergeQuality(playbackQuality, tiers);
+  if (label) label.textContent = playbackQualityShortLabel(display);
+  if (btn) {
+    btn.title = lastResolvedPlaybackQuality
+      ? '音质偏好: ' + playbackQualityLabel(playbackQuality) +
+        ' · 实际播放: ' + (playbackResolvedQualityText(lastResolvedPlaybackQuality) || playbackQualityLabel(display)) +
+        (lastResolvedPlaybackQuality.source ? '（' + lastResolvedPlaybackQuality.source + '）' : '')
+      : '音质: ' + playbackQualityLabel(display);
+  }
   document.querySelectorAll('.quality-option').forEach(function(option){
     var q = normalizePlaybackQuality(option.dataset.quality);
-    var locked = option.dataset.svip === '1' && !hasProviderSvip('netease', loginStatus);
-    option.classList.toggle('active', q === playbackQuality);
-    option.classList.toggle('locked', locked);
-    option.disabled = locked;
-    option.title = locked ? '需要网易云 SVIP 账号' : playbackQualityLabel(q);
+    var available = tiers.indexOf(q) >= 0;
+    // 只显示「存在的档位」：不可用的直接隐藏（不能只靠 .locked —— 全项目没有
+    // data-svip 属性，那套 .locked/disabled 逻辑其实从未生效过）
+    option.hidden = !available;
+    option.disabled = !available;
+    option.classList.remove('locked', 'playing');
+    option.classList.toggle('active', q === display);
+    option.title = available ? playbackQualityLabel(q) : '当前账号不可用';
   });
 }
 function setPlaybackQuality(value) {
@@ -13920,8 +14018,7 @@ function setPlaybackQuality(value) {
   playbackQuality = next;
   savePlaybackQualityPreference();
   updatePlaybackQualityUi();
-  var wrap = document.getElementById('quality-control');
-  if (wrap) wrap.classList.remove('open');
+  closeQualityPanel();
   applyPlaybackQualityToCurrentTrack(next);
 }
 function canReloadCurrentTrackForQuality() {
@@ -13949,19 +14046,47 @@ function applyPlaybackQualityToCurrentTrack(nextQuality) {
     showToast('音质切换失败，已保留偏好');
   }).finally(forcePlaybackControlsInteractive);
 }
+/**
+ * 关闭「.open / :hover / :focus-within 三条件展开」的浮动面板（音量、音质…）。
+ * ⚠️ 这类 popover 的显示条件在 CSS 里是三条并列取或（main.css:687），只移除 `.open`
+ * 是关不掉的：用户点过面板内的按钮（音质选项）或拖过滑块后，焦点仍留在面板里，
+ * `:focus-within` 会让它一直挂在屏幕上 —— 用户反馈「音质面板弹出后不关闭」即此。
+ * 所以关闭时必须显式失焦。
+ */
+function closeHoverPopover(controlId) {
+  var wrap = document.getElementById(controlId);
+  if (!wrap) return;
+  wrap.classList.remove('open');
+  var active = document.activeElement;
+  if (active && wrap.contains(active) && typeof active.blur === 'function') active.blur();
+}
+/**
+ * 关闭音质面板。
+ * 交互约定：点选项**不**收起（鼠标还悬在面板上，:hover 继续撑着），鼠标移出才收。
+ * 所以这里只做两件事：清掉 `.open` 类 + 失焦 —— 失焦是关键，
+ * 否则 `:focus-within`（main.css:687 的三条显示条件之一）会顶住面板，
+ * 鼠标移出也收不掉（用户反馈「弹出后不关闭」的根因）。
+ */
+function closeQualityPanel() { closeHoverPopover('quality-control'); }
 function toggleQualityPanel(e) {
   if (e) e.stopPropagation();
   var wrap = document.getElementById('quality-control');
-  if (wrap) wrap.classList.toggle('open');
+  if (!wrap) return;
+  if (wrap.classList.contains('open')) { closeQualityPanel(); return; }
+  wrap.classList.add('open');
 }
 function bindQualityControl() {
   var wrap = document.getElementById('quality-control');
   if (wrap) {
     wrap.addEventListener('mouseenter', function(){ wrap.classList.add('open'); });
-    wrap.addEventListener('mouseleave', function(){ setTimeout(function(){ if (!wrap.matches(':hover')) wrap.classList.remove('open'); }, 260); });
+    // 鼠标移出才收：260ms 缓冲防手抖。closeQualityPanel 会同时失焦 ——
+    // 点过选项后焦点留在按钮上，:focus-within 会顶住面板，这里就收不掉了。
+    wrap.addEventListener('mouseleave', function(){
+      setTimeout(function(){ if (!wrap.matches(':hover')) closeQualityPanel(); }, 260);
+    });
   }
   document.addEventListener('click', function(e){
-    if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+    if (wrap && !wrap.contains(e.target)) closeQualityPanel();
   });
   updatePlaybackQualityUi();
 }
@@ -16963,7 +17088,7 @@ function bindVolumeControls() {
     if (volumeCloseTimer) clearTimeout(volumeCloseTimer);
     volumeCloseTimer = setTimeout(function(){
       volumeCloseTimer = null;
-      if (wrap) wrap.classList.remove('open');
+      closeHoverPopover('volume-control');  // 同时清焦点，否则 :focus-within 会顶住面板
     }, 520);
   }
   if (wrap) {
@@ -16983,7 +17108,7 @@ function bindVolumeControls() {
     if (!wrap) return;
     if (!wrap.contains(e.target)) {
       if (volumeCloseTimer) { clearTimeout(volumeCloseTimer); volumeCloseTimer = null; }
-      wrap.classList.remove('open');
+      closeHoverPopover('volume-control');
     }
   });
   updateVolumeUi();
@@ -17280,7 +17405,11 @@ function extractAlbumName(song) {
  * 尝试使用第三方音源解析音乐 URL
  * @param {Object} song - 歌曲对象
  * @param {string} quality - 请求的音质
- * @returns {Promise<string|null>} 解析到的 URL，失败返回 null
+ * @returns {Promise<{url: string, level: string, br: number, source: string}|null>}
+ *   失败返回 null。
+ *   ⚠️ 返回的是**对象**不是裸 url：`level`（'lossless'/'exhigh'/'standard'）是服务端
+ *   归一化后的**实际解析档位**，音质按钮在非会员时要用它显示真实档位 ——
+ *   旧版只把 url 带回来，档位信息在服务端就被丢掉了。
  */
 async function tryThirdPartyParse(song, quality, opts) {
   try {
@@ -17295,7 +17424,13 @@ async function tryThirdPartyParse(song, quality, opts) {
 
     // silent（恢复态预解析/启动自动播放）：后台请求不打扰用户
     var silentParse = !!(opts && opts.silent);
-    if (!silentParse) showSourceFallbackNotice('正在尝试第三方音源', '官方音源不可用，正在搜索其他来源...');
+    // 文案随调用路径变化：只有「官方优先但官方真的失败了」才谈得上「官方音源不可用」；
+    // 第三方优先（非会员 / 显式配置优先第三方）是**设计路径**，官方源压根没被尝试过，
+    // 说「官方音源不可用」不成立 —— 那里只是「正在搜索可用音源」。
+    if (!silentParse) {
+      showSourceFallbackNotice('正在尝试第三方音源',
+        (opts && opts.officialFailed) ? '官方音源不可用，正在搜索其他来源...' : '正在搜索可用音源...');
+    }
 
     // 10s 超时：覆盖 server 端策略链（冷却后 gdmusic 6s + kugou ~2s）+ 网络往返；
     // server 端有策略健康记忆，正常情况远快于此上限
@@ -17320,14 +17455,37 @@ async function tryThirdPartyParse(song, quality, opts) {
 
     var result = await response.json();
     if (result && result.url) {
-      console.log('[ThirdPartyParse] 解析成功, 来源:', result.source);
+      console.log('[ThirdPartyParse] 解析成功, 来源:', result.source, ', 档位:', result.level || '未知');
       if (!silentParse) showSourceFallbackNotice('第三方音源可用', '已通过 ' + (result.source || '第三方') + ' 获取到音频。');
-      return result.url;
+      return {
+        url: result.url,
+        level: result.level || '',
+        br: Number(result.br) || 0,
+        source: result.source || 'third-party'
+      };
     }
   } catch (e) {
     console.warn('[ThirdPartyParse] 解析失败:', e);
   }
   return null;
+}
+/**
+ * 第三方命中 → 播放数据对象（带 level/br，供音质按钮显示「实际解析档位」）。
+ * ⚠️ 刻意**不填** `quality`：服务端返回的 quality 是 'flac'/'999' 这类**源侧编码**，
+ * 而 `playbackResolvedQualityText` 会把它当**中文标签**直接输出（会渲染出「999 · 320 kbps」）。
+ * @returns {Object|null}
+ */
+function thirdPartyPlaybackData(hit) {
+  if (!hit || !hit.url) return null;
+  return {
+    url: hit.url,
+    trial: false,
+    playable: true,
+    source: 'third-party',
+    thirdPartySource: hit.source || 'third-party',
+    level: hit.level || '',
+    br: hit.br || 0
+  };
 }
 async function tryAutoPlaybackFallback(song, data, idx, token, opts) {
   opts = opts || {};
@@ -17378,6 +17536,25 @@ function handlePlaybackUnavailable(song, data) {
   }
 }
 
+/**
+ * 播放中断时的音源自救：清掉这首歌在服务端的解析缓存。
+ * 服务端成功缓存 TTL 是 10 分钟，而第三方直链带时效 token ——
+ * 缓存里很可能是一条已经失效的死链，不清掉的话用户重试只会反复拿到同一条。
+ * 只清缓存、不自动重试：自动重试要动播放链路（token 校验 / 递归），风险不值当。
+ */
+function handlePlaybackSourceError() {
+  var song = (Array.isArray(playQueue) && currentIdx >= 0) ? playQueue[currentIdx] : null;
+  if (!song || song.type === 'local' || song.type === 'podcast') return;
+  if (song.id === undefined || song.id === null) return;
+  showSourceFallbackNotice('音源链接失效', '已清除这首歌的解析缓存，重新播放会重新解析。');
+  try {
+    fetch('/api/parse/cache/clear-song', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: song.id })
+    }).catch(function () {});
+  } catch (e) {}
+}
 function pauseCurrentAudioForTrackSwitch() {
   playToggleBusy = false;
   if (!audio) return;
@@ -17553,6 +17730,9 @@ async function playQueueAt(idx, opts) {
       if (preparsedData) {
         data = preparsedData;
         console.log('[StartupPreparse] 命中预解析，跳过音源解析:', song.name || '');
+        // 预解析是后台静默跑的，这里跳过了整段解析链 → 这条路径下顶部会一条提示都没有。
+        // 用户要求「每首歌播放上面都有提示」，所以在真正开始播放时把来源补报一次。
+        notifyPreparsedSourceNotice(data);
       }
     }
 
@@ -17561,18 +17741,19 @@ async function playQueueAt(idx, opts) {
       data = { url: song.localUrl, trial: false, playable: true, source: 'local' };
     } else if (!data && (preferThirdParty || !hasVip)) {
       // 第三方优先：① 第三方 → ② 官方 API → ③ 跨平台换源
-      var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
+      // ⚠️ 这里**故意不静默**：第三方解析可能要 1~2s（竞速 + 真实音频探测），
+      // 没有提示的话点播放后界面看起来像卡住。这条「正在尝试第三方音源」就是
+      // 播放前的解析状态提示，用户明确要求每首歌都显示，不要改成 silent。
+      var thirdPartyHit = await tryThirdPartyParse(song, requestedQuality);
       if (token !== trackSwitchToken) return;
-      if (thirdPartyUrl) {
-        data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
-      }
+      data = thirdPartyPlaybackData(thirdPartyHit);
 
       if (!data || !data.url) {
         var qualityParam = '&quality=' + encodeURIComponent(requestedQuality);
         data = isQQPlayback
           ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
           : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
-        noteOfficialSourceResult(currentProvider, !!(data && data.url));
+        noteOfficialSourceResult(currentProvider, !!(data && data.url), data === null);
         if (token !== trackSwitchToken) return;
       }
     } else if (!data) {
@@ -17581,20 +17762,24 @@ async function playQueueAt(idx, opts) {
       data = isQQPlayback
         ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
         : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
-      noteOfficialSourceResult(currentProvider, !!(data && data.url));
+      noteOfficialSourceResult(currentProvider, !!(data && data.url), data === null);
       if (token !== trackSwitchToken) return;
 
-      if (!data.url) {
-        var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality);
+      // ⚠️ 必须 `!data ||`：apiParseJson 在超时/网络失败时返回 **null**，
+      // 少了这个判断会直接抛 TypeError 被外层 catch 吞掉 → 这首歌被跳过，
+      // 而它本该回落到第三方源（noteOfficialSourceResult 那行已经用 data && data.url 防了）
+      if (!data || !data.url) {
+        // officialFailed：官方源确实试过且失败了，提示文案才成立
+        var thirdPartyHit = await tryThirdPartyParse(song, requestedQuality, { officialFailed: true });
         if (token !== trackSwitchToken) return;
-        if (thirdPartyUrl) {
-          data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
-        }
+        var thirdPartyData = thirdPartyPlaybackData(thirdPartyHit);
+        if (thirdPartyData) data = thirdPartyData;
       }
     }
 
     // ③ 官方 + 第三方都失败 → 尝试跨平台换源 → 最后兜底试听片段
-    if (!data.url) {
+    // （`!data ||` 同理：官方源请求超时会让 data 停在 null，直接取 .url 会抛异常）
+    if (!data || !data.url) {
       if (isQQPlayback && await retryQQPlaybackWithCompatibleQuality(song, idx, token, opts, data, requestedQuality)) return;
       if (await tryAutoPlaybackFallback(song, data, idx, token, opts)) return;
 
@@ -17613,15 +17798,46 @@ async function playQueueAt(idx, opts) {
         }
       }
 
-      if (!data.url) {
+      if (!data || !data.url) {
         handlePlaybackUnavailable(song, data);
         return;
       }
     }
     var resolvedQualityText = playbackResolvedQualityText(data);
-    if (!isQQPlayback && playbackQualityWasDowngraded(requestedQuality, data.level)) {
-      showSourceFallbackNotice('网易云音质自动降级', '请求 ' + playbackQualityLabel(requestedQuality) + '，实际播放 ' + resolvedQualityText + '。');
-    } else if (opts.qualitySwitch) {
+    // 记录实际档位 → 刷新音质按钮（非会员时按钮显示的就是这个「解析出来的档位」）
+    noteResolvedPlaybackQuality(data);
+    // 第三方音源命中的档位是「第三方能给到的最高档」，与用户偏好不是一个语义
+    // （偏好选超清母带 → 第三方给无损，那是第三方上限，不是「被降级」）。
+    // 这条路径已由 tryThirdPartyParse 弹过「第三方音源可用」，别再补一条自相矛盾的
+    // 「官方源只能用 无损 · 879 kbps」（实际播放的正是它）。
+    var resolvedFromThirdParty = data.source === 'third-party';
+    // 只有「拿到了真实档位信息」才谈降级。第三方音源命中时 data 只有
+    // {url, source:'third-party'}（无 level/br），硬算会得出
+    // 「请求 超清母带，实际播放 超清母带」；而且那条路径已由
+    // tryThirdPartyParse 弹过「第三方音源可用」，不需要再补一条。
+    var hasResolvedQuality = !!(data.level || data.br);
+    // 试听片段不算降级：完整版不可用是权限问题，由 #trial-banner 说明，
+    // 两条同时弹会让「试听」被误读成「音质被降」。
+    if (!isQQPlayback && hasResolvedQuality && !data.trial && !resolvedFromThirdParty
+        && playbackQualityWasDowngraded(requestedQuality, data.level)) {
+      if (isSvipOnlyQuality(requestedQuality) && !hasProviderSvip('netease')) {
+        // 必然降级：没 SVIP 就注定拿不到超清母带（server.js 的
+        // qualityCandidatesFrom().filter(!q.svip || svipReady) 已把它摘掉）。
+        // 这属于「偏好设置选了做不到的档位」，不是故障 —— 说「自动降级」像出错了，
+        // 且每首歌都弹一次纯噪音。一个会话只提示一次。
+        //
+        // ⚠️ 不要建议用户「切到极高来避免提示」：那会让第三方源从无损降到 320k
+        // （gdQualityOf('exhigh') = '320'、qualityOf('exhigh') = '320'），
+        // 反而丢音质。超清母带/无损这类高档位对第三方源是有意义的（映射成 '999' 无损），
+        // 只有网易云官方源那一条路受 SVIP 限制。所以这里只陈述事实，不改建议。
+        if (!svipQualityNoticeShown) {
+          svipQualityNoticeShown = true;
+          showSourceFallbackNotice('超清母带需要 SVIP', '官方源只能用 ' + resolvedQualityText + '；第三方源不受影响，仍按无损解析。');
+        }
+      } else {
+        showSourceFallbackNotice('网易云音质自动降级', '请求 ' + playbackQualityLabel(requestedQuality) + '，实际播放 ' + resolvedQualityText + '。');
+      }
+    } else if (opts.qualitySwitch && resolvedQualityText) {
       showSourceFallbackNotice('音质已切换', '实际播放: ' + resolvedQualityText + '。');
     }
     if (data.trial) {
@@ -19236,6 +19452,14 @@ function bindPlaybackProgressEvents(audioEl) {
   });
   ['play', 'playing', 'pause', 'ended', 'emptied', 'abort', 'error'].forEach(function(name){
     audioEl.addEventListener(name, function(){ syncPlaybackStateFromAudioEvent(name); });
+  });
+  // 播放中断（多数是第三方直链过期 / 被限流）：清掉这首歌的服务端解析缓存。
+  // 不清的话重试只会反复命中缓存里的死链，得干等 10 分钟 TTL 才恢复。
+  audioEl.addEventListener('error', function(){
+    if (!audioEl.error) return;   // 切换 src 引发的 abort 不算真失败
+    if (audioEl._bhandsmusicFailedSrc === audioEl.src) return;
+    audioEl._bhandsmusicFailedSrc = audioEl.src;
+    handlePlaybackSourceError();
   });
   audioEl.addEventListener('timeupdate', throttledLastSessionPositionSave);
   // cuefield 自动混音触发器：进度更新时检查是否到达过渡点
@@ -22367,17 +22591,35 @@ function syncMusicSourcesUI() {
           '</div>';
       }).join('');
     } else {
-      listEl.innerHTML = '<span>暂无脚本</span>';
+      // 无脚本时留空：「未加载」已由上方 #lx-script-status 表达，不重复一遍「暂无脚本」
+      listEl.innerHTML = '';
     }
   }
-  // 自定义 API
-  var urlInput = document.getElementById('custom-api-url');
-  if (urlInput) urlInput.value = _musicSourcesConfig.customApiUrl || '';
-  var methodSelect = document.getElementById('custom-api-method');
-  if (methodSelect) methodSelect.value = _musicSourcesConfig.customApiMethod || 'GET';
-  // go-music-api 换源服务地址
-  var goUrlInput = document.getElementById('go-music-api-url');
-  if (goUrlInput) goUrlInput.value = _musicSourcesConfig.goMusicApiUrl || '';
+  // 注：自定义 API 地址 / go-music-api 服务地址的输入框与对应配置项
+  //     （customApiUrl / customApiMethod / goMusicApiUrl）已于 2026-09-23 全部移除，
+  //     这里不再回填。go-music-api 的服务地址现在只看环境变量 GO_MUSIC_API_URL。
+  // 配置块跟随开关折叠（目前只剩 LX 脚本块）
+  syncSourceConfigVisibility();
+  // 「音源解析顺序」随官方源会员态显隐（非会员三档等价，整块隐藏）
+  syncSourceParseOrderVisibility();
+  // 酷狗登录文案依赖 kugou 是否启用：开关一变就重算
+  if (typeof updateKugouLoginStatusText === 'function') updateKugouLoginStatusText();
+}
+
+/**
+ * 配置区跟随音源开关折叠：只有启用对应音源时才展开它的配置块。
+ * 之前三块（LX 脚本 / 自定义 API 地址 / go-music-api 地址）无条件展开，开关全关时面板
+ * 仍是一整屏配置项 —— 既冗余，又容易让人误以为「填了地址就等于启用了」。
+ * 2026-09-23：自定义 API 地址块与 go-music-api 地址块已从面板移除，map 只剩 LX 脚本。
+ */
+function syncSourceConfigVisibility() {
+  if (!_musicSourcesConfig) return;
+  var enabled = _musicSourcesConfig.enabledSources || [];
+  var map = { lxMusic: 'lx-script-block' };
+  Object.keys(map).forEach(function (src) {
+    var el = document.getElementById(map[src]);
+    if (el) el.style.display = enabled.indexOf(src) >= 0 ? '' : 'none';
+  });
 }
 
 /**
@@ -22463,70 +22705,15 @@ async function deleteLxScript(scriptId) {
 }
 
 /**
- * 保存自定义 API 地址
+ * 2026-09-23：`saveCustomApiUrl` / `saveGoMusicApiUrl` / `setGoMusicStatus` /
+ * `testGoMusicService` 四个函数已**整体删除**。
+ *
+ * 它们的面板入口更早一轮就已移除，而要写的三个配置项
+ * （customApiUrl / customApiMethod / goMusicApiUrl）本身也已从服务端配置里删掉 ——
+ * 留着就是四个永远调不到、也写不出任何东西的死函数。
+ * 想恢复：git 里有；同时要把 server.js 的 DEFAULT_MUSIC_SOURCES_CONFIG、
+ * POST /api/parse/config 合并分支、parseMusic 入参一起接回来。
  */
-function saveCustomApiUrl() {
-  if (!_musicSourcesConfig) return;
-  var urlInput = document.getElementById('custom-api-url');
-  var methodSelect = document.getElementById('custom-api-method');
-  _musicSourcesConfig.customApiUrl = urlInput ? urlInput.value.trim() : '';
-  _musicSourcesConfig.customApiMethod = methodSelect ? methodSelect.value : 'GET';
-  saveMusicSourcesConfigToServer();
-}
-
-/**
- * 保存 go-music-api 换源服务地址
- */
-function saveGoMusicApiUrl() {
-  if (!_musicSourcesConfig) return;
-  var input = document.getElementById('go-music-api-url');
-  _musicSourcesConfig.goMusicApiUrl = input ? input.value.trim() : '';
-  saveMusicSourcesConfigToServer();
-  setGoMusicStatus('已保存，点「测试连接」验证', 'dim');
-}
-
-/**
- * 更新 go-music-api 服务状态提示
- * @param {string} text
- * @param {string} [tone] - 'ok' | 'bad' | 'dim'
- */
-function setGoMusicStatus(text, tone) {
-  var el = document.getElementById('go-music-api-status');
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = tone === 'ok'
-    ? 'var(--c-accent,#7cf)'
-    : tone === 'bad'
-      ? '#f66'
-      : 'var(--c-text-dim,#888)';
-}
-
-/**
- * 测试 go-music-api 换源服务连通性（由服务端代探，避免浏览器跨域）
- */
-async function testGoMusicService() {
-  var input = document.getElementById('go-music-api-url');
-  if (_musicSourcesConfig && input) {
-    // 先把当前输入框的值落盘，保证测试的就是用户看到的地址
-    _musicSourcesConfig.goMusicApiUrl = input.value.trim();
-    await saveMusicSourcesConfigToServer();
-  }
-  setGoMusicStatus('测试中…', 'dim');
-  try {
-    var resp = await fetch('/api/parse/go-music/status');
-    var data = await resp.json();
-    if (data && data.reachable) {
-      setGoMusicStatus('连接正常 · ' + data.baseUrl + ' · ' + data.elapsedMs + 'ms', 'ok');
-      showToast('换源服务连接正常（' + data.elapsedMs + 'ms）');
-    } else {
-      setGoMusicStatus('连接失败 · ' + (data && data.baseUrl ? data.baseUrl + ' · ' : '') + ((data && data.error) || '未知错误'), 'bad');
-      showToast('换源服务连不上，检查 Docker 是否启动、端口是否发布');
-    }
-  } catch (e) {
-    setGoMusicStatus('测试失败: ' + e.message, 'bad');
-    showToast('测试失败: ' + e.message);
-  }
-}
 
 /**
  * 清除解析缓存
@@ -22571,6 +22758,8 @@ function toggleFxPanel(force) {
     return;
   }
   el.classList.remove('show', 'closing');
+  // 打开前刷一次「音源解析顺序」显隐：登录态可能是在面板关着的时候变的
+  if (typeof syncSourceParseOrderVisibility === 'function') syncSourceParseOrderVisibility();
   setPeek(el, true, 'fx');
 }
 function resetFx() {
@@ -23444,6 +23633,7 @@ async function refreshLoginStatus(force) {
     loginStatusChecked = true;
     loginStatusCheckFailed = false;
     loginStatus = info || { loggedIn: false };
+    if (typeof syncSourceParseOrderVisibility === 'function') syncSourceParseOrderVisibility();
     if (loginStatus.loggedIn && !hasPlatformLogin(activeAccountProvider)) activeAccountProvider = 'netease';
     renderUserBtn();
     if (info && info.loggedIn) {
@@ -27161,9 +27351,44 @@ setTimeout(updateKugouLoginStatusText, 2000);
 function updateKugouLoginStatusText() {
   var el = document.getElementById('kugou-login-status');
   if (!el) return;
+  var row = document.getElementById('kugou-qr-login-row');
   fetch('/api/kugou/login/status').then(function (r) { return r.json(); }).then(function (j) {
-    el.textContent = j && j.loggedIn ? '已登录（会员音质已启用）' : '未登录';
+    var loggedIn = !!(j && j.loggedIn);
+    // 会员 FLAC 只在 kugou 策略参与解析时才生效（musicParser.js canHandle 要求
+    // enabledSources 含 'kugou'，默认配置里没有它）——所以状态文案必须跟着开关走，
+    // 否则会出现「已登录（会员音质已启用）」但实际还在跑 128k 的空头支票。
+    var enabled = (_musicSourcesConfig && _musicSourcesConfig.enabledSources) || [];
+    var sourceOn = enabled.indexOf('kugou') >= 0;
+    // 文案保持短：这行右侧空间有限，太长会把左侧「酷狗扫码登录」挤成省略号
+    el.textContent = !loggedIn ? '未登录' : (sourceOn ? '已登录 · 音质已启用' : '已登录 · 音源未开');
+    el.style.color = (loggedIn && sourceOn) ? 'var(--c-accent,#7cf)' : 'rgba(255,255,255,.45)';
+    if (row) {
+      row.title = !loggedIn
+        ? '扫码登录酷狗概念版，解锁会员音质（FLAC/320k）'
+        : (sourceOn
+          ? '已登录酷狗概念版，会员音质已参与解析（点击可重新登录）'
+          : '已登录，但「酷狗音源」开关没打开，会员音质不会生效 —— 点下方开关开启');
+    }
   }).catch(function () { el.textContent = ''; });
+}
+/**
+ * 扫码/验证码登录成功后自动启用「酷狗音源」开关。
+ * 会员 FLAC 走的是 kugou 策略，该策略要求 enabledSources 含 'kugou'（默认配置不含）——
+ * 不自动打开的话用户扫完码仍然拿不到会员音质。
+ * @param {boolean} [retried] - 配置尚未拉取时的单次重试标记（防无限递归）
+ */
+function enableKugouSourceOnLogin(retried) {
+  if (!_musicSourcesConfig) {
+    if (retried) return;
+    loadMusicSourcesConfig().then(function () { enableKugouSourceOnLogin(true); });
+    return;
+  }
+  var enabled = _musicSourcesConfig.enabledSources || [];
+  if (enabled.indexOf('kugou') >= 0) return;
+  enabled.push('kugou');
+  _musicSourcesConfig.enabledSources = enabled;
+  syncMusicSourcesUI();
+  saveMusicSourcesConfigToServer();
 }
 function closeKugouQrLogin() {
   if (kugouQrPollTimer) { clearTimeout(kugouQrPollTimer); kugouQrPollTimer = null; }
@@ -27181,6 +27406,7 @@ function pollKugouQrStatus(key, attempts) {
       var note = document.getElementById('kugou-qr-note');
       if (j && j.status === 4) {
         if (note) note.textContent = '✅ 登录成功！会员音质已启用';
+        enableKugouSourceOnLogin();
         showToast('酷狗会员登录成功，已启用会员音质');
         updateKugouLoginStatusText();
         setTimeout(closeKugouQrLogin, 1600);
@@ -27296,6 +27522,7 @@ function renderSmsTab(body) {
     fetch('/api/kugou/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code)).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.success) {
         note.textContent = '✅ 登录成功！会员音质已启用';
+        enableKugouSourceOnLogin();
         showToast('酷狗会员登录成功，已启用会员音质');
         updateKugouLoginStatusText();
         setTimeout(closeKugouQrLogin, 1600);
@@ -27421,6 +27648,30 @@ function hasFreshPreparseFor(song, requestedQuality) {
   }
   return false;
 }
+/**
+ * 命中预解析缓存时补一条顶部提示。
+ *
+ * 为什么需要它：预解析（启动恢复 / 下一首预取）是**后台静默**跑的，不打扰当前播放；
+ * 而命中预解析的歌曲会直接跳过整段解析链 → 那条歌曲播放时顶部一条提示都没有。
+ * 用户要求「不管啥时候，每首歌播放上面都有提示」，所以这里在**真正开始播放**时
+ * 把来源补报一次，语义与实时解析路径（`tryThirdPartyParse` 的「第三方音源可用」）对齐。
+ *
+ * 只补报、不重复解析；本地曲目不走在线解析，不提示。
+ * @param {Object} data 预解析缓存里的播放数据
+ */
+function notifyPreparsedSourceNotice(data) {
+  if (!data || !data.url) return;
+  if (data.trial) {
+    showSourceFallbackNotice('试听片段可用', '完整版不可用，当前播放官方 30 秒试听。');
+    return;
+  }
+  if (data.source === 'third-party') {
+    showSourceFallbackNotice('第三方音源已就绪', '已通过 ' + (data.thirdPartySource || '第三方') + ' 获取到音频。');
+    return;
+  }
+  var qualityText = playbackResolvedQualityText(data);
+  showSourceFallbackNotice('音源已就绪', qualityText ? ('官方音源 · ' + qualityText + '。') : '官方音源，可立即播放。');
+}
 // 登录态/会员状态就绪后再做解析路由决策（提案 1：路由固化）——
 // 启动早期 loginStatus 未加载时 hasVip 恒为 false，VIP 用户会被误判走第三方
 async function waitForStartupLoginStatus(maxMs) {
@@ -27449,22 +27700,24 @@ async function resolveSongSourceQuietly(song) {
     data = isQQPlayback
       ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam)
       : await apiParseJson('/api/song/url?id=' + song.id + qualityParam);
-    noteOfficialSourceResult(currentProvider, !!(data && data.url));
+    noteOfficialSourceResult(currentProvider, !!(data && data.url), data === null);
     if (!data || !data.url) {
-      var thirdPartyUrl = await tryThirdPartyParse(song, requestedQuality, { silent: true });
-      if (thirdPartyUrl) data = { url: thirdPartyUrl, trial: false, playable: true, source: 'third-party' };
+      var thirdPartyHit = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+      var thirdPartyData = thirdPartyPlaybackData(thirdPartyHit);
+      if (thirdPartyData) data = thirdPartyData;
     }
   } else {
     // 第三方优先：① 第三方（静默，8s 超时）→ ② 官方 API（8s 超时）
-    var thirdPartyUrl2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
-    if (thirdPartyUrl2) {
-      data = { url: thirdPartyUrl2, trial: false, playable: true, source: 'third-party' };
+    var thirdPartyHit2 = await tryThirdPartyParse(song, requestedQuality, { silent: true });
+    var thirdPartyData2 = thirdPartyPlaybackData(thirdPartyHit2);
+    if (thirdPartyData2) {
+      data = thirdPartyData2;
     } else {
       var qualityParam2 = '&quality=' + encodeURIComponent(requestedQuality);
       data = isQQPlayback
         ? await apiParseJson('/api/qq/song/url?mid=' + encodeURIComponent(song.mid || song.songmid || song.id || '') + '&mediaMid=' + encodeURIComponent(song.mediaMid || song.media_mid || '') + qualityParam2)
         : await apiParseJson('/api/song/url?id=' + song.id + qualityParam2);
-      noteOfficialSourceResult(currentProvider, !!(data && data.url));
+      noteOfficialSourceResult(currentProvider, !!(data && data.url), data === null);
     }
   }
   return data && data.url ? { data: data, quality: requestedQuality } : null;
@@ -27532,8 +27785,20 @@ var sourceParseOrder = (function () {
 })();
 var officialSourceFailStreak = {};  // 会话级：官方解析连续失败次数（按平台，成功清零）
 
-function noteOfficialSourceResult(provider, ok) {
-  officialSourceFailStreak[provider] = ok ? 0 : (officialSourceFailStreak[provider] || 0) + 1;
+/**
+ * 记录官方源解析结果，供 auto 模式的会话级降级使用。
+ * @param {string} provider - 'netease' | 'qq'
+ * @param {boolean} ok - 是否拿到可播 url
+ * @param {boolean} [requestFailed] - 请求本身失败（超时/网络/5xx → apiParseJson 返回 null）
+ *
+ * ⚠️ 只有「请求本身失败」才计入降级。拿到响应但没有 url 是版权/权限问题
+ * （需单曲购买、区域限制等），属于单首歌的情况 —— 此前只要没 url 就计数，
+ * 一首无版权的歌会让 VIP 用户整个会话都跳过官方源，白白丢掉 FLAC。
+ */
+function noteOfficialSourceResult(provider, ok, requestFailed) {
+  if (ok) { officialSourceFailStreak[provider] = 0; return; }
+  if (!requestFailed) return;
+  officialSourceFailStreak[provider] = (officialSourceFailStreak[provider] || 0) + 1;
 }
 function shouldPreferThirdPartyParse(provider, hasVip) {
   if (sourceParseOrder === 'third-party') return true;
@@ -27561,6 +27826,25 @@ function syncSourceParseOrderSeg() {
   }
 }
 syncSourceParseOrderSeg();
+
+/**
+ * 「音源解析顺序」整块的显隐：只有账号在**官方源**上有会员时才显示。
+ *
+ * 为什么隐藏：shouldPreferThirdPartyParse 在 hasVip=false 时三档全部返回 true ——
+ * 非会员切「自动 / 官方优先 / 第三方优先」行为完全一致，是个无效控件。
+ * 实测（check-parse-order.js 抽真实源码跑）：hasVip=false → auto/official/third-party 全 true；
+ * hasVip=true → auto=false official=false third-party=true（这时才有区别）。
+ *
+ * ⚠️ hasVip 只看**网易云 / QQ** 的登录态，**酷狗会员不算**（酷狗是第三方源）。
+ * 任一官方源有会员就显示 —— seg 是全局设置，而 hasVip 是按歌曲所属平台算的。
+ */
+function syncSourceParseOrderVisibility() {
+  var block = document.getElementById('source-parse-order-block');
+  if (!block) return;
+  var vip = hasProviderVip('netease', loginStatus) || hasProviderVip('qq', qqLoginStatus);
+  block.style.display = vip ? '' : 'none';
+}
+syncSourceParseOrderVisibility();   // 初始隐藏，避免登录态加载完后闪一下
 
 window.addEventListener('beforeunload', function () {
   try {

@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { isCandidateDurationPlausible } = require('./durationProbe');
 
 const KUGOU_SEARCH_URL = 'https://songsearch.kugou.com/song_search_v2';
 const KUGOU_PLAY_MOBILE = 'https://m.kugou.com/app/i/getSongInfo.php';
@@ -65,6 +66,23 @@ function normalizeText(text) {
     .replace(/[（(【[].*?[)）】\]]/g, '')
     .replace(/[\s\-—_·・'"''""!！?？.,，。&＆+]/g, '');
   return stripped || String(text).toLowerCase().replace(/[\s\-—_·・'"''""!！?？.,，。&＆+]/g, '');
+}
+
+/**
+ * 拆开聚合形态的歌手串。
+ *
+ * 同一首歌的歌手列表，网易云给的是「杨宗纬 / 杨旭 / 于冬然 / 范甲君」（斜杠），
+ * 酷狗给的是「杨宗纬、杨旭、于冬然、范甲君」（顿号）—— 而 `normalizeText` 的
+ * 清理字符集里**没有**斜杠和顿号，整串比对必然失败。
+ * 2026-09-23「其实都没有」即此：真正的对应版本（4 人 Live，255s vs 期望 256s）
+ * 因为分隔符不一致被歌手校验拒掉，只剩时长不符的独唱版可挑，最后 kugou 整个放弃。
+ * 拆成单个歌手后逐个比对即可。
+ */
+function splitArtistNames(raw) {
+  return String(raw || '')
+    .split(/[\/、;；,，&＆|·]+/)
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean);
 }
 
 function isNameMatched(expectedName, candidateName) {
@@ -157,8 +175,29 @@ async function kugouSearch(keywords, limit, timeoutMs) {
 // 候选挑选（严格校验：歌名必须匹配，歌手能对上则加分）
 // ============================================================
 
-/** 变体标注（Live/翻唱/伴奏等括号后缀）——这类版本不能冒充原曲 */
-const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|翻唱|cover|伴奏|dj|remix|现场|演唱会|铃声|试听|纯音乐|降压|助眠)[^\)）\]]*[)）\]]/i;
+/** 变体标注（Live/翻唱/伴奏/乐器改编版等）——这类版本不能冒充原曲 */
+const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|现场|演唱会|翻唱|cover|伴奏|remix|dj|混音|铃声|试听|纯音乐|acoustic|instrumental|karaoke|demo|翻录|重制|remaster|架子鼓|钢琴|吉他|古筝|小提琴|八音盒|口琴|尤克里里|纯享|重置|女声|男声|童声|合唱|对唱|降压|助眠)[^\)）\]]*[)）\]]/i;
+
+/**
+ * 候选名的括号后缀在原曲名里不存在 → 判为变体。
+ *
+ * 词表式 VARIANT_NAME_RE 永远补不全：2026-09-23「座位 (架子鼓版)」就是漏网的
+ *（当时词表里没有"架子鼓"），它靠 12% 的时长容差被选中，白拿了一次 FLAC 地址。
+ * 通用兜底：「后缀是否为原曲名的一部分」——
+ *   原曲「座位」      vs 候选「座位 (架子鼓版)」→ 后缀不在原名里 → 变体
+ *   原曲「晴天 (Live)」vs 候选「晴天 (Live)」   → 后缀在原名里   → 非变体
+ * 用**原始**歌名比对（normalizeText 会把括号整段删掉，比不出来）。
+ */
+function hasUnmatchedVariantSuffix(expectedName, candidateName) {
+  const segs = String(candidateName || '').match(/[（(【\[]([^)）】\]]*)[)）】\]]/g);
+  if (!segs || !segs.length) return false;
+  const expectedRaw = String(expectedName || '').toLowerCase();
+  return segs.some(function (seg) {
+    const inner = seg.replace(/[（(【\[\])）】\]]/g, '').trim().toLowerCase();
+    if (!inner) return false;
+    return expectedRaw.indexOf(inner) < 0;
+  });
+}
 
 /**
  * 时长接近度的打分尺度（毫秒）：差值 0 → +1.0，差值越大线性递减到 0。
@@ -177,34 +216,48 @@ function pickBestCandidate(candidates, expected) {
     if (!item || !item.hash) continue;
     if (!isNameMatched(expected.name, item.name)) continue;
 
-    // 时长硬校验：偏差超过 max(10s, 12%) 直接拒绝——不同版本（Live/remix/
-    // 合作版）时长差异大，音频与原曲歌词时间轴必然对不上（货不对版）
-    if (expected.durationMs > 0 && item.durationMs > 0) {
-      const durationDiff = Math.abs(expected.durationMs - item.durationMs);
-      if (durationDiff > Math.max(10000, expected.durationMs * 0.12)) continue;
-    }
+    // 时长硬校验：容差 max(8s, 6%)，比下游 durationProbe 的 max(5s, 4%) 宽 2 个百分点。
+    // ⚠ 必须比 probe 严（原来是 max(10s, 12%)）：2026-09-23「座位」候选
+    //   「座位 (架子鼓版)」225s vs 期望 208s（差 16.7s）被 12% 放行，这里选中后
+    //   白拿了一次 FLAC 地址，紧接着被 probe 以「实际 225s vs 期望 208s」拒掉。
+    //   收紧后此处直接 continue，不再为注定被拒的候选请求播放地址。
+    if (!isCandidateDurationPlausible(item.durationMs, expected.durationMs)) continue;
 
-    const candidateArtist = normalizeText(item.artist);
+    const candidateArtists = splitArtistNames(item.artist);
     let score;
 
     if (expected.artists.length === 0) {
       score = 2;
-    } else if (!candidateArtist) {
+    } else if (!candidateArtists.length) {
       score = 1;
     } else {
+      // 双方都拆成单个歌手后逐个比对（分隔符不一致见 splitArtistNames 注释）
       const artistMatched = expected.artists.some(function (name) {
-        const normalized = normalizeText(name);
-        return !!normalized && (
-          candidateArtist.includes(normalized) || normalized.includes(candidateArtist)
-        );
+        return splitArtistNames(name).some(function (expectName) {
+          const normalized = normalizeText(expectName);
+          if (!normalized) return false;
+          return candidateArtists.some(function (candidateName) {
+            const candidateNorm = normalizeText(candidateName);
+            return !!candidateNorm && (
+              candidateNorm.includes(normalized) || normalized.includes(candidateNorm)
+            );
+          });
+        });
       });
       // 有歌手信息但对不上 → 拒绝（防止货不对版）
       if (!artistMatched) continue;
       score = 3;
     }
 
-    // 变体强降权：即使免费，Live/翻唱/DJ 版也不能优先于原曲（权重必须压过免费加分）
-    if (VARIANT_NAME_RE.test(item.name)) score -= 2;
+    // 变体强降权：即使免费，Live/翻唱/DJ 版/乐器改编版也不能优先于原曲（权重必须压过免费加分）。
+    // ⚠ 但「时长与期望高度吻合」的变体必须豁免 —— 那说明原曲本身就是这个变体：
+    //   网易云「其实都没有」歌名不带 Live，实际却是 4 人合作 Live 版（256s），
+    //   酷狗上真正对应的正是「其实都没有 (Live)」255s。若无条件降权 2 分，
+    //   它会输给时长差 15s 的另一版（241s），而那一版才是货不对版。
+    const isVariantName = VARIANT_NAME_RE.test(item.name) || hasUnmatchedVariantSuffix(expected.name, item.name);
+    const variantDurationMatches = expected.durationMs > 0 && item.durationMs > 0 &&
+      Math.abs(expected.durationMs - item.durationMs) <= Math.max(2000, expected.durationMs * 0.02);
+    if (isVariantName && !variantDurationMatches) score -= 2;
 
     // 免费曲目优先（VIP 曲目免登录大概率拿不到完整播放地址）
     if (item.playableGuess) score += 1;
@@ -260,24 +313,32 @@ function pickPlayUrl(json) {
 /**
  * 会员路径的播放地址解析：优先 extra2（FLAC）→ extra1（320k）→ 普通字段回退。
  * 带 token 的 getSongInfo 登录态响应里，extra1/extra2 为高品质地址（数组或字符串）。
+ * @returns {{url: string, quality: string}} quality 为 flac/320/128
  */
-function pickVipPlayUrl(json) {
-  if (!json) return '';
+function pickVipPlayHit(json) {
+  if (!json) return { url: '', quality: '128' };
   const data = json.data || {};
-  const fields = [data.extra2, json.extra2, data.extra1, json.extra1];
+  const fields = [
+    { v: data.extra2, q: 'flac' }, { v: json.extra2, q: 'flac' },
+    { v: data.extra1, q: '320' }, { v: json.extra1, q: '320' }
+  ];
   for (let i = 0; i < fields.length; i++) {
-    const v = fields[i];
+    const v = fields[i].v;
     if (Array.isArray(v)) {
       for (let j = v.length - 1; j >= 0; j--) {
         const candidate = typeof v[j] === 'string' ? v[j].replace(/\\/g, '').trim() : '';
-        if (/^https?:\/\/[^\s,]+$/i.test(candidate)) return candidate;
+        if (/^https?:\/\/[^\s,]+$/i.test(candidate)) return { url: candidate, quality: fields[i].q };
       }
     } else if (typeof v === 'string') {
       const candidate = v.replace(/\\/g, '').trim();
-      if (/^https?:\/\/[^\s,]+$/i.test(candidate)) return candidate;
+      if (/^https?:\/\/[^\s,]+$/i.test(candidate)) return { url: candidate, quality: fields[i].q };
     }
   }
-  return pickPlayUrl(json);
+  return { url: pickPlayUrl(json), quality: '128' };
+}
+
+function pickVipPlayUrl(json) {
+  return pickVipPlayHit(json).url;
 }
 
 // ============================================================
@@ -321,15 +382,22 @@ function readKugouVipCredentials() {
   return cachedVipCredentials;
 }
 
+/** 档位 → 真实码率（bps）。前端音质按钮要用它显示「实际播放的档位」。 */
+const KUGOU_QUALITY_BR = { flac: 999000, '320': 320000, '128': 128000 };
+
 /**
  * 会员播放地址：走本地 KuGouMusicApi 服务的 /song/url（带登录态 Cookie）。
- * quality 从 FLAC 递减到 320；服务不可用或全部失败返回 ''（回退免登录）。
+ * quality 从 FLAC 递减到 320；服务不可用或全部失败返回 null（回退免登录）。
+ *
+ * ⚠️ 返回 `{ url, quality }` 而不是裸 url：调用方需要知道**真实命中的档位**
+ * （flac/320/128）才能把 `br` 如实回给前端。此前 br 写死 128000，
+ * 拿到 FLAC 也报 128kbps，前端音质按钮就会显示错档。
  */
 async function tryKugouLocalSongUrl(hash, albumId, timeoutMs) {
   const cred = readKugouVipCredentials();
-  if (!cred || !cred.cookie) return '';
+  if (!cred || !cred.cookie) return null;
   const ready = await kugouService.ensureRunning({ appDir: KUGOU_LOCAL_APP_DIR, dataDir: KUGOU_LOCAL_APP_DIR });
-  if (!ready.ok) return '';
+  if (!ready.ok) return null;
   const qualities = ['flac', '320', '128'];
   for (let i = 0; i < qualities.length; i++) {
     const q = qualities[i];
@@ -343,14 +411,28 @@ async function tryKugouLocalSongUrl(hash, albumId, timeoutMs) {
     const url = pickPlayUrl(j);
     if (url) {
       console.log('[KugouVIP] 会员音质命中: quality=' + q + ' url=' + url.slice(0, 80));
-      return url;
+      return { url: url, quality: q };
     }
-    console.log('[KugouVIP] quality=' + q + ' 无地址' + (j && j.error_code ? '（error_code=' + j.error_code + '）' : '') + '，降档重试');
+    // status=3 = **无播放权限**（响应里带 priv_status / auth_through / fail_process）。
+    // 此时 flac / 320 / 128 三个档位会给出**完全相同**的结果，继续降档只是白打两次上游。
+    // 2026-09-23 实测「冷冰冰」「Kung Fu Jumpstyle」：三档全 status=3，日志里三轮
+    // 「无地址，降档重试」全是无用功（对照「六月的雨」是 status=1 且带 url）。
+    // 这里直接跳出降档链，保留后面的免登录回退（那是另一个接口，权限判定不同）。
+    if (Number(j.status) === 3) {
+      console.log('[KugouVIP] 无播放权限（status=3），跳过降档');
+      break;
+    }
+    console.log('[KugouVIP] quality=' + q + ' 无地址（status=' +
+      (j.status != null ? j.status : '?') + '），降档重试');
   }
   console.log('[KugouVIP] 会员路径全部失败，回退免登录 128k');
-  return '';
+  return null;
 }
 
+/**
+ * 取酷狗播放地址。
+ * @returns {Promise<{url: string, quality: string} | null>} quality 为 flac/320/128
+ */
 async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
   const cacheKey = hash.toLowerCase();
   const cached = playUrlCache.get(cacheKey);
@@ -358,10 +440,10 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
 
   // ① 会员路径：本地 KuGouMusicApi 服务 + 扫码登录态（FLAC → 320）
   try {
-    const localUrl = await tryKugouLocalSongUrl(hash, albumId, timeoutMs);
-    if (localUrl) {
-      playUrlCache.set(cacheKey, localUrl);
-      return localUrl;
+    const localHit = await tryKugouLocalSongUrl(hash, albumId, timeoutMs);
+    if (localHit && localHit.url) {
+      playUrlCache.set(cacheKey, localHit);
+      return localHit;
     }
   } catch (e) { /* 会员路径失败回退免登录 */ }
 
@@ -385,10 +467,10 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
         }
       });
       const json = resp && resp.data;
-      const vipUrl = pickVipPlayUrl(json);
-      if (json && Number(json.status) === 1 && vipUrl) {
-        playUrlCache.set(cacheKey, vipUrl);
-        return vipUrl;
+      const vipHit = pickVipPlayHit(json);
+      if (json && Number(json.status) === 1 && vipHit.url) {
+        playUrlCache.set(cacheKey, vipHit);
+        return vipHit;
       }
     } catch (e) { /* 回退免登录 */ }
   }
@@ -411,15 +493,30 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
   const json = resp && resp.data;
   const url = pickPlayUrl(json);
   if (json && Number(json.status) === 1 && url) {
-    playUrlCache.set(cacheKey, url);
-    return url;
+    // 免登录路径固定标准音质
+    const hit = { url: url, quality: '128' };
+    playUrlCache.set(cacheKey, hit);
+    return hit;
   }
-  return '';
+  return null;
 }
 
 // ============================================================
 // 主入口：与 gdmusic.js 的 parseFromGDMusic 同一契约
 // ============================================================
+
+/**
+ * 「这首歌酷狗确实没有」类失败的统一返回：搜索无结果 / 无匹配候选 / 拿到 hash 但无播放权限。
+ *
+ * 刻意**不返回 null**，而是带上 reason 标记 —— 编排器据此把它归为「中性失败」，
+ * 不计入策略冷却。否则连遇几首无版权/无资源的歌，完全正常的 kugou 会被打进
+ * 5 分钟冷却（2026-09-23 实测：「冷冰冰」+「Kung Fu Jumpstyle」两首就触发，
+ * 之后 5 分钟内 kugou 被排到队尾，白丢会员 FLAC 的先手优势）。
+ * 真正的服务故障（搜索接口报错 / 超时 / 异常）仍然返回 null，照常计冷却。
+ */
+function unavailableResult() {
+  return { url: '', reason: 'unavailable' };
+}
 
 /**
  * 从酷狗解析音乐 URL
@@ -430,7 +527,7 @@ async function kugouPlayUrlByHash(hash, albumId, timeoutMs) {
  * @param {string} [params.album] - 专辑名
  * @param {number} [params.duration] - 时长(毫秒)
  * @param {number} [params.timeout] - 超时(ms)，默认 15000
- * @returns {Promise<{url: string, source: string, br: number} | null>}
+ * @returns {Promise<{url: string, source: string, br: number, quality: string} | {url: '', reason: 'unavailable'} | null>}
  */
 async function parseFromKugou(params) {
   const name = params.name || '';
@@ -451,13 +548,13 @@ async function parseFromKugou(params) {
     const list = await kugouSearch(searchQuery, 10, Math.min(8000, deadline - Date.now()));
     if (!list.length) {
       console.log('[Kugou] 搜索结果为空');
-      return null;
+      return unavailableResult();
     }
 
     const matched = pickBestCandidate(list, { name: name, artists: artists, durationMs: params.duration || 0 });
     if (!matched) {
       console.log('[Kugou] 搜索结果与原曲不匹配，已拒绝（避免货不对版）');
-      return null;
+      return unavailableResult();
     }
 
     const remaining = deadline - Date.now();
@@ -466,17 +563,20 @@ async function parseFromKugou(params) {
       return null;
     }
 
-    const url = await kugouPlayUrlByHash(matched.hash, matched.albumId, Math.min(8000, remaining));
-    if (!url) {
+    const hit = await kugouPlayUrlByHash(matched.hash, matched.albumId, Math.min(8000, remaining));
+    if (!hit || !hit.url) {
       console.log('[Kugou] 未获取到有效播放地址 (hash:', matched.hash, ')');
-      return null;
+      return unavailableResult();
     }
 
-    console.log('[Kugou] 解析成功:', matched.name, '-', matched.artist);
+    console.log('[Kugou] 解析成功:', matched.name, '-', matched.artist, '(quality=' + hit.quality + ')');
     return {
-      url: url,
+      url: hit.url,
       source: 'kugou',
-      br: 128000
+      // 如实回报命中档位对应的码率（此前写死 128000，拿到 FLAC 也报 128k，
+      // 前端音质按钮会显示错档位）
+      br: KUGOU_QUALITY_BR[hit.quality] || 128000,
+      quality: hit.quality
     };
   } catch (error) {
     console.error('[Kugou] 解析异常:', error.message);

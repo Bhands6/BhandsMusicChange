@@ -233,6 +233,25 @@ function isDurationPlausible(actualSec, expectedMs) {
 }
 
 /**
+ * 候选**预筛**用的时长容差：比 acceptProbe 的 max(5s, 4%) 宽 2 个百分点。
+ *
+ * 为什么需要它：音源在「挑选候选」阶段就该把明显错版本的候选剔掉，否则会走成
+ * 「内部选中 → 白拿一次播放地址 → 被 acceptProbe 拒掉」，白白浪费一次上游请求。
+ * 原实现用 max(10s, 12%)：2026-09-23「座位」的候选「座位 (架子鼓版)」225s vs
+ * 期望 208s（差 16.7s ≈ 8%）被 12% 放行，kugou 还专门去要了一次 FLAC 地址，
+ * 外层探测才把它拒掉。
+ *
+ * 为什么不直接对齐 acceptProbe 的 4%：这里比的是**搜索结果的元数据时长**，
+ * 与真实音频时长存在系统偏差，卡到 4% 会把元数据略偏的正确候选误杀
+ *（probe 取不到时长时是 fail-open，一旦内部先拒就再没有挽回机会）。
+ */
+function isCandidateDurationPlausible(candidateMs, expectedMs) {
+  if (!expectedMs || !candidateMs) return true;
+  const diff = Math.abs(expectedMs - candidateMs);
+  return diff <= Math.max(8000, expectedMs * 0.06);
+}
+
+/**
  * 综合判定候选音源是否可用：
  *  - 明确非音频 → 拒绝（「伪成功」音源的兜底，如返回 JSON/HTML 的源）
  *  - 取不到数据 / 时长为空 → 放行（fail-open）
@@ -248,4 +267,4 @@ function acceptProbe(probe, expectedMs) {
   return isDurationPlausible(probe.durationSec, expectedMs);
 }
 
-module.exports = { probeAudio, acceptProbe, isDurationPlausible };
+module.exports = { probeAudio, acceptProbe, isDurationPlausible, isCandidateDurationPlausible };

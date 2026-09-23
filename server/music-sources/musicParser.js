@@ -8,7 +8,6 @@
 const { parseFromGDMusic } = require('./gdmusic');
 const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
-const { parseFromCustomApi } = require('./customApi');
 const { parseFromKugou, readKugouVipCredentials } = require('./kugou');
 const { tryGoMusicSwitch } = require('./goMusicSwitch');
 const { probeAudio, acceptProbe } = require('./durationProbe');
@@ -28,19 +27,33 @@ const FAILED_CACHE_TTL = 1 * 60 * 1000;
 /** 成功缓存 Map: key = songId, value = { data, sources, time } */
 const successCache = new Map();
 
-/** 失败缓存 Map: key = "songId_strategyName", value = timestamp */
+/**
+ * 失败缓存 Map: key = "songId_strategyName", value = { at, neutral }
+ *
+ * neutral 必须存下来：策略在**早退**（命中失败缓存）时也要能告诉编排器
+ * 「这次是中性失败」。否则同一首歌 60 秒内被解析两次（重播 / 切音质重试），
+ * 第一次中性（不计数）、第二次早退返回 null 被当成**真实故障**计数 ——
+ * 两首无版权的歌各解析两次就够把完全正常的策略打进 5 分钟冷却，
+ * noteStrategyResult 的中性豁免等于白做。
+ */
 const failedCache = new Map();
 
 // ============================================================
 // 缓存管理
 // ============================================================
 
-function getSuccessCacheKey(id, sources) {
-  return String(id) + '_' + (sources || []).sort().join(',');
+/**
+ * 成功缓存 key = 歌曲 id + 音质 + 排序后的音源列表。
+ * ⚠️ quality 必须进 key（对齐 Bhands_Web 的 id_quality_vip_cookieMD5）：此前漏了这一维，
+ * 用户切音质后第三方源在 10 分钟内仍命中旧音质结果（表现为「切了无损还是 128k」）。
+ * 官方音源（/api/song/url）不走这层缓存，所以只有第三方路径会中招。
+ */
+function getSuccessCacheKey(id, sources, quality) {
+  return String(id) + '_' + String(quality || '') + '_' + (sources || []).sort().join(',');
 }
 
-function getSuccessCache(id, sources) {
-  const key = getSuccessCacheKey(id, sources);
+function getSuccessCache(id, sources, quality) {
+  const key = getSuccessCacheKey(id, sources, quality);
   const cached = successCache.get(key);
   if (!cached) return null;
 
@@ -62,8 +75,8 @@ function getSuccessCache(id, sources) {
   return cached.data;
 }
 
-function setSuccessCache(id, data, sources) {
-  const key = getSuccessCacheKey(id, sources);
+function setSuccessCache(id, data, sources, quality) {
+  const key = getSuccessCacheKey(id, sources, quality);
   successCache.set(key, {
     data: data,
     sources: sources || [],
@@ -72,21 +85,37 @@ function setSuccessCache(id, data, sources) {
 }
 
 function isInFailedCache(id, strategyName) {
-  const key = String(id) + '_' + strategyName;
-  const time = failedCache.get(key);
-  if (!time) return false;
-
-  if (Date.now() - time > FAILED_CACHE_TTL) {
-    failedCache.delete(key);
-    return false;
-  }
-
-  return true;
+  return !!readFailedCache(id, strategyName);
 }
 
-function addFailedCache(id, strategyName) {
+/**
+ * 读失败缓存，带上「当时是不是中性失败」。
+ *
+ * 给策略的早退分支用：中性失败要**原样回放**成 { url:'', neutralFailure:true }，
+ * 而不是简单的 null（见 failedCache 的注释）。
+ * @returns {{neutral: boolean} | null}
+ */
+function readFailedCache(id, strategyName) {
   const key = String(id) + '_' + strategyName;
-  failedCache.set(key, Date.now());
+  const entry = failedCache.get(key);
+  if (!entry) return null;
+
+  if (Date.now() - entry.at > FAILED_CACHE_TTL) {
+    failedCache.delete(key);
+    return null;
+  }
+
+  return { neutral: !!entry.neutral };
+}
+
+/**
+ * 记一次失败缓存。
+ * @param {boolean} [neutral] 这次失败是否与策略健康无关（版权/无资源等）。
+ *   必须与 noteStrategyResult 的判定保持一致，否则早退时会错误计数。
+ */
+function addFailedCache(id, strategyName, neutral) {
+  const key = String(id) + '_' + strategyName;
+  failedCache.set(key, { at: Date.now(), neutral: !!neutral });
 }
 
 function clearCacheForSong(id) {
@@ -111,8 +140,8 @@ setInterval(function () {
   for (const [key, cached] of successCache) {
     if (now - cached.time > SUCCESS_CACHE_TTL) successCache.delete(key);
   }
-  for (const [key, time] of failedCache) {
-    if (now - time > FAILED_CACHE_TTL) failedCache.delete(key);
+  for (const [key, entry] of failedCache) {
+    if (now - entry.at > FAILED_CACHE_TTL) failedCache.delete(key);
   }
 }, 5 * 60 * 1000); // 每 5 分钟清理一次
 
@@ -128,6 +157,52 @@ function gdQualityOf(tier) {
   if (tier === 'standard') return '128';
   if (tier === 'lossless' || tier === 'hires' || tier === 'jymaster') return '999';
   return '320';
+}
+
+/**
+ * 请求档位 → 前端档位键。第三方源没给出任何可判定的证据时用它兜底
+ * （注意：这只是「拿不到证据」时的保守估计，不是真实档位）。
+ */
+function tierOfRequest(tier) {
+  if (tier === 'standard') return 'standard';
+  if (tier === 'exhigh') return 'exhigh';
+  return 'lossless';
+}
+
+/**
+ * 把第三方源返回的音质信息归一成前端认识的档位键
+ * （'lossless' | 'exhigh' | 'standard'，与网易云官方源 `d.level` 同语义，
+ *   前端 `playbackQualityLabel()` 可直接用）。
+ *
+ * ⚠️ 各源的 `br` 语义**并不统一**，这里必须都兜住：
+ *  - `lxMusic`：`quality` 直接是 'flac' / '320k' / '128k'
+ *  - `gdmusic`：`br` 是**档位码**（'999' = 无损 / '320' / '128'）
+ *  - `kugou`：现在透传真实档位（flac/320/128）+ 对应码率
+ *  - `goMusic` / `custom` / `unblock`：`br` 是**真实 bps**（如 320000）
+ * 判定办法：br ≤ 1000 一律按档位码解释，否则按 bps 解释。
+ *
+ * 为什么要做这件事：前端音质按钮要显示「实际解析出来的档位」
+ * （非会员走第三方源，与网易云账号权限无关），而 `tryThirdPartyParse`
+ * 此前只把 url 带回去，档位信息在服务端就被丢掉了。
+ *
+ * @returns {string} 'lossless' | 'exhigh' | 'standard'
+ */
+function normalizeSourceQuality(result, requestedQuality) {
+  if (!result) return tierOfRequest(requestedQuality);
+  const raw = String(result.quality || '').trim().toLowerCase();
+  if (raw) {
+    if (raw === 'flac' || raw === 'lossless' || raw === 'sq' || raw === '999') return 'lossless';
+    if (raw === '320k' || raw === 'exhigh' || raw === 'hq' || raw === '320') return 'exhigh';
+    if (raw === '128k' || raw === 'standard' || raw === 'std' || raw === '128') return 'standard';
+  }
+  const br = Number(result.br) || 0;
+  if (br > 0) {
+    if (br <= 1000) return br >= 900 ? 'lossless' : (br >= 256 ? 'exhigh' : 'standard');
+    if (br >= 900000) return 'lossless';
+    if (br >= 256000) return 'exhigh';
+    return 'standard';
+  }
+  return tierOfRequest(requestedQuality);
 }
 
 // ============================================================
@@ -177,35 +252,14 @@ const lxMusicStrategy = {
 };
 
 /**
- * 自定义 API 策略
+ * 自定义 API 策略已于 2026-09-23 **整体移除**。
+ *
+ * 它的唯一开关是 `customApiUrl` 配置项（面板上的「自定义 API」开关与地址块
+ * 在更早一轮就已删除），所以那个配置项一去掉，`canHandle` 永远返回 false ——
+ * 留着就是一段永远不执行的死代码。`customApi.js` 同时删除。
+ * 想恢复：git 里有，且 `params.customApiUrl` / `params.customApiMethod` 两条
+ * 入参链路需要一并接回（server.js 的 parseMusic 调用点）。
  */
-const customApiStrategy = {
-  name: 'custom',
-  priority: 1,
-  canHandle: function (params) {
-    return params.enabledSources.includes('custom') && !!params.customApiUrl;
-  },
-  parse: async function (params) {
-    if (isInFailedCache(params.id, 'custom')) return null;
-
-    const result = await parseFromCustomApi({
-      id: params.id,
-      name: params.name,
-      artists: params.artists,
-      album: params.album,
-      quality: params.quality,
-      apiUrl: params.customApiUrl,
-      apiMethod: params.customApiMethod || 'GET'
-    });
-
-    if (result && result.url) {
-      return { url: result.url, source: 'custom', br: result.br };
-    }
-
-    addFailedCache(params.id, 'custom');
-    return null;
-  }
-};
 
 /**
  * 酷狗音源策略（移植自上游 Mineradio 2.2.0，免登录解析）
@@ -220,7 +274,10 @@ const kugouStrategy = {
     return params.enabledSources.includes('kugou');
   },
   parse: async function (params) {
-    if (isInFailedCache(params.id, 'kugou')) return null;
+    // 早退也要回放中性标记（见 failedCache 注释）：否则 60 秒内重播同一首无版权歌，
+    // 第二次会被当成真实故障计数。
+    const cachedFail = readFailedCache(params.id, 'kugou');
+    if (cachedFail) return cachedFail.neutral ? { url: '', neutralFailure: true } : null;
 
     const result = await parseFromKugou({
       id: params.id,
@@ -232,11 +289,14 @@ const kugouStrategy = {
     });
 
     if (result && result.url) {
-      return { url: result.url, source: result.source || 'kugou', br: result.br };
+      return { url: result.url, source: result.source || 'kugou', br: result.br, quality: result.quality };
     }
 
-    addFailedCache(params.id, 'kugou');
-    return null;
+    // 版权/无资源类失败（kugou.js 的 unavailableResult）不是服务故障 →
+    // 标记为中性失败，让 noteStrategyResult 不动连败计数。
+    const neutral = !!(result && result.reason === 'unavailable');
+    addFailedCache(params.id, 'kugou', neutral);
+    return neutral ? { url: '', neutralFailure: true } : null;
   }
 };
 
@@ -251,10 +311,13 @@ const gdmusicStrategy = {
   },
   parse: async function (params) {
     // 失败缓存按「歌曲 + 音质档位」隔离（对齐 Bhands_Web）：
-    // 无损档失败不应连带封禁有损档，反之亦然
+    // 无损档失败不应连带封禁有损档，反之亦然。
+    // 同时检查不带档位的基础 key —— 编排器在「探测校验拒绝」时会按策略名
+    // （addFailedCache(id, 'gdmusic')）记一次，那条记忆与音质档无关，
+    // 不检查就会漏掉（表现为：外层刚拒过，下一轮解析又完整重跑一遍）。
     const br = gdQualityOf(params.quality);
     const failKey = 'gdmusic_' + br;
-    if (isInFailedCache(params.id, failKey)) return null;
+    if (isInFailedCache(params.id, failKey) || isInFailedCache(params.id, 'gdmusic')) return null;
 
     const result = await parseFromGDMusic({
       id: params.id,
@@ -279,6 +342,7 @@ const gdmusicStrategy = {
  * 独立 Go 服务，用酷狗/酷我/QQ/咪咕的**官方真实音源**替代——远优于 unblock 的 128k 错配。
  * 优先级 3.7：排在 gdmusic/kugou 之后、unblock 之前（与 Web 的链路位置一致）。
  * 服务离线时策略内部会短路 3 分钟（健康记忆），不会拖慢解析。
+ * 「这首歌没有可用资源」类失败标记为中性（见 parse 内注释），不计入策略冷却。
  */
 const goMusicStrategy = {
   name: 'goMusic',
@@ -287,7 +351,9 @@ const goMusicStrategy = {
     return params.enabledSources.includes('goMusic');
   },
   parse: async function (params) {
-    if (isInFailedCache(params.id, 'goMusic')) return null;
+    // 早退也要回放中性标记（见 failedCache 注释）
+    const cachedFail = readFailedCache(params.id, 'goMusic');
+    if (cachedFail) return cachedFail.neutral ? { url: '', neutralFailure: true } : null;
 
     const result = await tryGoMusicSwitch({
       id: params.id,
@@ -295,16 +361,20 @@ const goMusicStrategy = {
       artists: params.artists,
       album: params.album,
       duration: params.duration,
-      quality: params.quality,
-      baseUrl: params.goMusicApiUrl
+      quality: params.quality
     });
 
     if (result && result.url) {
       return { url: result.url, source: result.source, br: result.br, size: result.size || 0 };
     }
 
-    addFailedCache(params.id, 'goMusic');
-    return null;
+    // 「换源搜不到 / 命中平台不在白名单 / 候选歌手对不上 / 拿不到直链」都是
+    // **这首歌在 goMusic 侧没有可用资源**，与策略健康无关 → 中性失败，不动连败计数。
+    // 不豁免的话，连遇两首同名错配或无版权歌就能把 goMusic 打进 5 分钟冷却。
+    // 超时与服务不可用仍返回 null（goMusicSwitch 那边判的），照常计真实故障。
+    const neutral = !!(result && result.neutralFailure);
+    addFailedCache(params.id, 'goMusic', neutral);
+    return neutral ? { url: '', neutralFailure: true } : null;
   }
 };
 
@@ -343,10 +413,9 @@ const unblockMusicStrategy = {
   }
 };
 
-/** 所有策略列表 */
+/** 所有策略列表（`custom` 已于 2026-09-23 移除，见 customApiStrategy 处的注释） */
 const ALL_STRATEGIES = [
   lxMusicStrategy,
-  customApiStrategy,
   gdmusicStrategy,
   kugouStrategy,
   goMusicStrategy,
@@ -372,7 +441,17 @@ const STRATEGY_COOLDOWN_PENALTY = 100;
 /** name -> { count, cooldownUntil } */
 const strategyFailStreak = new Map();
 
-function noteStrategyResult(name, ok) {
+/**
+ * 记录策略健康结果。
+ * @param {string} name 策略名
+ * @param {boolean} ok 是否产出了可用结果
+ * @param {boolean} [neutralFailure] 是否为「中性失败」—— 与策略健康无关的失败
+ *   （典型：版权/无资源，即搜索服务本身完全正常、只是这首歌确实没有）。
+ *   此时**不改变连败计数**：否则连遇几首无版权的歌，会把完全正常的策略
+ *   打进 5 分钟冷却，白丢它的先手优势（2026-09-23 kugou 实测）。
+ */
+function noteStrategyResult(name, ok, neutralFailure) {
+  if (neutralFailure && !ok) return;
   if (ok) {
     strategyFailStreak.delete(name);
     return;
@@ -434,20 +513,31 @@ function isShimProbe(probe, expectedMs) {
  * @param {number} [params.duration] - 时长(毫秒)
  * @param {string} [params.quality] - 音质
  * @param {string[]} [params.enabledSources] - 启用的音源列表
- * @param {string} [params.customApiUrl] - 自定义 API 地址
- * @param {string} [params.customApiMethod] - 自定义 API 请求方法
  * @param {string} [params.lxMusicScriptId] - LX Music 脚本 ID
  * @param {string[]} [params.unblockPlatforms] - UnblockNeteaseMusic 平台列表
- * @param {string} [params.goMusicApiUrl] - go-music-api 换源服务地址（留空则用环境变量/默认 127.0.0.1:8080）
  * @returns {Promise<{url: string, source: string, quality?: string, br?: number} | null>}
+ *
+ * 注：`customApiUrl` / `customApiMethod` / `goMusicApiUrl` 三个入参已于 2026-09-23 移除
+ * （面板入口早已删掉、无人能改）。go-music-api 的服务地址现在只看环境变量
+ * GO_MUSIC_API_URL，留空即默认 http://127.0.0.1:8080。
  */
 async function parseMusic(params) {
   const startTime = Date.now();
 
-  const enabledSources = params.enabledSources || ['gdmusic', 'unblockMusic'];
+  // 默认值必须与 public/js/server.js 的 DEFAULT_MUSIC_SOURCES_CONFIG 保持一致
+  // （那里是 ['gdmusic','goMusic']）。此前这里少一个 goMusic，
+  // 同一份配置出现两个默认值，改动很容易只改一处（2026-09-23 对齐）；
+  // 同日起 unblockMusic 从默认值摘掉（实测恒返回酷我试听垫片，见 server.js 注释）。
+  const enabledSources = params.enabledSources || ['gdmusic', 'goMusic'];
+  // ⚠️ 必须写回 params：各策略的 canHandle(params) 读的是 params.enabledSources，
+  // 不写回的话「调用方没传 enabledSources」会直接抛
+  // TypeError: Cannot read properties of undefined (reading 'includes')。
+  //（server.js 那条路径总是显式传值，所以这个坑一直没暴露；直接调 parseMusic
+  //  或将来新增调用点就会踩到。）
+  params.enabledSources = enabledSources;
 
-  // 检查成功缓存
-  const cached = getSuccessCache(params.id, enabledSources);
+  // 检查成功缓存（key 含音质：切音质后不会复用旧音质的结果）
+  const cached = getSuccessCache(params.id, enabledSources, params.quality);
   if (cached) {
     return cached;
   }
@@ -491,9 +581,12 @@ async function parseMusic(params) {
     function settleWith(result, strategyName) {
       if (settled) return;
       settled = true;
+      // 补上归一化档位键（前端音质按钮显示「实际解析档位」用），随结果一起进成功缓存
+      if (result && !result.level) result.level = normalizeSourceQuality(result, params.quality);
       const elapsed = Date.now() - startTime;
-      console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms');
-      setSuccessCache(params.id, result, enabledSources);
+      console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms' +
+        (result && result.level ? ', 档位: ' + result.level : ''));
+      setSuccessCache(params.id, result, enabledSources, params.quality);
       resolve(result);
     }
     function settleFallback() {
@@ -501,6 +594,7 @@ async function parseMusic(params) {
       settled = true;
       const elapsed = Date.now() - startTime;
       if (fallback) {
+        if (!fallback.level) fallback.level = normalizeSourceQuality(fallback, params.quality);
         console.log('[MusicParser] 无候选通过时长校验，宽容回落首个成功候选（' + fallback.source + '），耗时: ' + elapsed + 'ms');
       } else {
         console.log('[MusicParser] 所有策略均失败, 耗时: ' + elapsed + 'ms');
@@ -520,9 +614,10 @@ async function parseMusic(params) {
       var launchDelay = (kugouVipBoost > 0 && launchIdx > 0) ? Math.min(launchIdx * 300, 900) : 0;
       var launch = function () {
       strategy.parse(params).then(function (result) {
-        noteStrategyResult(strategy.name, !!(result && result.url));
+        noteStrategyResult(strategy.name, !!(result && result.url), !!(result && result.neutralFailure));
         if (!result || !result.url) {
-          console.log('[MusicParser] 策略 ' + strategy.name + ' 未返回有效 URL');
+          console.log('[MusicParser] 策略 ' + strategy.name +
+            (result && result.neutralFailure ? ' 无可用资源（不计入冷却）' : ' 未返回有效 URL'));
           onPendingDone();
           return;
         }
@@ -535,6 +630,9 @@ async function parseMusic(params) {
             '[MusicParser] 声明大小 ' + result.size + 'B 过小（expectedMs=' + expectedMs +
             '），疑似广告垫片，丢弃 ' + strategy.name
           );
+          // 同样记失败缓存：声明体积是上游自己给的、确定性高，
+          // 没必要 1 分钟内对同一首歌反复撞同一块垫片。
+          addFailedCache(params.id, strategy.name);
           onPendingDone();
           return;
         }
@@ -554,6 +652,13 @@ async function parseMusic(params) {
           );
           // 垫片不进宽容回落（未声明体积的音源只能靠探测识别，见 isShimProbe）
           if (!shim && !fallback) fallback = result;
+          // 探测拒绝 → 记住「这首歌 + 该策略」不可用（TTL 1 分钟）。
+          // probeAudio 每次都真发 Range 请求、没有缓存，不记的话同一首歌每次解析
+          // 都会重跑一遍注定失败的策略（2026-09-23「座位」实测：kugou 每次都匹配到
+          // 「座位 (架子鼓版)」、每次都被探测量出 225s vs 208s 拒掉）。
+          // 只记**确定性**拒绝（不是音频 / 时长不符 / 垫片体积），unreachable 走的是
+          // acceptProbe 的 fail-open 分支，不会走到这里。
+          addFailedCache(params.id, strategy.name);
           onPendingDone();
         }).catch(function () {
           // 探测自身异常：fail-open 放行（与 unreachable 同语义）

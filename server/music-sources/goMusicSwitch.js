@@ -18,7 +18,9 @@
  *  ③ 新增**服务健康记忆**：服务离线时短路 3 分钟，避免每首歌都白等超时
  *     （桌面版这个服务是可选的，Docker 没开时不能拖慢解析）。
  *
- * 配置：环境变量 GO_MUSIC_API_URL，或 .music-sources.json 的 goMusicApiUrl（优先）。
+ * 配置：环境变量 GO_MUSIC_API_URL（留空则用默认 http://127.0.0.1:8080）。
+ * 2026-09-23：`.music-sources.json` 的 `goMusicApiUrl` 配置项已移除（面板入口早先已删，
+ * 该键实际已无人能改），服务地址现在只由环境变量决定。
  */
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
@@ -50,9 +52,30 @@ function isTimeoutError(e) {
  */
 const ALLOWED_PLATFORMS = ['qq', 'kugou', 'kuwo', 'migu'];
 
-/** 失败缓存：某曲不可换源时防反复打（5 分钟） */
+/**
+ * 失败缓存：某曲不可换源时防反复打（5 分钟）。value = { at, neutral }。
+ *
+ * neutral 必须一起记：5 分钟里同一首歌再被解析时走的是**早退**分支，
+ * 那次也得知道「上次是中性失败」，否则中性豁免只生效一次（第二次早退返回 null
+ * 会被 musicParser 当成真实故障计数）。
+ */
 const failedCache = new Map();
 const FAILED_TTL = 5 * 60 * 1000;
+
+function markFailed(cacheKey, neutral) {
+  failedCache.set(cacheKey, { at: Date.now(), neutral: !!neutral });
+}
+
+/** @returns {{at: number, neutral: boolean} | null} */
+function readFailed(cacheKey) {
+  const entry = failedCache.get(cacheKey);
+  if (!entry) return null;
+  if (Date.now() - entry.at >= FAILED_TTL) {
+    failedCache.delete(cacheKey);
+    return null;
+  }
+  return entry;
+}
 
 /** 服务健康记忆：连不上时短路一段时间，别让每首歌都白等 */
 let serviceDownUntil = 0;
@@ -62,6 +85,18 @@ const SERVICE_DOWN_COOLDOWN_MS = 3 * 60 * 1000;
 function resolveBaseUrl(explicit) {
   const raw = explicit || process.env.GO_MUSIC_API_URL || DEFAULT_BASE_URL;
   return String(raw).replace(/\/+$/, '');
+}
+
+/**
+ * 「这首歌在 goMusic 侧没有可用资源」的中性失败标记。
+ *
+ * 与「服务故障」严格区分：策略健康计数只看后者，否则连遇几首无版权 / 同名错配的歌，
+ * 就能把完全正常的策略打进 5 分钟冷却（排到队尾，白丢先手）。
+ * 调用方（musicParser 的 goMusicStrategy）会把它转成 { url:'', neutralFailure:true }，
+ * 并让失败缓存记住这个标记 —— 60 秒内重播同一首歌时早退也要回放成中性。
+ */
+function unavailableResult(reason) {
+  return { url: '', neutralFailure: true, reason: reason || 'unavailable' };
 }
 
 function isServiceDown() {
@@ -75,7 +110,11 @@ function markServiceDown(reason) {
   );
 }
 
-/** 手动重置健康记忆（改配置后调用，让新地址立刻生效） */
+/**
+ * 手动重置健康记忆。
+ * 2026-09-23 起 goMusicApiUrl 配置项已移除，唯一的调用方是
+ * `GET /api/parse/go-music/status` 探活成功后调用（让服务恢复可用不用等冷却到期）。
+ */
 function resetServiceHealth() {
   serviceDownUntil = 0;
 }
@@ -115,19 +154,23 @@ function pickCandidate(payload) {
  * @param {string[]} params.artists - 歌手列表
  * @param {number} [params.duration] - 时长（毫秒）
  * @param {string} [params.quality] - 音质档位
- * @param {string} [params.baseUrl] - 服务地址覆盖
- * @returns {Promise<{url: string, source: string, br: number, size: number} | null>}
+ * @returns {Promise<{url: string, source: string, br: number, size: number}
+ *   | {url: '', neutralFailure: true} | null>}
+ *   null = 真实故障（超时 / 服务不可用），计入策略健康；
+ *   `{url:'', neutralFailure:true}` = 这首歌在 goMusic 侧没有可用资源，**不计入**策略健康。
  */
 async function tryGoMusicSwitch(params) {
   const name = params.name || '';
   if (!name) return null;
 
-  const base = resolveBaseUrl(params.baseUrl);
+  const base = resolveBaseUrl();
   const br = qualityOf(params.quality);
   const cacheKey = 'go_' + params.id + '_' + br;
 
-  const failedAt = failedCache.get(cacheKey);
-  if (failedAt && Date.now() - failedAt < FAILED_TTL) return null;
+  // 早退要**回放**上次的「中性」标记（见 failedCache 注释），
+  // 否则 5 分钟内重播同一首无版权歌时，这次早退会被算成真实故障。
+  const failed = readFailed(cacheKey);
+  if (failed) return failed.neutral ? unavailableResult('cached') : null;
   if (isServiceDown()) return null;
 
   const artist = (params.artists || [])[0] || '';
@@ -145,27 +188,29 @@ async function tryGoMusicSwitch(params) {
     sw = await getJson(base + '/api/v1/music/switch?' + q, SWITCH_TIMEOUT());
   } catch (e) {
     if (isTimeoutError(e)) {
-      // 超时 ≠ 服务不可用：只记本次失败（1 分钟内不再试这首），不要把服务冷却掉
+      // 超时 ≠ 服务不可用：只记本次失败（5 分钟内不再试这首），不要把服务冷却掉。
+      // 但超时**不是**中性失败 —— 它是我们这边等不到响应，属于真实故障，照常计数。
       console.warn('[GoMusic] 换源搜索超时（' + SWITCH_TIMEOUT() + 'ms），本次跳过；服务未标记为不可用');
-      failedCache.set(cacheKey, Date.now());
+      markFailed(cacheKey, false);
       return null;
     }
     markServiceDown((e && e.message) || e);
     return null;
   }
 
+  // ①' 换源没找到候选：这首歌在聚合的平台里确实搜不到 → 中性失败
   const cand = pickCandidate(sw);
   if (!cand) {
-    failedCache.set(cacheKey, Date.now());
-    return null;
+    markFailed(cacheKey, true);
+    return unavailableResult('no-candidate');
   }
 
-  // ② 平台白名单过滤
+  // ② 平台白名单过滤：搜到了但我们不支持的平台，等于没有可用资源 → 中性失败
   const platform = String(cand.source || '').toLowerCase();
   if (!ALLOWED_PLATFORMS.includes(platform)) {
     console.log('[GoMusic] 换源命中平台 ' + platform + ' 不在白名单，跳过');
-    failedCache.set(cacheKey, Date.now());
-    return null;
+    markFailed(cacheKey, true);
+    return unavailableResult('platform-not-allowed');
   }
 
   // ②' 歌手一致性校验：候选歌手与期望歌手无交集 → 同名错配
@@ -178,9 +223,11 @@ async function tryGoMusicSwitch(params) {
   if (wantArtists.length && candArtist && !wantArtists.some(function (a) {
     return candArtist.includes(a) || a.includes(candArtist);
   })) {
+    // 同名错配 = 这首歌没有**对的**版本可换 → 中性失败（用户点名的场景）：
+    // 不豁免的话，连遇两首同名错配就能把 goMusic 打进 5 分钟冷却。
     console.log('[GoMusic] 候选歌手不一致（' + cand.artist + '），丢弃避免货不对版');
-    failedCache.set(cacheKey, Date.now());
-    return null;
+    markFailed(cacheKey, true);
+    return unavailableResult('artist-mismatch');
   }
 
   // ③ 取直链
@@ -194,19 +241,21 @@ async function tryGoMusicSwitch(params) {
     );
   } catch (e) {
     if (isTimeoutError(e)) {
+      // 同 ①：超时是真实故障，不算中性
       console.warn('[GoMusic] 取直链超时（' + URL_TIMEOUT() + 'ms），本次跳过；服务未标记为不可用');
-      failedCache.set(cacheKey, Date.now());
+      markFailed(cacheKey, false);
       return null;
     }
     markServiceDown((e && e.message) || e);
     return null;
   }
 
+  // ③' 有候选但拿不到直链（该平台无版权 / 无该档位）→ 中性失败
   const data = (u && u.data) || null;
   const direct = (data && data.url) || (u && u.url) || '';
   if (!direct || !/^https?:\/\//i.test(direct)) {
-    failedCache.set(cacheKey, Date.now());
-    return null;
+    markFailed(cacheKey, true);
+    return unavailableResult('no-direct-url');
   }
 
   console.log('[GoMusic] 换源成功, 平台:', platform, '原曲:', name, '-', artist);

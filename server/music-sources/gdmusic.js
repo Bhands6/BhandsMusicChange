@@ -6,6 +6,7 @@
  */
 
 const axios = require('axios');
+const { isCandidateDurationPlausible } = require('./durationProbe');
 
 const BASE_URL = 'https://music-api.gdstudio.xyz/api.php';
 
@@ -20,7 +21,28 @@ const DURATION_PROXIMITY_MS = 12000;
  * 必须对**原始**歌名判断：normalizeText 会把括号内容整段删掉，
  * 「Take Me To Your Heart (Live)」归一化后与原曲完全相同。
  */
-const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|现场|演唱会|翻唱|cover|伴奏|remix|dj|混音|铃声|试听|纯音乐|acoustic|instrumental|karaoke|demo|翻录|重制|remaster)[^\)）\]]*[)）\]]/i;
+const VARIANT_NAME_RE = /[(（【\[][^\)）\]]*(live|现场|演唱会|翻唱|cover|伴奏|remix|dj|混音|铃声|试听|纯音乐|acoustic|instrumental|karaoke|demo|翻录|重制|remaster|架子鼓|钢琴|吉他|古筝|小提琴|八音盒|口琴|尤克里里|纯享|重置|女声|男声|童声|合唱|对唱)[^\)）\]]*[)）\]]/i;
+
+/**
+ * 候选名的括号后缀在原曲名里不存在 → 判为变体。
+ *
+ * 词表式 VARIANT_NAME_RE 永远补不全（「座位 (架子鼓版)」这种乐器改编版就是漏网的，
+ * 2026-09-23 实测它被选中后白拿了一次播放地址），所以再加一层通用兜底：
+ * 「后缀是否为原曲名的一部分」——
+ *   原曲「座位」      vs 候选「座位 (架子鼓版)」→ 后缀不在原名里 → 变体
+ *   原曲「晴天 (Live)」vs 候选「晴天 (Live)」   → 后缀在原名里   → 非变体
+ * 用**原始**歌名比对（normalizeText 会把括号整段删掉，比不出来）。
+ */
+function hasUnmatchedVariantSuffix(expectedName, candidateName) {
+  const segs = String(candidateName || '').match(/[（(【\[]([^)）】\]]*)[)）】\]]/g);
+  if (!segs || !segs.length) return false;
+  const expectedRaw = String(expectedName || '').toLowerCase();
+  return segs.some(function (seg) {
+    const inner = seg.replace(/[（(【\[\])）】\]]/g, '').trim().toLowerCase();
+    if (!inner) return false;
+    return expectedRaw.indexOf(inner) < 0;
+  });
+}
 
 /**
  * 归一化文本用于匹配：去掉括号备注（Live/翻唱/伴奏等）、空白与常见标点，转小写
@@ -52,6 +74,21 @@ function getCandidateArtistText(artist) {
 /**
  * 检查歌名是否匹配
  */
+/**
+ * 拆开聚合形态的歌手串。
+ *
+ * 同一首歌的歌手列表，网易云给的是「杨宗纬 / 杨旭 / 于冬然 / 范甲君」（斜杠），
+ * 其它平台可能给「杨宗纬、杨旭、于冬然、范甲君」（顿号）—— 而 `normalizeText` 的
+ * 清理字符集里**没有**斜杠和顿号，整串比对必然失败（2026-09-23「其实都没有」
+ * 在 kugou 侧即因此把正确版本拒掉）。拆成单个歌手后逐个比对。
+ */
+function splitArtistNames(raw) {
+  return String(raw || '')
+    .split(/[\/、;；,，&＆|·]+/)
+    .map(function (s) { return s.trim(); })
+    .filter(Boolean);
+}
+
 function isNameMatched(expectedName, candidateName) {
   const expected = normalizeText(expectedName);
   const candidate = normalizeText(candidateName);
@@ -86,42 +123,53 @@ function pickBestCandidate(candidates, expected, source) {
 
     if (!isNameMatched(expected.name, item.name || '')) continue;
 
-    // 时长硬校验：偏差超过 max(10s, 12%) 直接拒绝（不同版本歌词时间轴必然对不上）
+    // 时长硬校验：容差 max(8s, 6%)，比下游 durationProbe 的 max(5s, 4%) 宽 2 个百分点
+    //（原来是 max(10s, 12%)，会放过差十几秒的变体，白拿一次播放地址再被外层拒）。
     // ⚠ 实测 GD 接口的 search 返回**不含 duration 字段**，所以对 netease/joox 这条基本不生效，
     //   真正的兜底是 ② 的变体降权 和下游 durationProbe 的真实音频时长校验。
     const itemDurationMs = (Number(item.duration) || 0) * 1000;
-    if (expected.durationMs > 0 && itemDurationMs > 0) {
-      const durationDiff = Math.abs(expected.durationMs - itemDurationMs);
-      if (durationDiff > Math.max(10000, expected.durationMs * 0.12)) continue;
-    }
+    if (!isCandidateDurationPlausible(itemDurationMs, expected.durationMs)) continue;
 
-    const candidateArtist = normalizeText(getCandidateArtistText(item.artist));
+    const candidateArtists = splitArtistNames(getCandidateArtistText(item.artist));
     let score;
 
     if (expected.artists.length === 0) {
       // 原曲无歌手信息，歌名匹配即可
       score = 2;
-    } else if (!candidateArtist) {
+    } else if (!candidateArtists.length) {
       // 候选缺少歌手信息：保留为低优先级候选
       score = 1;
     } else {
+      // 双方都拆成单个歌手后逐个比对（分隔符不一致见 splitArtistNames 注释）
       const artistMatched = expected.artists.some(function (name) {
-        const normalized = normalizeText(name);
-        return (
-          !!normalized &&
-          (candidateArtist.includes(normalized) || normalized.includes(candidateArtist))
-        );
+        return splitArtistNames(name).some(function (expectName) {
+          const normalized = normalizeText(expectName);
+          if (!normalized) return false;
+          return candidateArtists.some(function (candidateName) {
+            const candidateNorm = normalizeText(candidateName);
+            return (
+              !!candidateNorm &&
+              (candidateNorm.includes(normalized) || normalized.includes(candidateNorm))
+            );
+          });
+        });
       });
       // 有歌手信息但对不上 → 拒绝
       if (!artistMatched) continue;
       score = 3;
     }
 
-    // 变体强降权：Live / 翻唱 / 伴奏 / Remix / DJ 版等不能优先于原曲。
+    // 变体强降权：Live / 翻唱 / 伴奏 / Remix / DJ 版 / 乐器改编版等不能优先于原曲。
     //（2026-09-21 实测：GD 接口不返回 duration → 时长校验失效 → 选中了
     //  「Take Me To Your Heart (Live)」，音频 221.9s vs 期望 238.8s，
     //  表现为"歌词前半对得上、后面全飘"）
-    if (VARIANT_NAME_RE.test(String(item.name || ''))) score -= 2;
+    // ⚠ 但「时长与期望高度吻合」的变体要豁免 —— 那说明原曲本身就是该变体
+    //（2026-09-23 kugou 侧「其实都没有」：歌名不带 Live，实际是 4 人 Live 版）。
+    const isVariantName = VARIANT_NAME_RE.test(String(item.name || '')) ||
+      hasUnmatchedVariantSuffix(expected.name, item.name);
+    const variantDurationMatches = expected.durationMs > 0 && itemDurationMs > 0 &&
+      Math.abs(expected.durationMs - itemDurationMs) <= Math.max(2000, expected.durationMs * 0.02);
+    if (isVariantName && !variantDurationMatches) score -= 2;
 
     // 时长接近度：连续打分，让「最接近原曲时长」的候选胜出。
     // 原实现只按 1/2/3 分级，同分时是「搜索结果里排最前的那个」胜出 ——
