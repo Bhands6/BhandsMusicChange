@@ -3,7 +3,7 @@
 生成时间：2026-09-20
 对比范围：
 - Web 版：`BhandsMusic_Web/Bhands_Web/apps/server/src/services/`（`musicParser.ts` / `music-sources/*` / `durationProbe.ts`）+ `routes/music.ts`
-- 桌面版：`BhandsMusic/BhandsMusicChange/server/music-sources/*`（`musicParser.js` / `gdmusic.js` / `kugou.js` / `unblockMusic.js` / `lxMusicRunner.js` / `goMusicSwitch.js` / `durationProbe.js`）+ `public/js/server.js` + `public/js/main.js`
+- 桌面版：`BhandsMusic/BhandsMusicChange/server/music-sources/*`（`musicParser.js` / `gdmusic.js` / `kugou.js` / `unblockMusic.js` / `lxMusicRunner.js` / `goMusicSwitch.js` / `durationProbe.js`）+ `server/server.js` + `public/js/main.js`
   - 注：`customApi.js` 与 `custom` 策略已于 2026-09-23 整体移除（配置项 `customApiUrl` / `customApiMethod` 一并下线）。
 
 > 背景：桌面版最近两批提交（`b88ce4e` 播放提速批次 1、`258fe04` 移植 Web 版音源探测与竞速编排批次 2）正在把 Web 版的音源逻辑往桌面版搬，所以两边现在是「同源不同步」的状态。
@@ -59,7 +59,7 @@
 | 维度 | Web 版 | 桌面版 Change |
 |---|---|---|
 | 语言/模块 | TypeScript + ESM | JavaScript + CommonJS |
-| 运行形态 | 独立 Fastify 服务（端口 6628，浏览器访问） | 内嵌 Electron 本地 http 服务（`public/js/server.js`） |
+| 运行形态 | 独立 Fastify 服务（端口 6628，浏览器访问） | 内嵌 Electron 本地 http 服务（`server/server.js`） |
 | 解析入口 | `resolveSongUrl()`（官方+第三方统一入口） | `parseMusic()`（只管第三方；官方在 `server.js` 的 `/api/song/url`） |
 | 官方/第三方分流 | **服务端**按 `vip` 参数分流 | **前端** `main.js` 的 `shouldPreferThirdPartyParse()` 决定顺序 |
 | 音源配置 | 环境变量 + 管理员面板 | `.music-sources.json`（`enabledSources` / `quality` / `unblockPlatforms`…） |
@@ -297,7 +297,7 @@ curl -X POST "http://127.0.0.1:3000/api/parse/music" -H "Content-Type: applicati
 
 | 层 | 文件 | 改动 |
 |---|---|---|
-| 服务端兜底 | `public/js/server.js` | 新增 `fillMetaFromNetease()`：**歌手为空时**按网易云 ID 回查详情补齐 name/artists/album/duration。触发条件刻意收紧——仅在歌手为空时调用（正常路径零额外延迟）、id 必须是纯数字（QQ mid 是字母数字混合，避免张冠李戴）、详情歌名必须与请求歌名一致。`/api/parse/music` 改为使用补齐后的元数据 |
+| 服务端兜底 | `server/server.js` | 新增 `fillMetaFromNetease()`：**歌手为空时**按网易云 ID 回查详情补齐 name/artists/album/duration。触发条件刻意收紧——仅在歌手为空时调用（正常路径零额外延迟）、id 必须是纯数字（QQ mid 是字母数字混合，避免张冠李戴）、详情歌名必须与请求歌名一致。`/api/parse/music` 改为使用补齐后的元数据 |
 | 前端容错 | `public/js/main.js` | 新增 `extractArtistNames()` / `extractAlbumName()`：兼容对象数组、**字符串数组**、`singer`/`artist` 单字段、合并串。**刻意不按 `&`/`,` 拆分**（会误伤 `Simon & Garfunkel`），合并串靠服务端双向包含匹配即可命中。歌手为空时打一条 warn 便于排查调用路径 |
 | 酷狗打分 | `server/music-sources/kugou.js` | 时长接近度改为**连续打分** `max(0, 1 - diff/12000)`；搜索顺序微调从 `0.01×位置` 降到 `0.001×位置`（只作为完全同分时的稳定排序） |
 | GD音乐台打分 | `server/music-sources/gdmusic.js` | 同样加连续时长接近度，让「最接近原曲时长」的候选胜出，而不是「搜索结果里排最前的」 |

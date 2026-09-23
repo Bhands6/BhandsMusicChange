@@ -2278,7 +2278,7 @@ async function createWindow() {
   // 先占了 3000，findOpenPort 的测试 socket 仍会误报可用，本 server 绑定成功却收不到
   // 任何流量，主窗口会加载到冒充者的页面（表现为主页空白）。因此绑定成功后必须验证
   // /__bhands_identity 是否由本 server 应答，失败则换下一个端口重试。
-  const serverPath = path.join(__dirname, '..', 'public', 'js', 'server.js');
+  const serverPath = path.join(__dirname, '..', 'server', 'server.js');
   let port = await findOpenPort(3000);
   for (let attempt = 0; attempt < 10; attempt++) {
     process.env.PORT = String(port);

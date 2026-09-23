@@ -62,16 +62,16 @@ const tls = require('tls');         // TLS 证书管理
 const { once } = require('events'); // 事件转 Promise
 const { fileURLToPath } = require('url');  // URL 转文件路径
 const { analyzePodcastDjStream, analyzePodcastDjIntro } = require('./dj-analyzer');  // DJ 节拍分析器
-const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('../../server/music-sources/musicParser');  // 多音源解析器
-const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('../../server/music-sources/lxMusicRunner');  // LX Music 脚本执行器
-const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('../../server/music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
-const kugouService = require('../../server/music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
+const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('./music-sources/musicParser');  // 多音源解析器
+const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('./music-sources/lxMusicRunner');  // LX Music 脚本执行器
+const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('./music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
+const kugouService = require('./music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
 /* cuefield 自动混音：转场方案规划 + 反馈记录。
  * ⚠️ 这两行曾经漏掉，导致 /api/cuefield/transition 与 /api/cuefield/feedback 三个路由
  * 引用未声明标识符，实测全部报 "xxx is not defined"（400/500），前端自动混音静默失效。
- * cuefield/ 在仓库根、本文件在 public/js/ 下，跨目录 require 容易漏 —— 改动时留意。 */
-const { planCuefieldTransitionFromCache } = require('../../cuefield/mineradio-bridge');
-const { readCuefieldFeedbackStats, appendCuefieldFeedback } = require('../../cuefield/feedback-log');
+ * 本文件在 server/ 下、cuefield/ 在仓库根，跨目录 require 容易漏 —— 改动时留意。 */
+const { planCuefieldTransitionFromCache } = require('../cuefield/mineradio-bridge');
+const { readCuefieldFeedbackStats, appendCuefieldFeedback } = require('../cuefield/feedback-log');
 
 // ==================== 酷狗会员状态（模块级：跨请求持久） ====================
 const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
@@ -83,7 +83,7 @@ let kugouCellCookies = null;
 function kugouApiAppDir() {
   if (!kugouApiState.appDir) {
     // 开发态：项目根/vendor/kugou-api；打包态：app.asar → app.asar.unpacked
-    let dir = path.resolve(__dirname, '..', '..', 'vendor', 'kugou-api');
+    let dir = path.resolve(__dirname, '..', 'vendor', 'kugou-api');
     dir = dir.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1');
     kugouApiState.appDir = dir;
   }
@@ -119,8 +119,8 @@ const HOST = process.env.HOST || '0.0.0.0';     // 监听地址
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';  // 默认 User-Agent
 
 /* ==================== 路径基准 ==================== */
-// server.js 现在位于 public/js/，项目根目录需要向上两级
-const PROJECT_ROOT = path.resolve(__dirname, '..', '..');
+// server.js 现在位于 server/，项目根目录需要向上 1 级
+const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 /* ==================== 文件路径配置 ==================== */
 const COOKIE_FILE = process.env.COOKIE_FILE || path.join(PROJECT_ROOT, '.cookie');           // 网易云 Cookie 文件
@@ -256,7 +256,7 @@ const UPDATE_CONFIG = readUpdateConfig(APP_PACKAGE);  // 更新配置
 /* ==================== 补丁系统配置 ==================== */
 const PATCH_MAX_BYTES = 12 * 1024 * 1024;  // 补丁文件最大 12MB
 const PATCH_ALLOWED_ROOTS = new Set(['public', 'desktop', 'build']);  // 允许补丁的目录
-const PATCH_ALLOWED_FILES = new Set(['public/js/server.js', 'public/js/dj-analyzer.js', 'package.json', 'package-lock.json']);  // 允许补丁的根文件
+const PATCH_ALLOWED_FILES = new Set(['server/server.js', 'server/dj-analyzer.js', 'package.json', 'package-lock.json']);  // 允许补丁的根文件
 
 /* ==================== 更新系统常量 ==================== */
 const UPDATE_FALLBACK_NOTES = [
@@ -421,6 +421,19 @@ function saveQQCookie(c) {
 }
 
 // ---------- 工具 ----------
+
+/* 静态根兜底：public/ 是静态根，serveStatic 没有路径白名单。
+ * 历史上 server.js(200K) / dj-analyzer.js(51K) 这两个 **Node 模块** 曾被放在 public/js/ 下，
+ * 实测 `GET /js/server.js` → 200 返回整个服务端源码（目录穿越倒是没成功，URL 解析器把 `..` 归一化掉了）。
+ * 这两个文件现已移到 server/；这里再留一道兜底，防止同类文件再被放回静态根。
+ * 只挡服务端产物，不动任何浏览器资源（main.js / styles / media 等照常服务）。 */
+const STATIC_BLOCKED_BASENAMES = new Set(['server.js', 'dj-analyzer.js']);  // Node 侧入口，不该出现在静态根
+const STATIC_BLOCKED_EXTENSIONS = new Set(['.node', '.jsonl', '.log', '.pem', '.key', '.pfx']);  // 服务端产物 / 凭据
+function isBlockedStaticPath(absPath) {
+  const base = path.basename(absPath).toLowerCase();
+  if (STATIC_BLOCKED_BASENAMES.has(base)) return true;
+  return STATIC_BLOCKED_EXTENSIONS.has(path.extname(base));
+}
 function serveStatic(res, filePath) {
   const ext = path.extname(filePath);
   fs.readFile(filePath, (err, data) => {
@@ -4930,6 +4943,7 @@ const server = http.createServer(async (req, res) => {
 
   let filePath = pn === '/' ? '/index.html' : pn;
   filePath = path.join(PROJECT_ROOT, 'public', filePath);
+  if (isBlockedStaticPath(filePath)) { res.writeHead(404); res.end('Not Found'); return; }
   serveStatic(res, filePath);
 });
 

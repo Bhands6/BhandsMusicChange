@@ -58,3 +58,6 @@ vendor/kugou-api/
 
 # 启动页背景视频（21MB，不入库；build/fetch-splash-video.js 按需拉取，运行时 CDN 回退）
 public/media/*.mp4
+
+# NVIDIA 驱动在 Electron 进程工作目录下自建的日志目录（umdlogs），与项目无关
+NVIDIA Corporation/

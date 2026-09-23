@@ -524,7 +524,7 @@ function isShimProbe(probe, expectedMs) {
 async function parseMusic(params) {
   const startTime = Date.now();
 
-  // 默认值必须与 public/js/server.js 的 DEFAULT_MUSIC_SOURCES_CONFIG 保持一致
+  // 默认值必须与 server/server.js 的 DEFAULT_MUSIC_SOURCES_CONFIG 保持一致
   // （那里是 ['gdmusic','goMusic']）。此前这里少一个 goMusic，
   // 同一份配置出现两个默认值，改动很容易只改一处（2026-09-23 对齐）；
   // 同日起 unblockMusic 从默认值摘掉（实测恒返回酷我试听垫片，见 server.js 注释）。

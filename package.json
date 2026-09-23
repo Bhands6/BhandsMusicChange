@@ -38,8 +38,8 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "public/js/server.js",
-      "public/js/dj-analyzer.js",
+      "server/server.js",
+      "server/dj-analyzer.js",
       "cuefield/**/*",
       "vendor/go-music-api/**/*",
       "vendor/kugou-api/**/*"

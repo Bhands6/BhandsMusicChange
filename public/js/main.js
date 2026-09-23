@@ -10834,6 +10834,23 @@ function applyLocalBeatMap(song, mode, map, fromCache) {
   if (fromCache) showToast((mode === 'dj' ? 'DJ' : 'MR') + ' 本地节奏缓存已载入');
   return true;
 }
+
+/* ⚠️ 保留：本函数是 #local-beat-modal 的**唯一入口**，但当前没有任何调用点。
+ *
+ * 来龙去脉：它原来由 prepareLocalBeatAnalysis(song, audioUrl) 在本地文件播放 520ms 后调用。
+ * 移植上游「本地音乐库」（def9f86）时，旧的「单文件 objectURL 直接播放」整段被重写成
+ * importLocalAudioSongs() → playQueueAt()，那次重写**漏掉了这个调用**，于是
+ * prepareLocalBeatAnalysis 变成零引用（2026-09-23 已按死代码删除），本函数随之成为孤儿。
+ *
+ * 所以这是「功能触发点丢失」，不是「死代码」—— 模态框 UI（index.html:1003）、
+ * 引擎（applyLocalBeatMap / getLocalBeatEntry / storeLocalBeatEntry）与
+ * 其余入口（closeLocalBeatModal / selectLocalBeatMode / startLocalBeatAnalysis）
+ * 全都健在，只差一个调用。删掉它等于静默砍掉「本地歌曲选 MR/DJ 分析」这个功能。
+ *
+ * 注意：新流程里 currentLocalSong 恒为 null（importLocalAudioSongs 会把它清掉），
+ * 要用 playQueue[currentIdx] 传参；且本地歌曲本来就会走 playQueueAt 里的
+ * scheduleBeatAnalysis 自动分析 MR，重新接线前得先想清楚「什么时候该弹这个框」，
+ * 否则每首未缓存的本地歌都会弹一次。 */
 function openLocalBeatModal(song, audioUrl) {
   if (immersiveMode) setImmersiveMode(false);
   localBeatAnalysis.song = song || currentLocalSong;
