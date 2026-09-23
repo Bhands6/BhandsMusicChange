@@ -66,6 +66,12 @@ const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners
 const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('../../server/music-sources/lxMusicRunner');  // LX Music 脚本执行器
 const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('../../server/music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
 const kugouService = require('../../server/music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
+/* cuefield 自动混音：转场方案规划 + 反馈记录。
+ * ⚠️ 这两行曾经漏掉，导致 /api/cuefield/transition 与 /api/cuefield/feedback 三个路由
+ * 引用未声明标识符，实测全部报 "xxx is not defined"（400/500），前端自动混音静默失效。
+ * cuefield/ 在仓库根、本文件在 public/js/ 下，跨目录 require 容易漏 —— 改动时留意。 */
+const { planCuefieldTransitionFromCache } = require('../../cuefield/mineradio-bridge');
+const { readCuefieldFeedbackStats, appendCuefieldFeedback } = require('../../cuefield/feedback-log');
 
 // ==================== 酷狗会员状态（模块级：跨请求持久） ====================
 const kugouApiState = { ensured: null, appDir: null, nodeExe: null };
@@ -123,6 +129,8 @@ const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
 const BEATMAP_CACHE_DIR = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';  // 节拍映射缓存目录
+// cuefield 反馈记录：桌面端 main.js 注入 userData 下的路径；裸跑（如本地调试）时退回仓库根。
+const CUEFIELD_FEEDBACK_FILE = process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE || path.join(PROJECT_ROOT, 'cuefield-feedback.jsonl');
 const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json');  // 音源配置文件
 
 /* ==================== 音源配置管理 ==================== */
@@ -1046,75 +1054,6 @@ function trimUpdateJobs() {
   const jobs = Array.from(updateDownloadJobs.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   jobs.slice(8).forEach(job => updateDownloadJobs.delete(job.id));
 }
-async function downloadUpdateAsset(job) {
-  const tmpPath = job.filePath + '.download';
-  try {
-    fs.mkdirSync(UPDATE_DOWNLOAD_DIR, { recursive: true });
-    job.status = 'downloading';
-    job.updatedAt = Date.now();
-
-    const resp = await fetch(job.downloadUrl, {
-      headers: {
-        'User-Agent': `BhandsMusic/${APP_VERSION}`,
-      },
-    });
-    if (!resp.ok) throw new Error('Download failed ' + resp.status);
-
-    const totalHeader = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
-    job.total = totalHeader || job.total || 0;
-    job.received = 0;
-    job.progress = 0;
-    job.speedBps = 0;
-    job.etaSeconds = 0;
-    job.message = job.total ? '正在下载完整安装包' : '正在下载完整安装包，等待服务器返回大小';
-    job.updatedAt = Date.now();
-    let speedWindowAt = Date.now();
-    let speedWindowBytes = 0;
-
-    const writer = fs.createWriteStream(tmpPath);
-    const reader = resp.body.getReader();
-    try {
-      while (true) {
-        const chunk = await reader.read();
-        if (chunk.done) break;
-        const buf = Buffer.from(chunk.value);
-        job.received += buf.length;
-        speedWindowBytes += buf.length;
-        const now = Date.now();
-        if (now - speedWindowAt >= 900) {
-          job.speedBps = Math.round(speedWindowBytes / Math.max(0.001, (now - speedWindowAt) / 1000));
-          speedWindowAt = now;
-          speedWindowBytes = 0;
-        }
-        if (job.total > 0) {
-          job.progress = Math.max(1, Math.min(99, Math.round((job.received / job.total) * 100)));
-          job.etaSeconds = job.speedBps > 0 ? Math.max(0, Math.round((job.total - job.received) / job.speedBps)) : 0;
-        } else {
-          const kb = Math.max(1, job.received / 1024);
-          job.progress = Math.max(1, Math.min(88, Math.round(Math.log10(kb + 1) * 24)));
-        }
-        job.message = job.total > 0 ? '正在下载完整安装包' : '正在下载完整安装包，服务器未提供总大小';
-        job.updatedAt = Date.now();
-        if (!writer.write(buf)) await once(writer, 'drain');
-      }
-    } finally {
-      writer.end();
-      await once(writer, 'finish').catch(() => {});
-    }
-
-    if (fs.existsSync(job.filePath)) fs.unlinkSync(job.filePath);
-    fs.renameSync(tmpPath, job.filePath);
-    job.status = 'ready';
-    job.progress = 100;
-    job.message = '安装包已下载';
-    job.updatedAt = Date.now();
-  } catch (e) {
-    try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
-    job.status = 'error';
-    job.error = e.message || 'UPDATE_DOWNLOAD_FAILED';
-    job.updatedAt = Date.now();
-  }
-}
 function sha512Base64(buffer) {
   return crypto.createHash('sha512').update(buffer).digest('base64');
 }
@@ -1428,59 +1367,6 @@ function normalizePatchPayload(payload) {
   if (!files.length) throw new Error('PATCH_EMPTY');
   if (files.length > 40) throw new Error('PATCH_TOO_MANY_FILES');
   return { from, to, files, restartRequired: payload.restartRequired !== false };
-}
-async function downloadAndApplyPatch(job) {
-  const chunks = [];
-  try {
-    fs.mkdirSync(UPDATE_DOWNLOAD_DIR, { recursive: true });
-    job.status = 'downloading';
-    job.mode = 'patch';
-    job.message = '正在下载快速补丁';
-    job.updatedAt = Date.now();
-
-    const resp = await fetch(job.downloadUrl, {
-      headers: { 'User-Agent': `BhandsMusic/${APP_VERSION}` },
-    });
-    if (!resp.ok) throw new Error('Patch download failed ' + resp.status);
-
-    job.total = parseInt(resp.headers.get('content-length') || '0', 10) || job.total || 0;
-    job.received = 0;
-    const reader = resp.body.getReader();
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      const buf = Buffer.from(chunk.value);
-      job.received += buf.length;
-      if (job.received > PATCH_MAX_BYTES) throw new Error('PATCH_TOO_LARGE');
-      chunks.push(buf);
-      job.progress = job.total > 0
-        ? Math.max(1, Math.min(84, Math.round((job.received / job.total) * 84)))
-        : Math.max(1, Math.min(76, Math.round(Math.log10(job.received / 1024 + 1) * 24)));
-      job.updatedAt = Date.now();
-    }
-
-    const raw = Buffer.concat(chunks);
-    const expectedPatchHash = String(job.sha256 || '').trim().toLowerCase();
-    if (expectedPatchHash && sha256Hex(raw) !== expectedPatchHash) throw new Error('PATCH_PACKAGE_HASH_MISMATCH');
-    const patch = normalizePatchPayload(JSON.parse(raw.toString('utf8').replace(/^\uFEFF/, '')));
-    job.version = patch.to;
-    job.message = '正在应用快速补丁';
-    job.progress = 88;
-    job.updatedAt = Date.now();
-    const changed = [];
-    patch.files.forEach(file => changed.push(writePatchFile(job, file)));
-    job.changedFiles = changed;
-    job.status = 'ready';
-    job.progress = 100;
-    job.restartRequired = patch.restartRequired;
-    job.message = patch.restartRequired ? '快速补丁已应用，重启后生效' : '快速补丁已应用';
-    job.updatedAt = Date.now();
-  } catch (e) {
-    job.status = 'error';
-    job.error = e.message || 'PATCH_APPLY_FAILED';
-    job.message = '快速补丁失败，可改用完整安装包';
-    job.updatedAt = Date.now();
-  }
 }
 async function downloadPatchBufferFromCandidate(job, candidate, index, total) {
   ensureMirrorCanBeVerified(job, candidate);
@@ -2314,33 +2200,7 @@ function uniqueSongsByKey(songs) {
   return out;
 }
 
-function tagWeatherPoolSongs(songs, source) {
-  return (songs || []).map(song => ({ ...song, weatherSource: source }));
-}
 
-async function fetchWeatherPlaylistSongs(playlist, limit) {
-  const id = playlist && playlist.id;
-  if (!id) return [];
-  let rawTracks = [];
-  try {
-    if (typeof playlist_track_all === 'function') {
-      const all = await playlist_track_all({ id, limit: limit || 36, offset: 0, cookie: userCookie, timestamp: Date.now() });
-      rawTracks = (all.body && (all.body.songs || all.body.tracks)) || [];
-    }
-  } catch (e) {
-    console.warn('[WeatherRadio] playlist_track_all failed:', playlist && playlist.name, e.message);
-  }
-  if (!rawTracks.length && typeof playlist_detail === 'function') {
-    try {
-      const detail = await playlist_detail({ id, s: 0, cookie: userCookie, timestamp: Date.now() });
-      const pl = (detail.body && detail.body.playlist) || {};
-      rawTracks = pl.tracks || [];
-    } catch (e) {
-      console.warn('[WeatherRadio] playlist_detail failed:', playlist && playlist.name, e.message);
-    }
-  }
-  return rawTracks.map(mapSongRecord).filter(song => song.id && song.name).slice(0, limit || 36);
-}
 
 async function filterLikelyPlayableWeatherSongs(songs) {
   const source = uniqueSongsByKey(songs)

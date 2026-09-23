@@ -546,55 +546,11 @@ function getUpdateDownloadDir() {
   return path.join(app.getPath('userData'), 'updates');
 }
 
-/**
- * 判断是否应该创建桌面快捷方式
- * 仅在 Windows 打包环境下且未禁用时创建
- * @returns {boolean}
- */
-function shouldEnsureDesktopShortcut() {
-  if (process.platform !== 'win32') return false;
-  if (process.env.BHANDSMUSIC_NO_DESKTOP_SHORTCUT === '1') return false;
-  return app.isPackaged || process.env.BHANDSMUSIC_CREATE_DESKTOP_SHORTCUT === '1';
-}
-
-/**
- * 确保桌面快捷方式存在
- * 如果已存在且指向相同目标则跳过，否则创建或更新
- * @returns {object} 创建结果
- */
-function ensureDesktopShortcut() {
-  if (!shouldEnsureDesktopShortcut()) return { ok: false, skipped: true };
-  try {
-    const shortcutPath = path.join(app.getPath('desktop'), `${APP_NAME}.lnk`);
-    const target = process.execPath;
-    const shortcut = {
-      target,
-      cwd: path.dirname(target),
-      args: '',
-      description: 'BhandsMusic desktop music player',
-      icon: fs.existsSync(APP_ICON_ICO) ? APP_ICON_ICO : target,
-      iconIndex: 0,
-      appUserModelId: APP_USER_MODEL_ID,
-    };
-
-    if (fs.existsSync(shortcutPath) && shell.readShortcutLink) {
-      try {
-        const existing = shell.readShortcutLink(shortcutPath);
-        // 快捷方式已存在且目标一致，无需更新
-        if (existing && path.resolve(existing.target || '') === path.resolve(target) && String(existing.args || '') === '') {
-          return { ok: true, path: shortcutPath, existing: true };
-        }
-      } catch (_) {}
-      shell.writeShortcutLink(shortcutPath, 'replace', shortcut);
-    } else {
-      shell.writeShortcutLink(shortcutPath, 'create', shortcut);
-    }
-    return { ok: true, path: shortcutPath, created: true };
-  } catch (e) {
-    console.warn('Desktop shortcut creation skipped:', e.message);
-    return { ok: false, error: e.message || 'DESKTOP_SHORTCUT_FAILED' };
-  }
-}
+/* 桌面快捷方式：原先这里有一对 `shouldEnsureDesktopShortcut()` / `ensureDesktopShortcut()`，
+ * 但从未接到任何 IPC 通道（前端也搜不到调用），属于设计后未接入的死代码。
+ * 快捷方式实际由 NSIS 安装器创建 —— 见 package.json 的
+ * `"createDesktopShortcut": true` / `"createStartMenuShortcut": true` / `"shortcutName"`。
+ * 2026-09-23 一并移除（含 BHANDSMUSIC_NO_DESKTOP_SHORTCUT / BHANDSMUSIC_CREATE_DESKTOP_SHORTCUT 两个开关）。 */
 
 // ==================== Cookie 工具函数 ====================
 

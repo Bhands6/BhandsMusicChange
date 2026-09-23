@@ -33,8 +33,6 @@ var cuefieldBridgeEngine = null;
 var cuefieldSourceLoopRuntime = null;
 var cuefieldDeckVolumeSerial = { A: 0, B: 0 };
 var cuefieldFeedbackState = { context: null, timer: 0, submitted: false };
-var CUEFIELD_AUTOMIX_NORMAL_START_SETTLE_MS = 4200;
-var CUEFIELD_AUTOMIX_HANDOFF_SETTLE_MS = 5200;
 
 // fork 适配：上游的 writeAudioOutputGain 对应 fork 的 setAudioOutputGainImmediate。
 // fork 主 audio 的音量实际作用在 WebAudio gainNode 上（audio.volume 恒为 1）。
@@ -336,9 +334,6 @@ function resetCuefieldAutoMix(reason, options) {
   updateCuefieldAutoMixUi(reason || 'idle');
 }
 
-function cuefieldAutoMixPostSwitchDelay(isCuefieldHandoff) {
-  return isCuefieldHandoff ? CUEFIELD_AUTOMIX_HANDOFF_SETTLE_MS : CUEFIELD_AUTOMIX_NORMAL_START_SETTLE_MS;
-}
 
 function cuefieldAutoMixVisualTransitionBusy() {
   if (typeof isRenderInteractionActive === 'function' && isRenderInteractionActive()) return true;
@@ -607,77 +602,7 @@ function cuefieldTransitionStillCurrent(pending, context) {
   return true;
 }
 
-function cuefieldRunEqualPowerCrossfade(pending, nextMedia, durationMs, context) {
-  cancelCuefieldMediaFade();
-  var serial = cuefieldMediaFadeSerial;
-  var initialTarget = Math.max(0.0001, Number(targetVolume) || 0);
-  var outgoingRatio = Math.max(0, Math.min(1, (typeof currentAudioOutputGain === 'function' ? currentAudioOutputGain() : initialTarget) / initialTarget));
-  var fadeStartA = isFinite(Number(pending && pending.fadeStartA))
-    ? Number(pending.fadeStartA)
-    : Number(context.outgoingMedia && context.outgoingMedia.currentTime) || 0;
-  var headroomDepth = pending && pending.mixType === 'beatmix' ? 0.16 : 0.10;
-  var fadeWatchdogAt = Date.now() + durationMs + 1800;
-  durationMs = Math.max(1, Number(durationMs) || 1);
-  return new Promise(function (resolve) {
-    var settled = false;
-    cuefieldPairFadeResolve = resolve;
-    function finish(ok) {
-      if (settled) return;
-      settled = true;
-      if (cuefieldPairFadeResolve === resolve) cuefieldPairFadeResolve = null;
-      if (cuefieldMediaFadeRaf) cancelAnimationFrame(cuefieldMediaFadeRaf);
-      if (cuefieldMediaFadeTimer) clearInterval(cuefieldMediaFadeTimer);
-      cuefieldMediaFadeRaf = 0;
-      cuefieldMediaFadeTimer = 0;
-      resolve(!!ok);
-    }
-    function applyStep() {
-      if (settled) return;
-      if (serial !== cuefieldMediaFadeSerial || !cuefieldTransitionStillCurrent(pending, context)) {
-        finish(false);
-        return;
-      }
-      if (Date.now() >= fadeWatchdogAt) {
-        finish(false);
-        return;
-      }
-      var mediaNow = Number(context.outgoingMedia && context.outgoingMedia.currentTime);
-      var t = Math.max(0, Math.min(1, ((isFinite(mediaNow) ? mediaNow : fadeStartA) - fadeStartA) / (durationMs / 1000)));
-      if (context.outgoingMedia && (context.outgoingMedia.ended || (isFinite(context.outgoingMedia.duration) && context.outgoingMedia.duration - mediaNow <= 0.025))) t = 1;
-      var eased = t * t * (3 - 2 * t);
-      var theta = eased * Math.PI * 0.5;
-      var liveTarget = Math.max(0, Math.min(1, Number(targetVolume) || 0));
-      var overlapHeadroom = 1 - Math.sin(Math.PI * eased) * headroomDepth;
-      var outgoing = liveTarget * outgoingRatio * Math.cos(theta) * overlapHeadroom;
-      var incoming = liveTarget * Math.sin(theta) * overlapHeadroom;
-      if (typeof writeAudioOutputGain === 'function') writeAudioOutputGain(outgoing);
-      cuefieldWriteIncomingGain(nextMedia, incoming);
-      if (t >= 1) {
-        if (typeof writeAudioOutputGain === 'function') writeAudioOutputGain(0);
-        cuefieldWriteIncomingGain(nextMedia, liveTarget);
-        finish(true);
-      }
-    }
-    function tick() {
-      applyStep();
-      if (!settled) cuefieldMediaFadeRaf = requestAnimationFrame(tick);
-    }
-    cuefieldMediaFadeTimer = setInterval(function () {
-      applyStep();
-    }, 40);
-    cuefieldMediaFadeRaf = requestAnimationFrame(tick);
-  });
-}
 
-async function cuefieldWaitForMediaTime(media, targetTime, pending, context) {
-  targetTime = Math.max(0, Number(targetTime) || 0);
-  var watchdogAt = Date.now() + 7000;
-  while (media && Number(media.currentTime) + 0.012 < targetTime) {
-    if (!cuefieldTransitionStillCurrent(pending, context) || Date.now() >= watchdogAt) return false;
-    if (!await cuefieldDelay(24, context.generation)) return false;
-  }
-  return cuefieldTransitionStillCurrent(pending, context);
-}
 
 function cuefieldRampParam(param, value, durationMs) {
   if (!param) return false;

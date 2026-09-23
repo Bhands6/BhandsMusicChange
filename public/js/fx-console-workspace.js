@@ -645,10 +645,6 @@ function fxConsoleChangesEmpty(changes) {
   return !changes || (!changes.fx.length && !changes.prefs.length);
 }
 
-function fxConsoleStateEqual(a, b) {
-  if (!a || !b) return false;
-  return fxConsoleChangesEmpty(fxConsoleChangedKeys(a, b));
-}
 
 function fxConsoleFormatHistoryValue(value) {
   if (value === true) return '开启';

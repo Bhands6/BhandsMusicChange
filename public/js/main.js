@@ -16,7 +16,6 @@ var lyricSunEnergy = 0, lyricSunTarget = 0, lyricSunHold = 0, lyricSunAvg = 0, l
 var smoothBass = 0, smoothMid = 0, smoothTreb = 0, smoothEnergy = 0;
 var bassPeak = 0.12, midPeak = 0.10, treblePeak = 0.08, energyPeak = 0.10;
 var beatOnsetFlag = false;        // beat 上升沿瞬时标志,每帧消费一次
-var lastStrongDrop = 0;           // 用于 burst 预设的强 drop 时刻
 
 var lyricsLines = [], lyricsVisible = false, lyricsHasNativeKaraoke = false, lyricsTimingSource = 'none';
 var playlist = [], playQueue = [], currentIdx = -1, playing = false, playToggleBusy = false;
@@ -34,7 +33,7 @@ var qqWebLoginBusy = false;
 var qqManualCookieOpen = false;
 var loginStatusChecked = false, loginStatusCheckFailed = false;
 var qrPollTimer = null, qrKey = null;
-var volumeTween = null, trackSwitchToken = 0;
+var trackSwitchToken = 0;   // 换歌令牌，多处读写；原本与 volumeTween 同在一行声明，别整行删
 var audioFadeTimer = null, audioElementFadeFrame = 0, audioFadeSerial = 0;
 var AUDIO_FADE_IN_MS = 460;
 var AUDIO_FADE_OUT_MS = 420;
@@ -344,9 +343,6 @@ function updateFullscreenDiyPeekFromPointer(x, y) {
   var hitBottom = Math.max(rect.top + rect.height, anchorRect.bottom) + 16;
   var active = x >= hitLeft && x <= hitRight && y >= hitTop && y <= hitBottom;
   document.body.classList.toggle('fullscreen-diy-peek', active);
-}
-function isDiyMode() {
-  return !!diyPlayerMode;
 }
 function syncDiyModeButton() {
   ['t-diyMode', 'fullscreen-diy-btn'].forEach(function(id) {
@@ -2664,12 +2660,6 @@ function setFocusZone(type, immediate) {
   }, 260);
 }
 
-// 电影镜头 v8: 振幅大幅减小, 节拍 punch 加冷却 + 强度门槛
-//   - cineTheta/Phi 是非常缓慢的低频漂移, 不再让人 motion sick
-//   - punch zoom 只在 真·强主拍 触发, 至少间隔 0.45s, 振幅 ×0.5
-var lastCamPunchAt = -10;
-var CAM_PUNCH_MIN_INTERVAL = 0.45;     // 秒
-var CAM_PUNCH_BEAT_THRESHOLD = 0.55;   // 必须够强才触发
 function updateCinema(dt) {
   cinemaT += dt;
   updateBeatCamera(dt);
@@ -4977,7 +4967,6 @@ var lyricLayoutBase = new THREE.Vector3();
 var lyricLayoutTarget = new THREE.Vector3();
 var lyricCoverWorldPos = new THREE.Vector3();
 var lyricCoverWorldQuat = new THREE.Quaternion();
-var lyricBaseEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 var lyricTiltEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 var lyricBaseQuat = new THREE.Quaternion();
 var lyricTiltQuat = new THREE.Quaternion();
@@ -5042,14 +5031,7 @@ function lyricCameraLockFit(layoutScale, layoutX, layoutY, distance) {
   var lockScaleCap = Math.min(1, (skullSafe ? 0.94 : LYRIC_CAMERA_LOCK_MAX_SCALE) / layoutScale);
   return clampRange(Math.min(viewportFit, lockScaleCap), skullSafe ? 0.36 : 0.42, 1);
 }
-// 兼容旧变量名以便其它代码不破坏
-var lyricsParticles = null;
-var lyricsGeo = null;
 
-// 三个 attribute: 源位置(随机扩散态), 目标位置(组成字), color, brightness
-var lyricsAttrTargetA = null;
-var lyricsAttrTargetB = null;
-var lyricsAttrSeed = null;
 
 function createLyricsParticles() {
   if (stageLyrics.group) {
@@ -6052,13 +6034,6 @@ window.addEventListener('resize', function(){
   if (window.requestAnimationFrame) requestAnimationFrame(repositionFxFloatingPanels);
   else repositionFxFloatingPanels();
 });
-function uiAccentHex(fallback) {
-  return normalizeHexColor((fx && fx.uiAccentColor) || fallback || '#00f5d4', fallback || '#00f5d4');
-}
-function uiAccentRgba(alpha, fallback) {
-  var c = hexToRgb(uiAccentHex(fallback));
-  return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (alpha == null ? 1 : alpha) + ')';
-}
 function readableInkForHex(hex) {
   var c = hexToRgb(hex || '#00f5d4');
   var lum = (c.r * 0.299 + c.g * 0.587 + c.b * 0.114) / 255;
@@ -8067,19 +8042,6 @@ function tickLyricsParticles() {
   }
 }
 
-function disposeLyricsParticles() {
-  clearStageLyrics();
-  if (stageLyrics.starRiver) {
-    if (stageLyrics.starRiver.parent) stageLyrics.starRiver.parent.remove(stageLyrics.starRiver);
-    if (stageLyrics.starRiver.geometry) stageLyrics.starRiver.geometry.dispose();
-    if (stageLyrics.starRiver.material) stageLyrics.starRiver.material.dispose();
-    stageLyrics.starRiver = null;
-  }
-  if (stageLyrics.group) {
-    scene.remove(stageLyrics.group);
-    stageLyrics.group = null;
-  }
-}
 
 // ============================================================
 //  涟漪触发系统 — 3×3 九宫格 + bass 上升沿
@@ -8761,26 +8723,6 @@ function estimateTempoPhaseOffset(tempoBeats, beatCandidates, step, duration) {
   if (wsum <= 0) return 0;
   var offsetOut = sum / wsum;
   return Math.abs(offsetOut) >= 0.045 ? Math.max(-maxOffset, Math.min(maxOffset, offsetOut)) : 0;
-}
-
-var musicTempoLoadPromise = null;
-function ensureMusicTempo() {
-  if (window.MusicTempo) return Promise.resolve(window.MusicTempo);
-  if (musicTempoLoadPromise) return musicTempoLoadPromise;
-  musicTempoLoadPromise = fetch('/vendor/music-tempo.min.js')
-    .then(function(resp){
-      if (!resp.ok) throw new Error('music-tempo load failed: ' + resp.status);
-      return resp.text();
-    })
-    .then(function(code){
-      (0, eval)(code);
-      return window.MusicTempo || null;
-    })
-    .catch(function(err){
-      console.warn('music-tempo dynamic load failed:', err);
-      return null;
-    });
-  return musicTempoLoadPromise;
 }
 
 var musicTempoWorkerUrl = null;
@@ -10891,33 +10833,6 @@ function applyLocalBeatMap(song, mode, map, fromCache) {
   notifyDesktopLyricsBeatMapReady();
   if (fromCache) showToast((mode === 'dj' ? 'DJ' : 'MR') + ' 本地节奏缓存已载入');
   return true;
-}
-function prepareLocalBeatAnalysis(song, audioUrl) {
-  if (!song || !song.localKey || !audioUrl) return;
-  var preferred = localBeatMapPrefs[song.localKey] === 'dj' ? 'dj' : 'mr';
-  var cached = getLocalBeatEntry(song.localKey, preferred) ||
-    getLocalBeatEntry(song.localKey, preferred === 'dj' ? 'mr' : 'dj');
-  if (cached) {
-    applyLocalBeatMap(song, cached === getLocalBeatEntry(song.localKey, 'dj') ? 'dj' : 'mr', cached, true);
-    return;
-  }
-  var diskToken = trackSwitchToken;
-  (async function(){
-    var firstMode = preferred;
-    var secondMode = preferred === 'dj' ? 'mr' : 'dj';
-    var firstMap = await readBeatDiskCache(localBeatDiskKey(song.localKey, firstMode));
-    var mode = firstMap ? firstMode : secondMode;
-    var map = firstMap || await readBeatDiskCache(localBeatDiskKey(song.localKey, secondMode));
-    if (diskToken !== trackSwitchToken || !currentLocalSong || currentLocalSong.localKey !== song.localKey) return;
-    if (map) {
-      storeLocalBeatEntry(song.localKey, mode, map, song, { skipDisk:true });
-      applyLocalBeatMap(song, mode, map, true);
-      return;
-    }
-    openLocalBeatModal(song, audioUrl);
-  })().catch(function(){
-    if (diskToken === trackSwitchToken && currentLocalSong && currentLocalSong.localKey === song.localKey) openLocalBeatModal(song, audioUrl);
-  });
 }
 function openLocalBeatModal(song, audioUrl) {
   if (immersiveMode) setImmersiveMode(false);
@@ -13692,11 +13607,6 @@ renderer.domElement.addEventListener('contextmenu', function(e){
   if (!shelfPinnedOpen && typeof setFocusZone === 'function') setFocusZone(null, true);
 });
 
-// 滚轮: 在真实卡片或右侧窄热区内滚卡片; 否则保留给封面粒子/视角
-//   side 模式: 常驻不再用半屏预览区接管滚轮
-//   stage 模式: 鼠标 y > 60% 屏幕高
-//   shift + wheel: 强制滚卡片
-var wheelOverShelf = false;
 renderer.domElement.addEventListener('wheel', function(e){
   if (isPointerOverUi(e)) return;
   if (!shelfManager || shelfManager.getMode() === 'off') return;
@@ -14750,58 +14660,6 @@ if (emptyHomeStartEl) {
     startWeatherRadio();
   }, true);
 }
-function locateWeatherRadio() {
-  var previousWeatherCity = homeWeatherRadioState.city || '上海';
-  homeWeatherToken++;
-  homeWeatherRadioState.loading = true;
-  homeWeatherRadioState.loaded = false;
-  homeWeatherRadioState.error = '';
-  homeWeatherRadioState.weather = null;
-  homeWeatherRadioState.radio = null;
-  homeWeatherRadioState.city = '定位中';
-  renderHomeDiscover();
-  var locationSettled = false;
-  var ipFallbackStarted = false;
-  function useIpFallback() {
-    if (locationSettled || ipFallbackStarted) return;
-    ipFallbackStarted = true;
-    apiJson('/api/weather/ip-location?t=' + Date.now()).then(function(data){
-      var loc = data && data.location;
-      if (!loc || !isFinite(Number(loc.latitude)) || !isFinite(Number(loc.longitude))) throw new Error(data && data.error || 'IP_LOCATION_FAILED');
-      if (locationSettled) return;
-      locationSettled = true;
-      homeWeatherRadioState.city = loc.city || '当前位置';
-      localStorage.setItem(HOME_WEATHER_CITY_KEY, homeWeatherRadioState.city);
-      renderHomeDiscover();
-      showToast('已用网络位置定位到 ' + (loc.city || '当前位置'));
-      loadHomeWeatherRadio(true, {
-        lat: loc.latitude,
-        lon: loc.longitude,
-        city: loc.city || '当前位置',
-        timezone: loc.timezone || '',
-      });
-    }).catch(function(e){
-      console.warn('weather ip location failed:', e);
-      if (locationSettled) return;
-      homeWeatherRadioState.loading = false;
-      homeWeatherRadioState.error = 'LOCATION_FAILED';
-      homeWeatherRadioState.city = previousWeatherCity;
-      renderHomeDiscover();
-      showToast('定位不可用，可以手动换城市');
-    });
-  }
-  // Desktop users need a stable city label; browser coordinates can be stale or cityless.
-  useIpFallback();
-}
-function changeWeatherCity() {
-  var city = window.prompt('输入城市名', homeWeatherRadioState.city || '上海');
-  city = String(city || '').trim();
-  if (!city) return;
-  homeWeatherRadioState.city = city;
-  localStorage.setItem(HOME_WEATHER_CITY_KEY, city);
-  homeWeatherRadioState.loaded = false;
-  loadHomeWeatherRadio(true, { city: city });
-}
 function shouldShowEmptyHomeCore(ignoreSplash) {
   if (!ignoreSplash && document.body.classList.contains('splash-active')) return false;
   if (immersiveMode) return false;
@@ -15113,13 +14971,6 @@ function openHomePodcast(index) {
     return;
   }
   loadPodcastRadioIntoQueue(item.id, true, item.name || '');
-}
-function openHomeThirdCard() {
-  if (!hasAnyPlatformLogin() && !homeDiscoverState.loggedIn) {
-    openHomeLocalImport();
-    return;
-  }
-  openHomePodcast(0);
 }
 function openHomeLibrary() {
   if (!hasAnyPlatformLogin() && !homeDiscoverState.loggedIn) {
@@ -16032,13 +15883,6 @@ function artistCollectTrayIconSvg() {
 function artistNextPlusIconSvg() {
   return '<svg fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.5v13"/><path d="M5.5 12h13"/></svg>';
 }
-function songActionHtml(kind, source, index, song) {
-  var liked = isSongLiked(song);
-  if (kind === 'like') {
-    return '<button class="song-action-btn' + (liked ? ' liked' : '') + '" title="' + (liked ? '取消红心' : '红心喜欢') + '" onclick="event.stopPropagation();toggleLike' + source + '(' + index + ')">' + heartIconSvg() + '</button>';
-  }
-  return '<button class="song-action-btn" title="收藏到歌单" onclick="event.stopPropagation();collect' + source + '(' + index + ')">' + playlistPlusIconSvg() + '</button>';
-}
 function syncLikeStatusForSongs(songs) {
   if (!loginStatus.loggedIn || !songs || !songs.length) return;
   var ids = songs.filter(isCloudSong).map(function(s){ return String(s.id); });
@@ -16263,7 +16107,6 @@ var searchLastResultQuery = '';
 var SEARCH_HISTORY_STORE_KEY = 'bhandsmusic-search-history';
 var $input = document.getElementById('search-input');
 var $results = document.getElementById('search-results');
-var $loading = document.getElementById('loading-overlay');
 function syncSearchAreaResultState() {
   var searchArea = document.getElementById('search-area');
   if (!searchArea || !$results) return;
@@ -20372,14 +20215,6 @@ function setCustomBackgroundCoverMode(silent) {
 function resetCustomBackgroundColor() {
   setCustomBackgroundCoverMode(false);
 }
-function setCustomBackgroundOpacity(value, silent) {
-  fx.backgroundOpacity = clampRange(Number(value), 0, 1);
-  fx.backgroundColorMode = 'custom';
-  fx.backgroundColorCustom = true;
-  updateCustomBackgroundControls();
-  saveLyricLayout();
-  if (!silent) showToast('背景透明度: ' + Math.round(fx.backgroundOpacity * 100) + '%');
-}
 function setCustomBackgroundImage(src, silent) {
   var image = normalizeCustomBackgroundImage(src);
   fx.backgroundImage = image;
@@ -20387,9 +20222,6 @@ function setCustomBackgroundImage(src, silent) {
   updateCustomBackgroundControls();
   saveLyricLayout();
   if (!silent) showToast(fx.backgroundImage ? '背景图片已应用' : '背景图片已清除');
-}
-function clearCustomBackgroundImage() {
-  setCustomBackgroundImage('');
 }
 function setCustomBackgroundMedia(media, silent) {
   media = normalizeCustomBackgroundMedia(media);
@@ -22472,7 +22304,6 @@ function toggleFx(key) {
 }
 // ---- 系统设置：关闭行为 ----
 var systemSettings = { behavior: 'ask', remember: false };
-function getCloseBehavior() { return systemSettings.behavior; }
 function setCloseBehavior(behavior) {
   systemSettings.behavior = behavior;
   document.querySelectorAll('#close-behavior-seg button').forEach(function(btn) {
@@ -22483,7 +22314,6 @@ function setCloseBehavior(behavior) {
   }
   showToast('关闭行为: ' + (behavior === 'ask' ? '每次询问' : behavior === 'minimize' ? '最小化到托盘' : '直接退出'));
 }
-function getRememberClose() { return systemSettings.remember; }
 function toggleRememberClose() {
   systemSettings.remember = !systemSettings.remember;
   var toggle = document.getElementById('t-rememberClose');
@@ -22715,17 +22545,6 @@ async function deleteLxScript(scriptId) {
  * POST /api/parse/config 合并分支、parseMusic 入参一起接回来。
  */
 
-/**
- * 清除解析缓存
- */
-async function clearParseCache() {
-  try {
-    await fetch('/api/parse/cache/clear', { method: 'POST' });
-    showToast('解析缓存已清除');
-  } catch (e) {
-    showToast('清除缓存失败');
-  }
-}
 
 function toggleFxPanel(force) {
   var el = document.getElementById('fx-panel');
@@ -24773,23 +24592,6 @@ function drawIdleGuideFrame() {
   ctx.globalCompositeOperation = 'source-over';
   scheduleIdleGuideFrame(0);
 }
-function idleRoundRect(ctx, x, y, w, h, r) {
-  if (ctx.roundRect) {
-    ctx.roundRect(x, y, w, h, r);
-    return;
-  }
-  r = Math.min(r || 0, Math.abs(w) * 0.5, Math.abs(h) * 0.5);
-  var x2 = x + w, y2 = y + h;
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x2 - r, y);
-  ctx.quadraticCurveTo(x2, y, x2, y + r);
-  ctx.lineTo(x2, y2 - r);
-  ctx.quadraticCurveTo(x2, y2, x2 - r, y2);
-  ctx.lineTo(x + r, y2);
-  ctx.quadraticCurveTo(x, y2, x, y2 - r);
-  ctx.lineTo(x, y + r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-}
 function drawShelfGuideCue(ctx, t, strength) {
   strength = Math.max(0, Math.min(1, strength == null ? shelfHoverCue.value : strength));
   if (strength <= 0.01) return;
@@ -25209,16 +25011,6 @@ function loadScriptOnce(src) {
   });
 }
 
-// ============================================================
-//  摄像头 / 手势 v8 — 仅保留手势, 头部追踪已下线
-//   - 21 个关键点用 EMA 平滑滤波, 消除抖动
-//   - 食指尖 + 手掌中心 共同推开粒子 (真实手感, 不再是单点小球)
-//   - 在 hand-canvas 上画出手掌骨架, 视觉跟随手
-//   - 捏合 = 拖动旋转封面 (Y 反向修正)
-//   - 没有挥扫 / 没有手势切歌
-// ============================================================
-function startHeadTracking(){}     // stub: 兼容旧调用
-function stopHeadTracking(){}      // stub
 
 var gestureVideo = null, gestureCamera = null, gestureHands = null;
 var gestureActive = false;
@@ -25482,16 +25274,6 @@ function processHandFrame(rawLm) {
   drawHandSkeleton(lm, isPinch, openness, isFist);
 }
 
-// 画手掌骨架: 连线 + 关节圆点
-//   骨架连接表 (MediaPipe 标准)
-var HAND_BONES = [
-  [0,1],[1,2],[2,3],[3,4],        // 拇指
-  [0,5],[5,6],[6,7],[7,8],        // 食指
-  [0,9],[9,10],[10,11],[11,12],   // 中指
-  [0,13],[13,14],[14,15],[15,16], // 无名指
-  [0,17],[17,18],[18,19],[19,20], // 小指
-  [5,9],[9,13],[13,17],           // 掌横连
-];
 function drawHandSkeleton(lm, isPinch, openness, isFist) {
   if (!handCanvasCtx) return;
   var ctx = handCanvasCtx;
@@ -25606,8 +25388,6 @@ function showGestureHUD(label, progress, detail) {
   if (fill) fill.style.width = Math.max(0, Math.min(100, (progress || 0) * 100)) + '%';
   hud.classList.add('show');
 }
-function showGestureCursor(){}  // stub: 兼容旧调用
-function hideGestureCursor(){}  // stub: 兼容旧调用
 
 
 // ============================================================
@@ -25826,7 +25606,6 @@ var secondaryPlaylistEdgeGuard = { enteredAt:0, timer:null, x:0, y:0, H:0 };
 var SECONDARY_PLAYLIST_EDGE_MIN_X = 36;
 var SECONDARY_PLAYLIST_EDGE_MAX_X = 96;
 var SECONDARY_PLAYLIST_EDGE_DWELL_MS = 220;
-var SECONDARY_PLAYLIST_SEAM_CLOSE_X = 28;
 function isSecondaryLeftDisplaySeamGuardActive() {
   var state = (typeof desktopWindowState !== 'undefined' && desktopWindowState) ? desktopWindowState : {};
   return !!(window.desktopWindow && window.desktopWindow.isDesktop && state.isPrimaryDisplay === false && state.hasDisplayOnLeft);
@@ -25872,12 +25651,6 @@ function isPlaylistEdgeTrigger(ex, ey, H) {
   if (!secondaryPlaylistEdgeGuard.enteredAt) secondaryPlaylistEdgeGuard.enteredAt = now;
   armSecondaryPlaylistEdgeDwell();
   return now - secondaryPlaylistEdgeGuard.enteredAt >= SECONDARY_PLAYLIST_EDGE_DWELL_MS;
-}
-function playlistPanelExitPadding() {
-  return isSecondaryLeftDisplaySeamGuardActive() ? 34 : 72;
-}
-function playlistPanelFocusPadding() {
-  return isSecondaryLeftDisplaySeamGuardActive() ? 28 : 52;
 }
 function shouldClosePlaylistPanelFromPointer(ppOn, ex, ppRect) {
   if (!ppOn) return false;
