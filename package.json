@@ -8,6 +8,12 @@
   "private": true,
   "scripts": {
     "start": "chcp 65001 >nul && electron .",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "probe:ui": "node scripts/probe-ui-all.js",
+    "probe:static": "node scripts/probe-static-exposure.js",
+    "probe:cuefield-api": "node scripts/probe-cuefield-api.js",
+    "probe:cuefield-e2e": "node scripts/probe-cuefield-transition-e2e.js",
+    "probe:parse": "node scripts/e2e-parse-level.js",
     "prebuild:win": "node build/fetch-go-music-api.js && node build/fetch-kugou-api.js && node build/fetch-splash-video.js",
     "build:win": "electron-builder --win nsis",
     "prebuild:win:dir": "node build/fetch-go-music-api.js && node build/fetch-kugou-api.js && node build/fetch-splash-video.js",

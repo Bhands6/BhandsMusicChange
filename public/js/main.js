@@ -10835,22 +10835,47 @@ function applyLocalBeatMap(song, mode, map, fromCache) {
   return true;
 }
 
-/* ⚠️ 保留：本函数是 #local-beat-modal 的**唯一入口**，但当前没有任何调用点。
+/* 本地歌曲的节奏分析入口：先查内存/D盘缓存，命中就直接套用；都没有才弹「选 MR 还是 DJ」的框。
  *
- * 来龙去脉：它原来由 prepareLocalBeatAnalysis(song, audioUrl) 在本地文件播放 520ms 后调用。
- * 移植上游「本地音乐库」（def9f86）时，旧的「单文件 objectURL 直接播放」整段被重写成
- * importLocalAudioSongs() → playQueueAt()，那次重写**漏掉了这个调用**，于是
- * prepareLocalBeatAnalysis 变成零引用（2026-09-23 已按死代码删除），本函数随之成为孤儿。
+ * ⚠️ 这个函数曾在移植上游「本地音乐库」（def9f86）时被漏掉调用 —— 那次把旧的
+ * 「单文件 objectURL 直接播放」整段重写成 importLocalAudioSongs() → playQueueAt()，
+ * 只搬了函数体没搬调用点，于是它变成零引用，2026-09-23 被当死代码删掉，
+ * 连带把 openLocalBeatModal 变成孤儿（本地节拍功能静默失效 6 天）。
  *
- * 所以这是「功能触发点丢失」，不是「死代码」—— 模态框 UI（index.html:1003）、
- * 引擎（applyLocalBeatMap / getLocalBeatEntry / storeLocalBeatEntry）与
- * 其余入口（closeLocalBeatModal / selectLocalBeatMode / startLocalBeatAnalysis）
- * 全都健在，只差一个调用。删掉它等于静默砍掉「本地歌曲选 MR/DJ 分析」这个功能。
- *
- * 注意：新流程里 currentLocalSong 恒为 null（importLocalAudioSongs 会把它清掉），
- * 要用 playQueue[currentIdx] 传参；且本地歌曲本来就会走 playQueueAt 里的
- * scheduleBeatAnalysis 自动分析 MR，重新接线前得先想清楚「什么时候该弹这个框」，
- * 否则每首未缓存的本地歌都会弹一次。 */
+ * 2026-09-23 按上游 2.2.0 原样恢复：上游在 public/js/modules/05-playback/13-playback-start-audio.js
+ * 里用 setTimeout(…, firstVisualPlay ? 680 : 520) 调用它，本项目的调用点在 playQueueAt
+ * 的 isLocalPlayback 分支（搜 prepareLocalBeatAnalysis( 可定位）。
+ * 恢复时同时补回了 currentLocalSong = song —— 少了它，下面所有 localKey 守卫都会直接 return。 */
+function prepareLocalBeatAnalysis(song, audioUrl) {
+  if (!song || !song.localKey || !audioUrl) return;
+  var preferred = localBeatMapPrefs[song.localKey] === 'dj' ? 'dj' : 'mr';
+  var cached = getLocalBeatEntry(song.localKey, preferred) ||
+    getLocalBeatEntry(song.localKey, preferred === 'dj' ? 'mr' : 'dj');
+  if (cached) {
+    applyLocalBeatMap(song, cached === getLocalBeatEntry(song.localKey, 'dj') ? 'dj' : 'mr', cached, true);
+    return;
+  }
+  var diskToken = trackSwitchToken;
+  (async function(){
+    var firstMode = preferred;
+    var secondMode = preferred === 'dj' ? 'mr' : 'dj';
+    var firstMap = await readBeatDiskCache(localBeatDiskKey(song.localKey, firstMode));
+    var mode = firstMap ? firstMode : secondMode;
+    var map = firstMap || await readBeatDiskCache(localBeatDiskKey(song.localKey, secondMode));
+    if (diskToken !== trackSwitchToken || !currentLocalSong || currentLocalSong.localKey !== song.localKey) return;
+    if (map) {
+      storeLocalBeatEntry(song.localKey, mode, map, song, { skipDisk:true });
+      applyLocalBeatMap(song, mode, map, true);
+      return;
+    }
+    openLocalBeatModal(song, audioUrl);
+  })().catch(function(){
+    if (diskToken === trackSwitchToken && currentLocalSong && currentLocalSong.localKey === song.localKey) openLocalBeatModal(song, audioUrl);
+  });
+}
+/* #local-beat-modal 的唯一打开入口，由上面的 prepareLocalBeatAnalysis 调用。
+ * 模态框 UI 在 index.html:1003，按钮走 inline onclick（closeLocalBeatModal / selectLocalBeatMode /
+ * startLocalBeatAnalysis）。⚠️ 别当死代码删 —— 它连着用户可见功能。 */
 function openLocalBeatModal(song, audioUrl) {
   if (immersiveMode) setImmersiveMode(false);
   localBeatAnalysis.song = song || currentLocalSong;
@@ -17599,6 +17624,10 @@ async function playQueueAt(idx, opts) {
     if (!data && isLocalPlayback) {
       // 本地曲目：直接使用库的流播地址（bhandsmusic-local:// 或 objectURL），不走在线解析
       data = { url: song.localUrl, trial: false, playable: true, source: 'local' };
+      // ⚠️ 必须记下来：本地节拍分析（prepareLocalBeatAnalysis）里每个守卫都拿
+      // currentLocalSong.localKey 与 song.localKey 比对，少了这行它们会全部直接 return，
+      // 功能表现成「静默失效」。上游在 05-playback/13-playback-start-audio.js:904 同样赋值。
+      currentLocalSong = song;
     } else if (!data && (preferThirdParty || !hasVip)) {
       // 第三方优先：① 第三方 → ② 官方 API → ③ 跨平台换源
       // ⚠️ 这里**故意不静默**：第三方解析可能要 1~2s（竞速 + 真实音频探测），
@@ -17842,6 +17871,16 @@ async function playQueueAt(idx, opts) {
     safeRenderQueuePanel('play-queue-at');
     scheduleShelfRebuild('play-queue-at', true);
     safePlaybackStep('shelf-preview-suppress-end', suppressShelfPreviewForPlaybackSwitch);
+    // 本地歌曲：等播放真正起来后再进节奏分析。缓存命中就静默套用，没缓存才弹「选 MR / DJ」的框
+    //（见 prepareLocalBeatAnalysis）。首次播放多等一点，避免抢音频解码与渲染资源。
+    // 与上游 05-playback/13-playback-start-audio.js 的 setTimeout(…, firstVisualPlay ? 680 : 520) 对齐。
+    if (isLocalPlayback) {
+      setTimeout(function(){
+        if (token === trackSwitchToken && currentLocalSong && currentLocalSong.localKey === song.localKey) {
+          prepareLocalBeatAnalysis(currentLocalSong, song.localUrl);
+        }
+      }, firstVisualPlay ? 680 : 520);
+    }
   } catch (err) {
     console.error('Play failed:', { phase: playPhase, error: err }, err);
     hideLoading();
