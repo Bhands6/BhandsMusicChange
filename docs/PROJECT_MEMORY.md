@@ -176,6 +176,13 @@
 
 ## Memory Entries
 
+### 2026-09-24 - main.js 拆分为 public/js/app/01…16
+
+- 用户认可/要求保留：`public/js/main.js`（28117 行单文件）按**自带的 48 个分区**拆成 16 个文件，放在 `public/js/app/`，`index.html` 用 16 行 `<script>` 按原顺序加载。**纯机械切割：零搬移、零逻辑改动。**
+- 涉及文件：`public/index.html`（原来那行 `<script src="js/main.js">` 换成 16 行）、`public/js/main.js`（**已删除**）、`public/js/app/01-state.js` … `16-session-boot.js`（新增 16 个）、`tests/lib/source.js`（新增 `APP_JS_FILES` / `readAppSource()`）、`tests/parse-order.test.js`、`tests/quality-notice.test.js`、`tests/third-party-notice.test.js`、`tests/source-config-removal.test.js`、`scripts/probe-static-exposure.js`、`public/js/fx-console-workspace.js`（顶部加说明注释）、`server/server.js`（QQ 缓存注释去掉行号）。
+- 关键参数/实现：只在分区横幅边界落刀，16 个区间首尾相接，覆盖 28115 行（+ 原文件头 2 行 `'use strict';` / 空行）。每个新文件开头注入 7 行（`'use strict';` + 来源注释头）。**验收闸门两条**：① 16 文件剥掉注入头后按序拼回，与原 `main.js` **逐字节一致**（1243520 字符）；② 16 个文件各自 `node --check` 全绿（切点若落在函数体/模板字符串里必然语法错，所以这条同时证明切点在语句边界）。测试侧统一用 `readAppSource()`（16 文件按加载顺序拼接）当「逻辑上的 main.js」，断言与拆分前完全等价（82/82 全绿）。16 个文件的划分：`01-state` / `02-scene-camera` / `03-particles` / `04-stage-lyrics` / `05-lyric-modes-cover` / `06-beat` / `07-shelf` / `08-api-search` / `09-audio-queue` / `10-lyrics-panel-playlist` / `11-fx-console` / `12-system-panels` / `13-update-account` / `14-idle-toast-libs` / `15-shell` / `16-session-boot`。
+- 禁止回退或改坏的点：`index.html` 里 16 个 `js/app/*.js` 的**顺序就是执行顺序**，不可调换、不可加 `defer`/`async`/`type="module"`（任何一个都会改变执行时机）；每个新文件必须各自保留 `'use strict';` —— 漏一个该文件会静默退回非严格模式；不要把 `public/js/main.js` 加回来；想按职责重排（像上游那 12 组分层）是**下一步**，不要在切割提交里混做。
+
 ### 2026-07-27 - 多音源解析系统 v1.4.0
 
 - 用户认可/要求保留：多音源解析系统（GD音乐台、UnblockNeteaseMusic、LX Music、自定义 API）已集成到项目中。

@@ -15,9 +15,10 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readSource, extractFunction } = require('./lib/source');
+const { readAppSource, extractFunction } = require('./lib/source');
 
-const body = extractFunction(readSource('public/js/main.js'), 'shouldPreferThirdPartyParse');
+// main.js 已拆成 public/js/app/*.js；readAppSource() = 16 文件按加载顺序拼接，等价于原整份文件
+const body = extractFunction(readAppSource(), 'shouldPreferThirdPartyParse');
 const ORDERS = ['auto', 'official', 'third-party'];
 
 /** 在干净沙箱里跑一次真实实现：probe(顺序, 官方失败记录, 是否会员) */

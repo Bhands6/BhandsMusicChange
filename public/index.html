@@ -635,7 +635,7 @@ try {
       <span>第三方音源</span><span class="arrow">▶</span>
     </div>
     <div class="fx-advanced-body">
-      <!-- 非会员时整块隐藏：三档行为完全相同（见 main.js syncSourceParseOrderVisibility） -->
+      <!-- 非会员时整块隐藏：三档行为完全相同（见 app/16-session-boot.js syncSourceParseOrderVisibility） -->
       <div id="source-parse-order-block">
         <div class="fx-section-label">音源解析顺序</div>
         <div class="fx-seg" id="source-parse-order-seg" title="仅对网易云 / QQ 会员生效。会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级。非会员时三档行为一致（都直接走第三方），所以这块会自动隐藏。">
@@ -1124,18 +1124,34 @@ try {
 
 </div> <!-- /desktop-window-shell -->
 
-<!-- ==================== 内联脚本（约 24000 行）==================== -->
-<!-- 主要模块：全局状态、Three.js 场景、粒子系统、音频分析、歌词引擎、
-     播放控制、搜索、登录、歌单管理、桌面歌词、壁纸、快捷键、UI 控制等 -->
+<!-- ==================== 应用主体脚本 ==================== -->
+<!-- 原 public/js/main.js（28117 行单文件）于 2026-09-24 按自带的 48 个分区
+     切成 public/js/app/01…16，**顺序即执行顺序，不可调换、不可加 defer/async/module**。
+     切分是纯机械的连续区间切割，零搬移、零逻辑改动。 -->
 <script src="js/cuefield-automix-core.js"></script>        <!-- cuefield 自动混音 · 计划判定核心 -->
 <script src="js/cuefield-timeline-executor.js"></script>   <!-- cuefield · 过渡时间线执行器 -->
 <script src="js/cuefield-bridge-engine.js"></script>       <!-- cuefield · WebAudio 过渡桥 -->
 <script src="js/cuefield-source-loop.js"></script>         <!-- cuefield · 源循环 -->
-<script src="js/cuefield-automix-integration.js"></script> <!-- cuefield · 播放集成（播放时才触碰 main.js 全局，安全） -->
-<script src="js/fx-console-workspace.js"></script>          <!-- 视觉控制台工作台（移植自上游：6 tab + 搜索 + 撤销/历史），须在 main.js 前加载 -->
+<script src="js/cuefield-automix-integration.js"></script> <!-- cuefield · 播放集成（播放时才触碰全局，安全） -->
+<script src="js/fx-console-workspace.js"></script>          <!-- 视觉控制台工作台（移植自上游：6 tab + 搜索 + 撤销/历史），须在 app/*.js 前加载 -->
 <script src="sonic-topography-preset.js"></script>          <!-- 预设7 音域回响 Sonic-Topography（作者 Ajin，移植自上游） -->
 <script src="sonic-workshop-preset.js"></script>            <!-- 预设8 音域回响 Wallpaper Engine（作者 CmzYa，WE 创意工坊 iframe 桥接） -->
 <script src="js/web-fx-presets.js"></script>               <!-- Web 移植 9 粒子特效（极光/万花筒/迸发/声波地形/螺旋星云/水母花/玫瑰/心跳/字符雨） -->
-<script src="js/main.js"></script>
+<script src="js/app/01-state.js"></script>                  <!-- 全局状态 / 常量表 / 热键表 -->
+<script src="js/app/02-scene-camera.js"></script>           <!-- Three.js 场景 / 相机系统 v7.1 / 指针拖拽 / 粒子点纹理 -->
+<script src="js/app/03-particles.js"></script>              <!-- 主粒子 shader / 背景星河 / 浮空粒子 / 安魂层 / 封面背面粒子 -->
+<script src="js/app/04-stage-lyrics.js"></script>           <!-- 舞台歌词系统 v9 -->
+<script src="js/app/05-lyric-modes-cover.js"></script>      <!-- 歌词显示模式 / 动画 / 校准 / 涟漪触发 / 封面深度处理 -->
+<script src="js/app/06-beat.js"></script>                   <!-- 离线节拍预解析 v7.2 -->
+<script src="js/app/07-shelf.js"></script>                  <!-- 3D 歌单架双模式 / 二级内容框 / PSP 卡片交互 -->
+<script src="js/app/08-api-search.js"></script>             <!-- API 助手 / 搜索 -->
+<script src="js/app/09-audio-queue.js"></script>            <!-- 音频上下文与频谱分析 / 播放队列 -->
+<script src="js/app/10-lyrics-panel-playlist.js"></script>  <!-- 歌词面板 / 播放列表面板 / 文件拖放 -->
+<script src="js/app/11-fx-console.js"></script>             <!-- 控制台：预设卡片 + 主滑块 + 开关 + 三态 -->
+<script src="js/app/12-system-panels.js"></script>          <!-- 输出设备 / 本地缓存面板 / 内存管家 / 第三方音源设置 -->
+<script src="js/app/13-update-account.js"></script>         <!-- 更新提示预览 / 登录系统 -->
+<script src="js/app/14-idle-toast-libs.js"></script>        <!-- 空场待机引导 / toast / 动态库加载 -->
+<script src="js/app/15-shell.js"></script>                  <!-- Resize 快捷键 / UI 半隐藏 v8 / 启动页 splash -->
+<script src="js/app/16-session-boot.js"></script>           <!-- 会话持久化 / 自动播放 / 酷狗扫码 / 预解析 / 解析顺序 / 启动 / 主循环 -->
 </body>
 </html>

@@ -48,13 +48,21 @@ if (!bin) {
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
+/* ⚠️ ELECTRON_RUN_AS_NODE=1 会让 electron.exe 退化成纯 node：
+ *   `require('electron')` 返回的是二进制路径字符串，解构出来的 `app` 是 undefined，
+ *   探针第 21 行 `app.commandLine.appendSwitch` 直接 TypeError。
+ *   某些 CI / 宿主 shell 会带这个变量，所以这里显式剥掉再 spawn。 */
+const childEnv = Object.assign({}, process.env);
+delete childEnv.ELECTRON_RUN_AS_NODE;
+delete childEnv.NODE_OPTIONS;
+
 let failed = 0;
 for (const [script, outFile] of PROBES) {
   const outPath = path.join(OUT_DIR, outFile);
   try { fs.rmSync(outPath, { force: true }); } catch (e) {}
 
   process.stdout.write(script.padEnd(34));
-  const r = spawnSync(bin, [path.join(__dirname, script)], { cwd: REPO, stdio: 'ignore', timeout: 120000 });
+  const r = spawnSync(bin, [path.join(__dirname, script)], { cwd: REPO, stdio: 'ignore', timeout: 120000, env: childEnv });
 
   if (!fs.existsSync(outPath)) {
     console.log('❌ 未产出结果文件（退出码 ' + r.status + '）');

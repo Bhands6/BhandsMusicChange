@@ -55,6 +55,13 @@ function assert(label, expected, actual) {
   console.log((ok ? '  PASS  ' : '  FAIL  ') + label + '  期望 ' + expected + ' / 实际 ' + actual);
 }
 
+/** public/js/app 下的 16 个应用主体脚本（原 main.js），按文件名排序 = 加载顺序 */
+function appFiles() {
+  return fs.readdirSync(path.join(REPO, 'public', 'js', 'app'))
+    .filter((n) => n.endsWith('.js'))
+    .sort();
+}
+
 (async () => {
   await new Promise((r) => setTimeout(r, 1200));
 
@@ -65,6 +72,9 @@ function assert(label, expected, actual) {
   for (const rel of ['server/server.js', 'server/dj-analyzer.js']) {
     assert('存在 ' + rel, true, fs.existsSync(path.join(REPO, rel)));
   }
+  // main.js 已按 48 分区拆成 public/js/app/01…16（2026-09-24）
+  assert('public/js/main.js 已拆分删除', false, fs.existsSync(path.join(REPO, 'public/js/main.js')));
+  assert('public/js/app 下有 16 个脚本', 16, appFiles().length);
 
   console.log('\n[2] HTTP：这些路径必须拿不到内容');
   const blocked = [
@@ -98,7 +108,10 @@ function assert(label, expected, actual) {
   }
 
   console.log('\n[4] HTTP：正常前端资源仍要可访问（对照，防「一刀切」误伤）');
-  for (const t of ['/', '/js/main.js', '/styles/main.css', '/default-user-fx-archive.json']) {
+  // 16 个应用主体脚本逐个都要能拿到 —— 漏一个 index.html 就会 404，应用半死
+  const frontend = ['/', '/styles/main.css', '/default-user-fx-archive.json']
+    .concat(appFiles().map((n) => '/js/app/' + n));
+  for (const t of frontend) {
     const r = await req(t);
     assert('GET ' + t + ' 可访问', 200, r.status);
   }

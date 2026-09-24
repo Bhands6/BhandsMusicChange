@@ -2,7 +2,7 @@
 /**
  * 「音质提示文案」的语义闸。
  *
- * 沙箱：从真实 main.js 抽出 12 个档位/账号相关函数 + 提示判定块本身，跑 8 个场景。
+ * 沙箱：从真实应用源码抽出 12 个档位/账号相关函数 + 提示判定块本身，跑 8 个场景。
  * 判定块是**按行区间**从源码里切的（不是复刻），所以源码改了文案这个测试立刻会红。
  *
  * 锁住的不变量：
@@ -16,9 +16,10 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readSource, extractFunction } = require('./lib/source');
+const { readAppSource, extractFunction } = require('./lib/source');
 
-const src = readSource('public/js/main.js');
+// main.js 已拆成 public/js/app/*.js；readAppSource() = 16 文件按加载顺序拼接，等价于原整份文件
+const src = readAppSource();
 
 /** 判定块依赖的函数（顺序无关，new Function 里都是声明提升） */
 const NOTICE_FNS = [

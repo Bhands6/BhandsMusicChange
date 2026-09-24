@@ -15,9 +15,10 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readSource, extractFunction } = require('./lib/source');
+const { readAppSource, extractFunction } = require('./lib/source');
 
-const src = readSource('public/js/main.js');
+// main.js 已拆成 public/js/app/*.js；readAppSource() = 16 文件按加载顺序拼接，等价于原整份文件
+const src = readAppSource();
 
 /** 造一个只装了 tryThirdPartyParse 及其桩的沙箱；每次调用独立，测试之间不串状态 */
 function makeRunner() {

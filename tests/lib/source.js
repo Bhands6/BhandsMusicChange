@@ -3,7 +3,8 @@
  * 测试公用：从**真实源码**里抽出函数 / 常量声明，让断言跑在真代码上而不是复刻副本。
  *
  * 为什么不直接 require：
- *   - `public/js/main.js` 是浏览器端经典脚本，没有 `module.exports`；
+ *   - 应用主体脚本（`public/js/app/*.js`，原 `public/js/main.js`）是浏览器端经典脚本，
+ *     没有 `module.exports`；
  *   - `server/server.js` 一旦 require 就会真的起 http 服务、spawn 内置酷狗子进程。
  * 所以统一走「抽文本 → `new Function` 执行」这条路。
  *
@@ -16,9 +17,41 @@ const path = require('node:path');
 /** 仓库根。tests/ 与 scripts/ 都在根下，所以向上两级 */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
+/**
+ * 应用主体脚本：原 `public/js/main.js`（28117 行单文件）于 2026-09-24 按自带的
+ * 48 个分区切成这 16 个文件，放在 `public/js/app/`。
+ * **数组顺序 = index.html 里的加载顺序，不可调换。**
+ *
+ * 跨文件的测试用 `readAppSource()` 取「逻辑上的 main.js」—— 它是这 16 个文件
+ * 按序拼接的结果，与拆分前的整份文件等价（切割时做过逐字节拼接回验）。
+ */
+const APP_JS_FILES = [
+  '01-state.js',
+  '02-scene-camera.js',
+  '03-particles.js',
+  '04-stage-lyrics.js',
+  '05-lyric-modes-cover.js',
+  '06-beat.js',
+  '07-shelf.js',
+  '08-api-search.js',
+  '09-audio-queue.js',
+  '10-lyrics-panel-playlist.js',
+  '11-fx-console.js',
+  '12-system-panels.js',
+  '13-update-account.js',
+  '14-idle-toast-libs.js',
+  '15-shell.js',
+  '16-session-boot.js',
+].map((name) => 'public/js/app/' + name);
+
 /** 读仓库内文件（相对仓库根的路径，正斜杠） */
 function readSource(relPath) {
   return fs.readFileSync(path.join(REPO_ROOT, relPath), 'utf8');
+}
+
+/** 读全部 16 个应用主体脚本并按加载顺序拼接（= 拆分前的 main.js） */
+function readAppSource() {
+  return APP_JS_FILES.map(readSource).join('\n');
 }
 
 /**
@@ -81,7 +114,9 @@ function lineOf(src, needle) {
 
 module.exports = {
   REPO_ROOT,
+  APP_JS_FILES,
   readSource,
+  readAppSource,
   stripComments,
   matchBracket,
   extractFunction,
