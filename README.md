@@ -3,16 +3,36 @@
   <br>
   <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架 · 多音源解析</sub>
 </h1>
-
-<p align="center">
-  <img src="./public/assets/IdleIcon.png" width="720" alt="BhandsMusic 暗场启动页"/>
-</p>
-
 <p align="center">
 BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能音质降级，配合天气电台、歌词舞台、粒子视觉和 3D 歌单架，为你打造一个更接近现场的私人音乐空间。
 
 本项目基于开源项目 [Mineradio](https://github.com/XxHuberrr/Mineradio) 二次开发。
 </p>
+<p align="center">
+  <img src="./public/assets/IdleIcon.png" width="720" alt="BhandsMusic 暗场启动页"/>
+</p>
+
+## ✨ 界面预览
+
+**首页**（启动动画 / 主界面）
+
+<p align="center">
+  <img src="docs/screenshots/01-splash.jpg" width="48%" alt="启动动画">
+  <img src="docs/screenshots/home.jpg" width="48%" alt="首页：我的歌单 / 每日推荐 / 继续听 / 听歌画像 / 排行榜">
+</p>
+
+## 🌌 粒子视觉效果
+
+播放态共 18 个视觉预设，右键唤出「视觉控制台」即可切换、搜索与收藏；全部效果由 GLSL 粒子着色器实时驱动，随音乐节拍与频谱联动：
+
+| | | |
+|:---:|:---:|:---:|
+| ![](docs/screenshots/02-emily-cover.jpg)<br>**丝绸** | ![](docs/screenshots/03-drum.png)<br>**滚筒** | ![](docs/screenshots/04-planet.jpg)<br>**星球** |
+| ![](docs/screenshots/05-void.jpg)<br>**虚空** | ![](docs/screenshots/06-vinyl.png)<br>**唱片** | ![](docs/screenshots/07-galaxy.jpg)<br>**星河** |
+| ![](docs/screenshots/08-requiem.jpg)<br>**安魂** | ![](docs/screenshots/09-sonic-topography.jpg)<br>**音域回响** | ![](docs/screenshots/10-wallpaper-engine.png)<br>**音域回响** |
+| ![](docs/screenshots/11-aurora.jpg)<br>**极光** | ![](docs/screenshots/12-kaleido.jpg)<br>**万花筒** | ![](docs/screenshots/13-burst.jpg)<br>**迸发** |
+| ![](docs/screenshots/14-sonic.png)<br>**声波地形** | ![](docs/screenshots/15-spiral.jpg)<br>**螺旋星云** | ![](docs/screenshots/16-jelly.jpg)<br>**水母花** |
+| ![](docs/screenshots/17-rose.jpg)<br>**玫瑰** | ![](docs/screenshots/18-heart.jpg)<br>**心跳** | ![](docs/screenshots/19-rain.png)<br>**字符雨** |
 
 ## 立即下载 Windows 安装包
 
@@ -56,70 +76,7 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 - GitHub Releases 更新检测与下载入口（支持轻量补丁与完整安装包，多线路自动切换）
 - 首次启动内置「默认测试」视觉用户存档，软件内默认视觉参数与该存档一致
 
-## 视觉预设
 
-播放态共 18 个视觉预设，右键唤出「视觉控制台」即可切换、搜索与收藏；歌词会随场景自动匹配大小并始终正对镜头。
-
-**基础预设**
-
-| 预设 | 说明 |
-| --- | --- |
-| emily专辑封面 | 封面粒子 · 快速入场 |
-| 滚筒 | 隧道 · 沉浸感 |
-| 星球 | 星球 · 雕塑感 |
-| 虚空 | 无粒子 · 自定义背景 |
-| 唱片 | 唱片 · 圆形封面 |
-| 星河 | 壁纸粒子 · 音乐律动 |
-| 安魂 | 骷髅 · YUI7W |
-| 音域回响 | 作者 Ajin（Sonic-Topography） |
-| 音域回响 | 作者 CmzYa（Wallpaper Engine） |
-
-**Web 粒子预设**
-
-| 预设 | 说明 |
-| --- | --- |
-| 极光 | 光幕 · 流星 |
-| 万花筒 | 径向镜像 · 十瓣 |
-| 迸发 | 换歌爆开 · 常驻云 |
-| 声波地形 | 音乐山脊 · 扫描 |
-| 螺旋星云 | 双旋臂 · 差速自转 |
-| 水母花 | 伞盖 · 触须 |
-| 玫瑰 | 数学玫瑰 · 绽放 |
-| 心跳 | 爱心粒子 · 星空 |
-| 字符雨 | Matrix 字形雨 |
-
-## 界面预览
-
-<p align="center">
-  <img src="./docs/screenshots/01-splash.jpg" width="380" alt="启动动画"/>
-  <img src="./docs/screenshots/home.jpg" width="380" alt="首页：我的歌单 / 每日推荐 / 继续听 / 听歌画像 / 排行榜"/>
-</p>
-
-<details>
-<summary><b>展开查看 18 个视觉预设效果</b></summary>
-
-| 预设 | 说明 | 效果 |
-| --- | --- | --- |
-| emily专辑封面 | 封面粒子 · 快速入场 | <img src="./docs/screenshots/02-emily-cover.jpg" width="300"/> |
-| 滚筒 | 隧道 · 沉浸感 | <img src="./docs/screenshots/03-drum.png" width="300"/> |
-| 星球 | 星球 · 雕塑感 | <img src="./docs/screenshots/04-planet.jpg" width="300"/> |
-| 虚空 | 无粒子 · 自定义背景 | <img src="./docs/screenshots/05-void.jpg" width="300"/> |
-| 唱片 | 唱片 · 圆形封面 | <img src="./docs/screenshots/06-vinyl.png" width="300"/> |
-| 星河 | 壁纸粒子 · 音乐律动 | <img src="./docs/screenshots/07-galaxy.jpg" width="300"/> |
-| 安魂 | 骷髅 · YUI7W | <img src="./docs/screenshots/08-requiem.jpg" width="300"/> |
-| 音域回响 | 作者 Ajin（Sonic-Topography） | <img src="./docs/screenshots/09-sonic-topography.jpg" width="300"/> |
-| 音域回响 | 作者 CmzYa（Wallpaper Engine） | <img src="./docs/screenshots/10-wallpaper-engine.png" width="300"/> |
-| 极光 | 光幕 · 流星 | <img src="./docs/screenshots/11-aurora.jpg" width="300"/> |
-| 万花筒 | 径向镜像 · 十瓣 | <img src="./docs/screenshots/12-kaleido.jpg" width="300"/> |
-| 迸发 | 换歌爆开 · 常驻云 | <img src="./docs/screenshots/13-burst.jpg" width="300"/> |
-| 声波地形 | 音乐山脊 · 扫描 | <img src="./docs/screenshots/14-sonic.png" width="300"/> |
-| 螺旋星云 | 双旋臂 · 差速自转 | <img src="./docs/screenshots/15-spiral.jpg" width="300"/> |
-| 水母花 | 伞盖 · 触须 | <img src="./docs/screenshots/16-jelly.jpg" width="300"/> |
-| 玫瑰 | 数学玫瑰 · 绽放 | <img src="./docs/screenshots/17-rose.jpg" width="300"/> |
-| 心跳 | 爱心粒子 · 星空 | <img src="./docs/screenshots/18-heart.jpg" width="300"/> |
-| 字符雨 | Matrix 字形雨 | <img src="./docs/screenshots/19-rain.png" width="300"/> |
-
-</details>
 
 ## 开发运行
 
