@@ -4,8 +4,10 @@
  *
  * ⚠️ 本文件须在 `js/app/*.js` **之前**加载（见 index.html 的 script 顺序）。
  *    下文注释里提到的 "main.js" 指原来的 `public/js/main.js` —— 它已于 2026-09-24
- *    按自带的 48 个分区拆成 `public/js/app/01…16`，拆分是纯机械切割、零逻辑改动，
- *    所以这些注释描述的行为与耦合关系**依然成立**，只是文件名换了。 */
+ *    先按自带的 48 个分区拆成 `public/js/app/01…16`，再按职责重排成
+ *    `00-prelude.js` + `01-state.js` … `18-session-boot.js`（共 19 个），
+ *    两次都是零逻辑改动，所以这些注释描述的行为与耦合关系**依然成立**，只是文件名换了。
+ *    找被调用的全局函数请按**函数名 grep**（映射见 docs/APP_REORG_PLAN.md）。 */
 
 var FX_CONSOLE_TABS = [
   { key: 'home', label: '常用' },

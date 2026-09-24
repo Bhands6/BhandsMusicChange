@@ -635,7 +635,7 @@ try {
       <span>第三方音源</span><span class="arrow">▶</span>
     </div>
     <div class="fx-advanced-body">
-      <!-- 非会员时整块隐藏：三档行为完全相同（见 app/16-session-boot.js syncSourceParseOrderVisibility） -->
+      <!-- 非会员时整块隐藏：三档行为完全相同（见 app/18-session-boot.js syncSourceParseOrderVisibility） -->
       <div id="source-parse-order-block">
         <div class="fx-section-label">音源解析顺序</div>
         <div class="fx-seg" id="source-parse-order-seg" title="仅对网易云 / QQ 会员生效。会员源解析经常失败浪费时间时，切「第三方优先」直接跳过官方请求；自动模式下官方失败一次会话内自动降级。非会员时三档行为一致（都直接走第三方），所以这块会自动隐藏。">
@@ -1133,14 +1133,6 @@ try {
      （含同步调用链）依赖的 46 个声明都放在 prelude 里。
      判定见 scripts/check-app-hoisting.js，运行期闸门见 scripts/probe-app-load.js。
      加载期读写顺序由 scripts/check-app-reorg.js 对基线校验。 -->
-<!-- 原 public/js/main.js（28117 行单文件）于 2026-09-24 按自带的 48 个分区
-     切成 public/js/app/01…16，并加 00-prelude.js，共 17 个。
-     **顺序即执行顺序，不可调换、不可加 defer/async/module**。
-     ⚠️ 00-prelude.js 必须排第一：原 main.js 是单个 script，顶层 function 声明提升到整个
-     文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数。拆成 17 个独立 script 后
-     提升只在各自文件内生效 —— 被更早文件顶层语句（含同步调用链）依赖的 46 个声明都放在
-     prelude 里。判定与校验见 scripts/check-app-hoisting.js，运行期闸门见
-     scripts/probe-app-load.js（`npm run probe:ui` 会带上）。 -->
 <script src="js/cuefield-automix-core.js"></script>        <!-- cuefield 自动混音 · 计划判定核心 -->
 <script src="js/cuefield-timeline-executor.js"></script>   <!-- cuefield · 过渡时间线执行器 -->
 <script src="js/cuefield-bridge-engine.js"></script>       <!-- cuefield · WebAudio 过渡桥 -->

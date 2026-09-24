@@ -4,7 +4,8 @@
 > 采集自 `BhandsMusicChange`（2026-09-22，已与 Web 版逐字对齐）。
 >
 > ⚠️ 下表里的 `public/js/main.js` 行号对应**拆分前的基线 `784afe6`**。该文件已于 2026-09-24
-> 按 48 个分区拆成 `public/js/app/01…16`，下表内容落在 `public/js/app/15-shell.js`（§41 启动页）。
+> 先按 48 个分区拆成 `public/js/app/01…16`、再按职责重排成 `00-prelude.js` + `01…18`（共 19 个），
+> 下表内容落在 `public/js/app/17-shell.js`（原 `15-shell.js`，§41 启动页；重排后外壳/启动页相关都在 17-shell）。
 
 ## 1. 结构概览（四层叠加，从下到上）
 

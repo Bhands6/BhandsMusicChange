@@ -6,7 +6,7 @@
 - 桌面版：`BhandsMusic/BhandsMusicChange/server/music-sources/*`（`musicParser.js` / `gdmusic.js` / `kugou.js` / `unblockMusic.js` / `lxMusicRunner.js` / `goMusicSwitch.js` / `durationProbe.js`）+ `server/server.js` + `public/js/main.js`
   - 注：`customApi.js` 与 `custom` 策略已于 2026-09-23 整体移除（配置项 `customApiUrl` / `customApiMethod` 一并下线）。
   - ⚠️ 文中 `main.js:xxxx` 的行号对应**拆分前的基线 `784afe6`**。`public/js/main.js` 已于 2026-09-24
-    按 48 个分区拆成 `public/js/app/01…16`，行号不再有效 —— 按函数名 grep 更快。
+    先按 48 个分区拆成 `public/js/app/01…16`、再按职责重排成 `00-prelude.js` + `01…18`（共 19 个），行号不再有效 —— 按函数名 grep 更快。
 
 > 背景：桌面版最近两批提交（`b88ce4e` 播放提速批次 1、`258fe04` 移植 Web 版音源探测与竞速编排批次 2）正在把 Web 版的音源逻辑往桌面版搬，所以两边现在是「同源不同步」的状态。
 
