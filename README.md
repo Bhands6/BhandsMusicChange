@@ -27,7 +27,7 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 
 | | | |
 |:---:|:---:|:---:|
-| ![](docs/screenshots/02-emily-cover.jpg)<br>**丝绸** | ![](docs/screenshots/03-drum.png)<br>**滚筒** | ![](docs/screenshots/04-planet.jpg)<br>**星球** |
+| ![](docs/screenshots/02-emily-cover.jpg)<br>**emily专辑封面** | ![](docs/screenshots/03-drum.png)<br>**滚筒** | ![](docs/screenshots/04-planet.jpg)<br>**星球** |
 | ![](docs/screenshots/05-void.jpg)<br>**虚空** | ![](docs/screenshots/06-vinyl.png)<br>**唱片** | ![](docs/screenshots/07-galaxy.jpg)<br>**星河** |
 | ![](docs/screenshots/08-requiem.jpg)<br>**安魂** | ![](docs/screenshots/09-sonic-topography.jpg)<br>**音域回响** | ![](docs/screenshots/10-wallpaper-engine.png)<br>**音域回响** |
 | ![](docs/screenshots/11-aurora.jpg)<br>**极光** | ![](docs/screenshots/12-kaleido.jpg)<br>**万花筒** | ![](docs/screenshots/13-burst.jpg)<br>**迸发** |
