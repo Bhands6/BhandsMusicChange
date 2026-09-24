@@ -91,33 +91,33 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 ## 界面预览
 
 <p align="center">
-  <img src="./docs/screenshots/home.jpg" width="720" alt="BhandsMusic 首页：我的歌单 / 每日推荐 / 继续听 / 听歌画像 / 排行榜"/>
+  <img src="./docs/screenshots/01-splash.jpg" width="380" alt="启动动画"/>
+  <img src="./docs/screenshots/home.jpg" width="380" alt="首页：我的歌单 / 每日推荐 / 继续听 / 听歌画像 / 排行榜"/>
 </p>
 
 <details>
-<summary><b>展开查看界面与 18 个视觉预设效果</b></summary>
+<summary><b>展开查看 18 个视觉预设效果</b></summary>
 
-<p align="center">
-  <img src="./docs/screenshots/preview-01.jpg" width="380" alt="界面"/>
-  <img src="./docs/screenshots/preview-02.jpg" width="380" alt="界面"/>
-  <img src="./docs/screenshots/preview-03.png" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-04.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-05.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-06.png" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-07.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-08.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-09.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-10.png" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-11.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-12.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-13.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-14.png" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-15.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-16.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-17.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-18.jpg" width="380" alt="视觉预设"/>
-  <img src="./docs/screenshots/preview-19.png" width="380" alt="视觉预设"/>
-</p>
+| 预设 | 说明 | 效果 |
+| --- | --- | --- |
+| emily专辑封面 | 封面粒子 · 快速入场 | <img src="./docs/screenshots/02-emily-cover.jpg" width="300"/> |
+| 滚筒 | 隧道 · 沉浸感 | <img src="./docs/screenshots/03-drum.png" width="300"/> |
+| 星球 | 星球 · 雕塑感 | <img src="./docs/screenshots/04-planet.jpg" width="300"/> |
+| 虚空 | 无粒子 · 自定义背景 | <img src="./docs/screenshots/05-void.jpg" width="300"/> |
+| 唱片 | 唱片 · 圆形封面 | <img src="./docs/screenshots/06-vinyl.png" width="300"/> |
+| 星河 | 壁纸粒子 · 音乐律动 | <img src="./docs/screenshots/07-galaxy.jpg" width="300"/> |
+| 安魂 | 骷髅 · YUI7W | <img src="./docs/screenshots/08-requiem.jpg" width="300"/> |
+| 音域回响 | 作者 Ajin（Sonic-Topography） | <img src="./docs/screenshots/09-sonic-topography.jpg" width="300"/> |
+| 音域回响 | 作者 CmzYa（Wallpaper Engine） | <img src="./docs/screenshots/10-wallpaper-engine.png" width="300"/> |
+| 极光 | 光幕 · 流星 | <img src="./docs/screenshots/11-aurora.jpg" width="300"/> |
+| 万花筒 | 径向镜像 · 十瓣 | <img src="./docs/screenshots/12-kaleido.jpg" width="300"/> |
+| 迸发 | 换歌爆开 · 常驻云 | <img src="./docs/screenshots/13-burst.jpg" width="300"/> |
+| 声波地形 | 音乐山脊 · 扫描 | <img src="./docs/screenshots/14-sonic.png" width="300"/> |
+| 螺旋星云 | 双旋臂 · 差速自转 | <img src="./docs/screenshots/15-spiral.jpg" width="300"/> |
+| 水母花 | 伞盖 · 触须 | <img src="./docs/screenshots/16-jelly.jpg" width="300"/> |
+| 玫瑰 | 数学玫瑰 · 绽放 | <img src="./docs/screenshots/17-rose.jpg" width="300"/> |
+| 心跳 | 爱心粒子 · 星空 | <img src="./docs/screenshots/18-heart.jpg" width="300"/> |
+| 字符雨 | Matrix 字形雨 | <img src="./docs/screenshots/19-rain.png" width="300"/> |
 
 </details>
 
