@@ -6,12 +6,6 @@
 // ============================================================
 
 // ============ 歌词显示模式（对齐上游 Minera 五态体系） ============
-// single=单行 / dual=双行 / triple=三行 / cinema=沉浸(5行) / custom=自定义(1-10行)
-// 合法值表 STAGE_LYRIC_DISPLAY_MODES 定义在文件头部（启动恢复先于本区执行）
-function normalizeLyricDisplayMode(mode) {
-  mode = String(mode || 'single');
-  return STAGE_LYRIC_DISPLAY_MODES[mode] ? mode : 'single';
-}
 function lyricCustomLineCountValue() {
   var raw = fx && fx.lyricCustomLineCount != null ? Number(fx.lyricCustomLineCount) : fxDefaults.lyricCustomLineCount;
   if (!isFinite(raw)) raw = fxDefaults.lyricCustomLineCount;
@@ -38,11 +32,6 @@ function stageLyricUpcomingCount() {
   return Math.max(0, stageLyricLineCount() - 1 - stageLyricParkCount());
 }
 // ============ 歌词动画（对齐上游 Minera motion 体系） ============
-// 合法值表 STAGE_LYRIC_MOTION_STYLES 定义在文件头部（同 DISPLAY_MODES 时序处理）
-function normalizeLyricMotionStyle(style) {
-  style = String(style || 'glass');
-  return STAGE_LYRIC_MOTION_STYLES[style] ? style : 'glass';
-}
 function lyricContextOpacityValue() {
   return clampRange(fx && fx.lyricContextOpacity == null ? fxDefaults.lyricContextOpacity : Number(fx && fx.lyricContextOpacity), 0.25, 1);
 }
@@ -53,15 +42,6 @@ function lyricContextSpreadValue() {
 function lyricBackdropAdaptStrengthValue() {
   if (typeof fx === 'undefined' || !fx || fx.lyricBackdropAdapt === false) return 0;
   return clampRange(fx.lyricBackgroundAdapt == null ? fxDefaults.lyricBackgroundAdapt : Number(fx.lyricBackgroundAdapt), 0, 1);
-}
-/**
- * 双语翻译模式（移植自上游 setLyricTranslationMode）：
- * off 关闭 / current 仅当前行 / dual 双行 / multi 多行。
- * 默认 off —— 不影响任何既有歌词观感。
- */
-function normalizeLyricTranslationMode(value) {
-  var v = String(value == null ? '' : value).toLowerCase();
-  return (v === 'current' || v === 'dual' || v === 'multi') ? v : 'off';
 }
 function lyricTranslationModeValue() {
   return normalizeLyricTranslationMode(fx && fx.lyricTranslationMode);

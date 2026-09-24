@@ -1,25 +1,30 @@
-# main.js 拆分方案（**已执行** · 2026-09-24）
+# main.js 拆分方案（**已执行 + 已修回归** · 2026-09-24）
 
 > 生成于 2026-09-23，基线提交 `784afe6`。**本方案已于 2026-09-24 按"推荐项"全部执行完毕。**
 > 相关文档：`docs/PROJECT_AUDIT_2026-09-21.md`（历史审计）、项目记忆 `topics/upstream-mineradio.md`（上游对照）。
+>
+> ⚠️ **第一次拆完是坏的，而且当时的验收全绿。** 下面第 1 节是**被推翻的**验收记录，
+> 第 2 节是真实的回归、根因与修法。留档的原因：这个坑的形态（验收假绿）比坑本身更值钱。
 
-## 执行结果（2026-09-24）
+## 一、第一次拆分（`d84ee11`）的验收记录 —— **已被推翻**
 
 拍板走的是全部推荐项：`public/js/app/01-state.js` … `16-session-boot.js` / 不保留 `main.js` 兼容入口 /
 一次切完 / 不做按职责重排。
 
-| 闸门 | 结果 |
-|---|---|
-| 16 个区间首尾相接 | ✅ 覆盖 28115 行 + 原文件头 2 行 = 28117 |
-| **拼接回验**（16 文件剥掉注入头按序拼回 == 原 `main.js`） | ✅ 逐字节一致（1243520 字符） |
-| `node --check` × 16 | ✅ 16/16 |
-| 每个文件自带 `'use strict';` | ✅ 16/16 |
-| `npm test` | ✅ 87/87（原 82 + 新增 `tests/app-script-order.test.js` 5 条） |
-| `npm run probe:ui`（6 个离屏 Electron 探针） | ✅ 6/6，`errors` 全空 |
-| `npm run probe:static` | ✅ 32/32（含 16 个 `js/app/*.js` 逐个 HTTP 200） |
-| `npm run probe:cuefield-api` / `probe:cuefield-e2e` | ✅ 三接口 200 + 过渡方案产出 |
-| `npm run probe:parse` | ✅ kugou lossless |
-| 变异验证（新测试真的会红） | ✅ 打乱 index.html 顺序 → 红；删 `01-state.js` 的 `'use strict'` → 红 |
+| 闸门 | 当时的结果 | 事后结论 |
+|---|---|---|
+| 16 个区间首尾相接 | ✅ 覆盖 28115 行 + 原文件头 2 行 = 28117 | 成立 |
+| **拼接回验**（16 文件剥掉注入头按序拼回 == 原 `main.js`） | ✅ 逐字节一致（1243520 字符） | 成立（但只证明「文本没丢」，**证明不了运行期等价**） |
+| `node --check` × 16 | ✅ 16/16 | 成立（语法对 ≠ 能跑） |
+| 每个文件自带 `'use strict';` | ✅ 16/16 | 成立 |
+| `npm test` | ✅ 87/87 | 成立 |
+| `npm run probe:ui`（6 个离屏探针） | ✅ 6/6，`errors` 全空 | ❌ **假绿**，见第 2 节 |
+| `npm run probe:static` | ✅ 32/32 | 成立 |
+| `probe:cuefield-api` / `cuefield-e2e` / `parse` | ✅ 全绿 | 成立 |
+| 变异验证 | ✅ 打乱 index.html 顺序 / 删 `'use strict'` → 均红 | 成立，但**没覆盖真正会炸的那一类** |
+
+**结论：这份验收清单缺一条「应用到底能不能正常启动」的闸门。** 它把「文件内容正确」当成了
+「应用正确」，于是漏掉了本轮唯一的真实语义差异。
 
 **落地时发现的两处与本文原稿不符的地方**（已按实际调整）：
 
@@ -29,12 +34,113 @@
    改成「16 个切点是注释行」+ 靠 `node --check` 兜底结构安全。
 2. 原文件头不是「两行横幅」，是 `'use strict';` + 一个空行。
 
-**拆完后不再有 `public/js/main.js`**。测试侧统一用 `tests/lib/source.js` 的
-`readAppSource()`（16 文件按加载顺序拼接）当「逻辑上的 main.js」，与拆分前语义等价。
+---
+
+## 二、回归、根因、修法（2026-09-24，`d84ee11` 之后）
+
+### 现象
+
+拆分提交后启动应用：**黑屏 + 鼠标不显示**。
+
+### 根因：跨 script 函数提升边界
+
+原 `main.js` 是**单个 `<script>`**。单个 script 里顶层 `function` 声明会被提升到**整个 script 顶部**，
+所以第 85 行的顶层语句可以调用第 2 万行才定义的函数 —— 老代码大量依赖这一点。
+
+切成 16 个独立 `<script>` 后，**提升只在各自文件内生效**：前面的文件看不到后面文件里的函数声明。
+
+而且失败形态比单个报错更糟：**一个顶层语句抛 `ReferenceError`，该 script 剩余的顶层语句全部不执行**
+（函数因为提升仍可调用，但所有 `var` 赋值都丢了）→ 连带产生一串「Cannot read properties of undefined」，
+把真实原因埋掉。实测 10 条错误里只有 3 条是「真错误」，其余 7 条是连带症状。
+
+离屏实测（`01-state.js` 是第 2 个文件）：
+
+```
+01-state.js:85   Uncaught ReferenceError: readCustomCoverMap is not defined
+01-state.js:874  Uncaught ReferenceError: normalizePerformanceBackgroundMode is not defined
+                 at currentPerformanceBackgroundMode (01-state.js:874)
+                 at isLiveBackgroundKeepMode (01-state.js:877)
+                 at isDeepBackgroundMode (01-state.js:870)
+                 at getRenderPixelRatio (02-scene-camera.js:37)
+                 at 02-scene-camera.js:99          ← ★ 02 死在这里，指针/拖拽系统没绑定 → 鼠标不显示
+03-particles.js:16    ReferenceError: coverParticleGridForResolution is not defined
+11-fx-console.js:81   TypeError: Cannot read properties of undefined (reading 'intensity')   ← 连带
+12-system-panels.js:976 TypeError: Cannot read properties of undefined (reading 'local')     ← 连带
+bodyClass = "splash-active simple-mode"             ← 启动流程没走完
+```
+
+### 为什么当时 6 个探针全绿（假绿的机制）
+
+现有探针都是在 `win.loadFile()` **完成之后**才 `executeJavaScript` 挂
+`window.addEventListener('error')` —— 那时加载期错误早就报完了，所以 `errors: []` 什么都看不到。
+
+**修法：用 `webPreferences.preload` 在主文档脚本之前挂监听。** 见
+`scripts/probe-app-load-preload.js` + `scripts/probe-app-load.js`，已加进 `probe:ui` 并排第一位。
+
+### 修法：`public/js/app/00-prelude.js`（提升垫片文件）
+
+`function` 声明**位置无关**（提升），所以把「被更早文件的顶层语句（含其同步调用链）依赖」的
+function 声明搬进最先加载的 `00-prelude.js`，是**零语义改动**（可见范围只增不减）。
+
+顶层 `var` 不能这么搬（搬了会把原单 script 下的 `undefined` 变成真值，属于行为改动），
+改为在 prelude 末尾加**裸 `var NAME;`** —— 精确复刻原提升语义：
+
+```js
+var MEMORY_REDUCT_MASK_DEFAULT;   // 原声明在 12-system-panels.js，但 01-state.js:807 的调用链会读它
+var toastTimer;                   // 原声明在 14-idle-toast-libs.js，但 11-fx-console.js 的加载期调用链会读它
+```
+
+搬运结果：**46 个顶层 function（258 行）+ 2 条 var 垫片** → `00-prelude.js` 共 646 行。
+贡献最大的两个源头：`readSavedLyricLayout()`（那个 140 行的 fx 设置大函数，拉进 16 个 `normalize*`）
+和 `bindModalBackdropClose()`（关窗回调表，拉进 4 个 `close*`）。
+
+### 判定口径（`scripts/check-app-hoisting.js`，入库）
+
+文件按 index.html 顺序执行，记为 0..N（0 = prelude）。文件 k 执行时只有 0..k 的声明存在：
+
+- **A 类（必搬）**：文件 k 顶层语句里出现的**任何**标识符 —— 引用本身就在那一刻求值，
+  哪怕当回调传出去（`addEventListener('click', onX)`，`requestAnimationFrame(fn)` 同理），onX/fn 也必须已存在。
+- **B 类（下钻）**：A 类里**处于调用位置**的函数当场执行，其函数体内一切引用同样当场求值；
+  其中又处于调用位置的继续下钻。嵌套回调体不下钻（之后才跑），例外是
+  `forEach/map/reduce` 这类**同步**高阶函数传入的回调。
+- **必须做作用域分析**：`function updatePlayModeButton(animate) {...}` 里的 `animate` 是形参，
+  不做作用域就会把局部名误判成全局顶层函数（实测会把 `animate` 主循环误搬进 prelude）。
+
+用 esprima 做 AST。**手写词法扫描不可信** —— 试过两版，在正则字面量/模板字符串插值处会失同步，
+报出 `data` / `quality` / `animate` 这类假阳性；结论以 AST 与运行期错误为准。
+
+### 修复后的验收
+
+| 闸门 | 结果 |
+|---|---|
+| `node scripts/check-app-hoisting.js` | ✅ prelude 覆盖全部 46 个前置依赖，0 漏 0 多 |
+| **基线对照**（`d84ee11^` 单文件 worktree 跑同一离屏诊断） | ✅ 13 行控制台输出**完全同构**，差异仅为文件名+行号 |
+| 离屏加载错误 | ✅ 与基线一致：3 条 IMG 资源错 + 1 条 Electron 内部 rejection，**0 条应用脚本错误** |
+| `npm run probe:ui` | ✅ **7/7**（新增 `probe-app-load.js` 加载期零错误闸门） |
+| `npm test` | ✅ **88/88**（`APP_JS_FILES` 17 个 + 新增「prelude 必须排第一」） |
+| `npm run probe:static` | ✅ 全过（17 个 `js/app/*.js` 逐个 HTTP 200） |
+| `probe:cuefield-api` / `cuefield-e2e` / `parse` | ✅ 全绿 |
+| **独立回验**（17 文件 vs `784afe6:public/js/main.js` 的代码行多重集） | ✅ 唯一差异 = 那 2 条 var 垫片（26481 → 26482 行） |
+| 变异验证 ① 把 prelude 标签挪到 `01-state.js` 之后 | ✅ 探针 FAIL 10 条 + 单测 2 条红 |
+| 变异验证 ② 在 16 号文件加新函数、01 号文件顶层调用 | ✅ `check-app-hoisting` 报「漏在 prelude 外」+ 探针 FAIL 2 条 |
+
+### 后续加代码时的规矩
+
+1. 改了 `public/js/app/*.js` 后跑 `node scripts/check-app-hoisting.js` —— 漏了就红，并给出修法。
+2. 再跑 `npm run probe:ui`（含加载期零错误闸门）。
+3. **不要**用 `defer` / `async` / `type="module"` 改这 17 行 script：parser-blocking 顺序执行是硬约束。
 
 ---
 
-## 一句话结论
+## 三、原方案正文（保留，供核对切分依据）
+
+**拆完后不再有 `public/js/main.js`**。测试侧统一用 `tests/lib/source.js` 的
+`readAppSource()`（17 文件按加载顺序拼接）当「逻辑上的 main.js」。注意它**不再**逐字节等于原文件
+（46 个函数位置变了），但语义等价 —— 等价性由上面两条独立回验证实。
+
+---
+
+## 一句话结论（原稿）
 
 按 `main.js` **自带的 48 个分区**做**连续区间**切分，产出 **16 个文件**（1134–2923 行/个），
 `index.html` 把一行 `<script src="js/main.js">` 换成 16 行、**顺序与原文件完全一致**。
@@ -42,6 +148,9 @@
 
 当前：`public/js/main.js` = **28117 行 / 1803 个顶层声明 / 159 条顶层可执行语句**。
 拆分后最大文件 2923 行（`08-api-search.js`），**体积降到 1/10**。
+
+> ⚠️ 原稿这句「不跨区搬任何函数」在修复回归时被打破了：46 个 function + 2 条 var 垫片
+> 被搬进了 `00-prelude.js`。这是**必须**的 —— 见第 2 节。
 
 ---
 

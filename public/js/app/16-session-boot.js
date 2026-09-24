@@ -318,29 +318,6 @@ function toggleStartupAutoplay() {
 var kugouQrPollTimer = null;
 // 页面加载即拉取一次酷狗登录状态（控制台重组后由 fx-console-workspace 再次刷新）
 setTimeout(updateKugouLoginStatusText, 2000);
-function updateKugouLoginStatusText() {
-  var el = document.getElementById('kugou-login-status');
-  if (!el) return;
-  var row = document.getElementById('kugou-qr-login-row');
-  fetch('/api/kugou/login/status').then(function (r) { return r.json(); }).then(function (j) {
-    var loggedIn = !!(j && j.loggedIn);
-    // 会员 FLAC 只在 kugou 策略参与解析时才生效（musicParser.js canHandle 要求
-    // enabledSources 含 'kugou'，默认配置里没有它）——所以状态文案必须跟着开关走，
-    // 否则会出现「已登录（会员音质已启用）」但实际还在跑 128k 的空头支票。
-    var enabled = (_musicSourcesConfig && _musicSourcesConfig.enabledSources) || [];
-    var sourceOn = enabled.indexOf('kugou') >= 0;
-    // 文案保持短：这行右侧空间有限，太长会把左侧「酷狗扫码登录」挤成省略号
-    el.textContent = !loggedIn ? '未登录' : (sourceOn ? '已登录 · 音质已启用' : '已登录 · 音源未开');
-    el.style.color = (loggedIn && sourceOn) ? 'var(--c-accent,#7cf)' : 'rgba(255,255,255,.45)';
-    if (row) {
-      row.title = !loggedIn
-        ? '扫码登录酷狗概念版，解锁会员音质（FLAC/320k）'
-        : (sourceOn
-          ? '已登录酷狗概念版，会员音质已参与解析（点击可重新登录）'
-          : '已登录，但「酷狗音源」开关没打开，会员音质不会生效 —— 点下方开关开启');
-    }
-  }).catch(function () { el.textContent = ''; });
-}
 /**
  * 扫码/验证码登录成功后自动启用「酷狗音源」开关。
  * 会员 FLAC 走的是 kugou 策略，该策略要求 enabledSources 含 'kugou'（默认配置不含）——
@@ -797,23 +774,6 @@ function syncSourceParseOrderSeg() {
 }
 syncSourceParseOrderSeg();
 
-/**
- * 「音源解析顺序」整块的显隐：只有账号在**官方源**上有会员时才显示。
- *
- * 为什么隐藏：shouldPreferThirdPartyParse 在 hasVip=false 时三档全部返回 true ——
- * 非会员切「自动 / 官方优先 / 第三方优先」行为完全一致，是个无效控件。
- * 实测（check-parse-order.js 抽真实源码跑）：hasVip=false → auto/official/third-party 全 true；
- * hasVip=true → auto=false official=false third-party=true（这时才有区别）。
- *
- * ⚠️ hasVip 只看**网易云 / QQ** 的登录态，**酷狗会员不算**（酷狗是第三方源）。
- * 任一官方源有会员就显示 —— seg 是全局设置，而 hasVip 是按歌曲所属平台算的。
- */
-function syncSourceParseOrderVisibility() {
-  var block = document.getElementById('source-parse-order-block');
-  if (!block) return;
-  var vip = hasProviderVip('netease', loginStatus) || hasProviderVip('qq', qqLoginStatus);
-  block.style.display = vip ? '' : 'none';
-}
 syncSourceParseOrderVisibility();   // 初始隐藏，避免登录态加载完后闪一下
 
 window.addEventListener('beforeunload', function () {

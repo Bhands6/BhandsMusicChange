@@ -473,13 +473,6 @@ function initIdleGuideCanvas() {
 //  toast
 // ============================================================
 var toastTimer = null;
-function showToast(msg) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
-}
 
 var visualGuideSteps = [
   {

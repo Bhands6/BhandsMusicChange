@@ -5,10 +5,16 @@
  * 为什么需要它：单个探针必须用
  *   `./node_modules/electron/dist/electron.exe scripts/probe-xxx.js`
  * 启动（`node_modules/.bin/electron` 会让 require('electron').app 变 undefined），
- * 6 个探针手敲 6 次容易漏。这里统一 spawn，并在跑完后读 `scripts/out/*.json`
- * 做一次冒烟判定：最后一条日志必须是 `RESULT ...`（而不是 `ERROR ...`）。
+ * 7 个探针手敲 7 次容易漏。这里统一 spawn，并在跑完后读 `scripts/out/*.json`
+ * 做一次冒烟判定：最后一条日志必须是 `RESULT ...`（而不是 `ERROR ...`），
+ * 且载荷里的 `fails[]` 必须为空 / `verdict` 不能以 FAIL 开头。
  *
- * 更细的断言在各探针内部（它们自己会打印期望/实际），这里只管「有没有崩」。
+ * 第一个探针 `probe-app-load.js` 是**加载期零错误闸门**：它用 preload 在主文档脚本之前
+ * 挂错误监听，专门堵「应用起不来但探针全绿」这个盲区（2026-09-24 拆分 main.js 就是这么
+ * 漏掉跨 script 函数提升 ReferenceError 的，见 scripts/probe-app-load.js 头部）。
+ * 它挂了，后面 6 个的结论都不作数。
+ *
+ * 更细的断言在各探针内部（它们自己会打印期望/实际），这里只管「有没有崩 + 有没有自判失败」。
  * 非 Electron 的探针（static / cuefield / e2e-parse-level）用 `npm run probe:*` 单独跑。
  */
 const fs = require('node:fs');
@@ -32,6 +38,10 @@ function electronBin() {
 }
 
 const PROBES = [
+  // 加载期零错误闸门：必须排第一 —— 它挂了，后面 6 个探针的结论都不作数
+  // （2026-09-24 拆分 main.js 引入跨 script 提升 ReferenceError，应用黑屏而探针全绿，
+  //   根因就是缺这道闸；详见 scripts/probe-app-load.js 头部）
+  ['probe-app-load.js', 'app-load-probe.json'],
   ['probe-playback-token.js', 'playback-token-probe.json'],
   ['probe-music-sources-panel.js', 'music-sources-panel-probe.json'],
   ['probe-quality-display.js', 'quality-display-probe.json'],
@@ -71,12 +81,31 @@ for (const [script, outFile] of PROBES) {
   }
   const log = JSON.parse(fs.readFileSync(outPath, 'utf8'));
   const last = String(log[log.length - 1] || '');
-  if (last.startsWith('RESULT ')) {
-    console.log('✅ ' + last.slice(7, 130).replace(/\n/g, ' '));
-  } else {
+  if (!last.startsWith('RESULT ')) {
     console.log('❌ 最后一条日志不是 RESULT: ' + last.slice(0, 160));
     failed++;
+    continue;
   }
+  /* 探针自己也会判失败：RESULT 载荷里带 fails[] / verdict 时以它为准，
+     否则「跑完了」会被误当成「断言都过了」。 */
+  let verdict = '';
+  let fails = null;
+  try {
+    const payload = JSON.parse(last.slice(7));
+    if (payload && Array.isArray(payload.fails)) fails = payload.fails;
+    if (payload && typeof payload.verdict === 'string') verdict = payload.verdict;
+  } catch (e) { /* 载荷不是 JSON 就走原来的口径 */ }
+  if (fails && fails.length) {
+    console.log('❌ 探针自判失败 ' + fails.length + ' 条：' + String(fails[0]).slice(0, 150));
+    failed++;
+    continue;
+  }
+  if (/^FAIL/.test(verdict)) {
+    console.log('❌ 探针 verdict=' + verdict);
+    failed++;
+    continue;
+  }
+  console.log('✅ ' + last.slice(7, 130).replace(/\n/g, ' '));
 }
 
 console.log(failed ? `\n${failed} / ${PROBES.length} 个探针失败` : `\n✅ ${PROBES.length} / ${PROBES.length} 个探针通过`);

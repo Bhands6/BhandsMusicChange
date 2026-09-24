@@ -206,11 +206,6 @@ function openUpdatePanel() {
   animateUpdatePanelContents();
 }
 
-function closeUpdatePanel() {
-  closeGsapModal(document.getElementById('update-modal'), function(){
-    updatePreviewState.open = false;
-  });
-}
 
 function animateUpdatePanelContents() {
   if (!window.gsap) return;
@@ -580,23 +575,6 @@ function closeGsapModal(mask, afterClose) {
     finish();
   }
 }
-function bindModalBackdropClose() {
-  [
-    ['track-detail-modal', closeTrackDetailModal],
-    ['login-modal', closeLoginModal],
-    ['user-modal', closeUserModal],
-    ['custom-lyric-modal', closeCustomLyricModal],
-    ['update-modal', closeUpdatePanel]
-  ].forEach(function(pair){
-    var mask = document.getElementById(pair[0]);
-    var close = pair[1];
-    if (!mask || mask.__backdropCloseBound) return;
-    mask.__backdropCloseBound = true;
-    mask.addEventListener('click', function(e){
-      if (e.target === mask) close();
-    });
-  });
-}
 function onUserBtnClick() {
   if (hasAnyPlatformLogin()) showUserModal();
   else showLoginModal();
@@ -604,28 +582,6 @@ function onUserBtnClick() {
 function platformMeta(provider) {
   if (provider === 'qq') return { key: 'qq', short: 'QQ', label: 'QQ 音乐', app: 'QQ 音乐 App', dot: 'qq' };
   return { key: 'netease', short: 'NE', label: '网易云音乐', app: '网易云音乐 App', dot: 'netease' };
-}
-function platformStatus(provider) {
-  return provider === 'qq' ? qqLoginStatus : loginStatus;
-}
-function providerVipType(provider, status) {
-  status = status || platformStatus(provider) || {};
-  return Number(status.vipType || status.vip_type || status.vip || status.isVip || status.is_vip || 0) || 0;
-}
-function providerVipLevel(provider, status) {
-  status = status || platformStatus(provider) || {};
-  var raw = String(status.vipLevel || status.vip_level || '').toLowerCase();
-  if (raw === 'svip' || raw === 'vip' || raw === 'none') return raw;
-  var vip = providerVipType(provider, status);
-  if (provider === 'netease') {
-    if (status.isSvip || status.is_svip || vip >= 10) return 'svip';
-    if (status.isVip || status.is_vip || vip > 0) return 'vip';
-    return 'none';
-  }
-  return vip > 0 ? 'vip' : 'none';
-}
-function hasProviderVip(provider, status) {
-  return providerVipLevel(provider, status) !== 'none';
 }
 function hasProviderSvip(provider, status) {
   return provider === 'netease' && providerVipLevel(provider, status) === 'svip';
@@ -840,10 +796,6 @@ async function showLoginModal(opts) {
   openGsapModal(modal);
   updateLoginProviderUi();
   await refreshQr();
-}
-function closeLoginModal() {
-  stopQrPoll();
-  closeGsapModal(document.getElementById('login-modal'));
 }
 function setLoginProvider(provider, silent) {
   loginProvider = provider === 'qq' ? 'qq' : 'netease';
@@ -1153,7 +1105,6 @@ function showUserModal() {
   updateUserModalUi();
   openGsapModal(document.getElementById('user-modal'));
 }
-function closeUserModal() { closeGsapModal(document.getElementById('user-modal')); }
 function setActiveAccountProvider(provider) {
   provider = provider === 'qq' ? 'qq' : 'netease';
   if (!hasPlatformLogin(provider)) {

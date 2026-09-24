@@ -1126,8 +1126,13 @@ try {
 
 <!-- ==================== 应用主体脚本 ==================== -->
 <!-- 原 public/js/main.js（28117 行单文件）于 2026-09-24 按自带的 48 个分区
-     切成 public/js/app/01…16，**顺序即执行顺序，不可调换、不可加 defer/async/module**。
-     切分是纯机械的连续区间切割，零搬移、零逻辑改动。 -->
+     切成 public/js/app/01…16，并加 00-prelude.js，共 17 个。
+     **顺序即执行顺序，不可调换、不可加 defer/async/module**。
+     ⚠️ 00-prelude.js 必须排第一：原 main.js 是单个 script，顶层 function 声明提升到整个
+     文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数。拆成 17 个独立 script 后
+     提升只在各自文件内生效 —— 被更早文件顶层语句（含同步调用链）依赖的 46 个声明都放在
+     prelude 里。判定与校验见 scripts/check-app-hoisting.js，运行期闸门见
+     scripts/probe-app-load.js（`npm run probe:ui` 会带上）。 -->
 <script src="js/cuefield-automix-core.js"></script>        <!-- cuefield 自动混音 · 计划判定核心 -->
 <script src="js/cuefield-timeline-executor.js"></script>   <!-- cuefield · 过渡时间线执行器 -->
 <script src="js/cuefield-bridge-engine.js"></script>       <!-- cuefield · WebAudio 过渡桥 -->
@@ -1137,6 +1142,7 @@ try {
 <script src="sonic-topography-preset.js"></script>          <!-- 预设7 音域回响 Sonic-Topography（作者 Ajin，移植自上游） -->
 <script src="sonic-workshop-preset.js"></script>            <!-- 预设8 音域回响 Wallpaper Engine（作者 CmzYa，WE 创意工坊 iframe 桥接） -->
 <script src="js/web-fx-presets.js"></script>               <!-- Web 移植 9 粒子特效（极光/万花筒/迸发/声波地形/螺旋星云/水母花/玫瑰/心跳/字符雨） -->
+<script src="js/app/00-prelude.js"></script>                <!-- 被更早文件顶层语句依赖的 function 声明（原靠单 script 全文件提升） -->
 <script src="js/app/01-state.js"></script>                  <!-- 全局状态 / 常量表 / 热键表 -->
 <script src="js/app/02-scene-camera.js"></script>           <!-- Three.js 场景 / 相机系统 v7.1 / 指针拖拽 / 粒子点纹理 -->
 <script src="js/app/03-particles.js"></script>              <!-- 主粒子 shader / 背景星河 / 浮空粒子 / 安魂层 / 封面背面粒子 -->

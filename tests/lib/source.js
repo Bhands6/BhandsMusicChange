@@ -19,13 +19,21 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /**
  * 应用主体脚本：原 `public/js/main.js`（28117 行单文件）于 2026-09-24 按自带的
- * 48 个分区切成这 16 个文件，放在 `public/js/app/`。
+ * 48 个分区切成 16 个文件，放在 `public/js/app/`；
+ * 随后又加了 `00-prelude.js`（见下），共 17 个。
  * **数组顺序 = index.html 里的加载顺序，不可调换。**
  *
- * 跨文件的测试用 `readAppSource()` 取「逻辑上的 main.js」—— 它是这 16 个文件
- * 按序拼接的结果，与拆分前的整份文件等价（切割时做过逐字节拼接回验）。
+ * 跨文件的测试用 `readAppSource()` 取「逻辑上的 main.js」—— 它是这 17 个文件
+ * 按序拼接的结果。
+ *
+ * ⚠️ 00-prelude.js 是什么：原 main.js 是**单个 script**，顶层 `function` 声明会被提升到
+ * 整个文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数。切成 17 个 script 后
+ * 提升只在各自文件内生效 —— 凡是「被更早文件的顶层语句（含其同步调用链）依赖」的
+ * function 必须最先可用，都放在 prelude。判定与校验见 `scripts/check-app-hoisting.js`。
+ * 所以 `readAppSource()` **不等于**原 main.js 的逐字节拼接（函数位置变了），但语义等价。
  */
 const APP_JS_FILES = [
+  '00-prelude.js',
   '01-state.js',
   '02-scene-camera.js',
   '03-particles.js',
@@ -49,7 +57,7 @@ function readSource(relPath) {
   return fs.readFileSync(path.join(REPO_ROOT, relPath), 'utf8');
 }
 
-/** 读全部 16 个应用主体脚本并按加载顺序拼接（= 拆分前的 main.js） */
+/** 读全部 17 个应用主体脚本并按加载顺序拼接（≈ 拆分前的 main.js，函数位置已重排） */
 function readAppSource() {
   return APP_JS_FILES.map(readSource).join('\n');
 }

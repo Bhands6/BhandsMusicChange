@@ -9,6 +9,7 @@
   "scripts": {
     "start": "chcp 65001 >nul && electron .",
     "test": "node --test \"tests/**/*.test.js\"",
+    "check:hoisting": "node scripts/check-app-hoisting.js",
     "probe:ui": "node scripts/probe-ui-all.js",
     "probe:static": "node scripts/probe-static-exposure.js",
     "probe:cuefield-api": "node scripts/probe-cuefield-api.js",
@@ -111,6 +112,7 @@
   "devDependencies": {
     "electron": "^42.4.1",
     "electron-builder": "^26.15.3",
+    "esprima": "^4.0.1",
     "rcedit": "^5.0.2"
   }
 }

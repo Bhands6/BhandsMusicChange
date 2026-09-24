@@ -37,15 +37,6 @@ async function apiParseJson(url, timeoutMs) {
   }
 }
 function escHtml(s){ var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function normalizePlaybackQuality(value) {
-  value = String(value || '').toLowerCase();
-  if (value === 'jymaster' || value === 'master' || value === 'svip') return 'jymaster';
-  if (value === 'hires' || value === 'hi-res' || value === 'highres' || value === 'highest') return 'hires';
-  if (value === 'lossless' || value === 'flac' || value === 'sq') return 'lossless';
-  if (value === 'exhigh' || value === 'high' || value === '320k' || value === 'hq') return 'exhigh';
-  if (value === 'standard' || value === 'normal' || value === 'std') return 'standard';
-  return 'hires';
-}
 function playbackQualityLabel(value) {
   value = normalizePlaybackQuality(value);
   if (value === 'jymaster') return '超清母带';
@@ -107,13 +98,6 @@ function playbackResolvedQualityText(data) {
   var br = playbackBitrateLabel(data.br);
   if (label && br) return label + ' · ' + br;
   return label || br;
-}
-function readPlaybackQualityPreference() {
-  try {
-    return normalizePlaybackQuality(localStorage.getItem(PLAYBACK_QUALITY_STORE_KEY) || 'hires');
-  } catch (e) {
-    return 'hires';
-  }
 }
 function savePlaybackQualityPreference() {
   try { localStorage.setItem(PLAYBACK_QUALITY_STORE_KEY, playbackQuality); } catch (e) {}
@@ -293,15 +277,6 @@ function isTypingTarget(target) {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
   return !!(target.isContentEditable || (target.closest && target.closest('[contenteditable="true"]')));
 }
-function readCustomCoverMap() {
-  try {
-    var raw = localStorage.getItem(CUSTOM_COVER_STORE_KEY);
-    var parsed = raw ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch (e) {
-    return {};
-  }
-}
 function saveCustomCoverMap() {
   try {
     localStorage.setItem(CUSTOM_COVER_STORE_KEY, JSON.stringify(customCoverMap || {}));
@@ -374,21 +349,6 @@ function compactHomeCount(n) {
   if (n >= 100000000) return (n / 100000000).toFixed(1).replace(/\.0$/, '') + '亿';
   if (n >= 10000) return Math.round(n / 10000) + '万';
   return n ? String(n) : '';
-}
-function loadListenStatsState() {
-  try {
-    var raw = localStorage.getItem(HOME_LISTEN_STATS_KEY);
-    if (!raw) return { history: [], songs: {}, artists: {}, updatedAt: 0 };
-    var data = JSON.parse(raw);
-    return {
-      history: Array.isArray(data.history) ? data.history.slice(0, 180) : [],
-      songs: data.songs && typeof data.songs === 'object' ? data.songs : {},
-      artists: data.artists && typeof data.artists === 'object' ? data.artists : {},
-      updatedAt: Number(data.updatedAt) || 0,
-    };
-  } catch (e) {
-    return { history: [], songs: {}, artists: {}, updatedAt: 0 };
-  }
 }
 function saveListenStatsState() {
   try {
@@ -1538,10 +1498,6 @@ function handleHomeTileClick(index) {
   else if (item.kind === 'library') openHomeLibrary();
   else runHomeSearch(item.query || item.title || '');
 }
-function currentCoverSong() {
-  if (currentIdx >= 0 && playQueue[currentIdx]) return playQueue[currentIdx];
-  return currentLocalSong || null;
-}
 function songDurationLabel(song) {
   var sec = playbackDurationFromSong(song);
   if (!sec && audio && isFinite(audio.duration) && audio.duration > 0) sec = audio.duration;
@@ -1887,20 +1843,6 @@ function clearCustomCoverForCurrent() {
   updateCustomCoverButton();
   showToast('已恢复默认封面');
 }
-function readCustomLyricMap() {
-  try {
-    var raw = JSON.parse(localStorage.getItem(CUSTOM_LYRIC_STORE_KEY) || '{}') || {};
-    var out = {};
-    Object.keys(raw).forEach(function(key){
-      var item = raw[key];
-      if (typeof item === 'string') out[key] = { text: item, updatedAt: 0 };
-      else if (item && typeof item.text === 'string') out[key] = { text: item.text, updatedAt: item.updatedAt || 0 };
-    });
-    return out;
-  } catch (e) {
-    return {};
-  }
-}
 function saveCustomLyricMap() {
   try {
     localStorage.setItem(CUSTOM_LYRIC_STORE_KEY, JSON.stringify(customLyricMap || {}));
@@ -1909,10 +1851,6 @@ function saveCustomLyricMap() {
     console.warn('custom lyric save failed:', e);
     return false;
   }
-}
-function readCustomLyricPrefs() {
-  try { return JSON.parse(localStorage.getItem(CUSTOM_LYRIC_PREF_STORE_KEY) || '{}') || {}; }
-  catch (e) { return {}; }
 }
 function saveCustomLyricPrefs() {
   try { localStorage.setItem(CUSTOM_LYRIC_PREF_STORE_KEY, JSON.stringify(customLyricPrefs || {})); } catch (e) {}

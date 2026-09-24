@@ -325,14 +325,6 @@ function bindVolumeControls() {
 // ============================================================
 //  播放队列
 // ============================================================
-function queueItemKey(song) {
-  if (!song) return '';
-  if (song.provider === 'qq' || song.source === 'qq' || song.type === 'qq') return 'qq:' + (song.mid || song.songmid || song.id || (song.name + '|' + song.artist));
-  if (song.type === 'podcast' && song.programId) return 'podcast:' + song.programId;
-  if (song.localKey) return 'local:' + song.localKey;
-  if (song.id != null && song.id !== '') return 'song:' + song.id;
-  return String(song.name || '') + '|' + String(song.artist || '');
-}
 function queueSong(song, opts) {
   opts = opts || {};
   if (!song) return -1;
@@ -1473,31 +1465,6 @@ function updateSearchBoxGlassDisplacementMap() {
     document.getElementById('search-box-glass-map'),
     'searchBoxKey'
   );
-}
-function updateSearchPillGlassDisplacementMap() {
-  var img = document.getElementById('search-pill-glass-map');
-  if (!img) return;
-  var nodes = Array.prototype.slice.call(document.querySelectorAll('.search-mode-tabs button,.search-history-chip'));
-  if (!nodes.length) return;
-  var maxW = 0, maxH = 0, maxRadius = 14;
-  nodes.forEach(function(el){
-    if (!el || el.offsetParent === null) return;
-    var rect = el.getBoundingClientRect();
-    if (rect.width < 2 || rect.height < 2) return;
-    maxW = Math.max(maxW, rect.width);
-    maxH = Math.max(maxH, rect.height);
-    maxRadius = Math.max(maxRadius, parseFloat(getComputedStyle(el).borderRadius) || Math.round(rect.height / 2) || 14);
-  });
-  if (maxW < 2 || maxH < 2) return;
-  var width = Math.max(96, Math.round(maxW));
-  var height = Math.max(32, Math.round(maxH));
-  var radius = Math.max(12, Math.min(Math.round(maxRadius), Math.round(height / 2) + 10));
-  var key = width + 'x' + height + ':' + radius;
-  if (key === controlGlassState.searchPillKey) return;
-  controlGlassState.searchPillKey = key;
-  var href = generateControlGlassDisplacementMap(width, height, radius);
-  img.setAttribute('href', href);
-  try { img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href); } catch (e) {}
 }
 function initControlGlassSurface() {
   if (supportsControlGlassSvgFilter()) document.documentElement.classList.add('control-glass-svg-ok');

@@ -176,12 +176,22 @@
 
 ## Memory Entries
 
+### 2026-09-24 - main.js 拆分回归：跨 script 函数提升失效 → 00-prelude.js
+
+- 用户认可/要求保留：拆成 `public/js/app/*.js` 多 `<script>` 之后**必须**有 `00-prelude.js` 并**排第一位**。它承载「被更早文件的顶层语句（含其同步调用链）依赖」的 46 个顶层 `function` 声明 + 2 条顶层 `var` 提升垫片。不要把这些声明挪回后面的文件，也不要把 prelude 标签往后移。
+- 背景（必须知道，否则会重犯）：原 `main.js` 是**单个 script**，顶层 `function` 声明提升到整个文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数 —— 老代码大量依赖这点。切成多个独立 script 后提升只在各自文件内生效，前面的文件看不到后面的函数 → `ReferenceError`，而且**该 script 剩余的顶层语句全部不执行**（`var` 赋值全丢）→ 连带一串「Cannot read properties of undefined」假故障。用户实测表现为**黑屏 + 鼠标不显示**（`02-scene-camera.js` 的指针/拖拽系统没绑定）。
+- 涉及文件：`public/js/app/00-prelude.js`（新增 646 行）、`public/index.html`（17 行 `<script>`，prelude 第一）、`scripts/check-app-hoisting.js`（新增，AST + 作用域分析，权威判定）、`scripts/probe-app-load.js` + `scripts/probe-app-load-preload.js`（新增，加载期零错误闸门）、`scripts/probe-ui-all.js`（探针 7 个 + RESULT 载荷 fails 判定）、`scripts/probe-static-exposure.js`（17 个）、`tests/lib/source.js`（`APP_JS_FILES` 17 个）、`tests/app-script-order.test.js`（16→17 + prelude 排第一）、`package.json`（devDependencies 加 `esprima@^4.0.1`）。
+- 关键参数/实现：判定口径 = A 类「文件 k 顶层语句里**任何**标识符引用」（含当回调传出：`addEventListener('click', onX)`、`requestAnimationFrame(fn)` 都在那一刻求值）+ B 类「A 类里**处于调用位置**的函数下钻其函数体」，嵌套回调体不下钻（`forEach/map/reduce` 这类同步高阶函数除外）。**必须做作用域分析**，否则 `function updatePlayModeButton(animate)` 的形参 `animate` 会被误判成全局顶层函数。顶层 `var` **不能搬声明**（会把原 `undefined` 变成真值），改为加裸 `var NAME;` 垫片精确复刻提升语义。
+- 验收：`check-app-hoisting` 46/46 覆盖；与 `d84ee11^` 单文件基线跑同一离屏诊断，**13 行控制台输出完全同构**（差异仅文件名+行号）；`probe:ui` 7/7、`npm test` 88/88、`probe:static` 全过、cuefield/parse 全绿；独立回验（17 文件 vs `784afe6:public/js/main.js` 代码行多重集）唯一差异 = 那 2 条 var 垫片。
+- 禁止回退或改坏的点：**不要用 `defer`/`async`/`type="module"`** 改这 17 行 script（parser-blocking 顺序执行是硬约束）；**不要用 `win.loadFile()` 之后再 `executeJavaScript` 挂 `window.addEventListener('error')` 当加载期错误闸门** —— 那时加载期错误早报完了，`errors: []` 是**假绿**（第一次拆分就是被这个坑过去的，6 个探针全绿而应用黑屏）；改了 `public/js/app/*.js` 后必须跑 `node scripts/check-app-hoisting.js` + `npm run probe:ui`；**不要用手写词法扫描判跨文件引用**（在正则字面量/模板字符串插值处会失同步，实测报出 `data`/`quality`/`animate` 假阳性），一律用 esprima AST。
+
 ### 2026-09-24 - main.js 拆分为 public/js/app/01…16
 
-- 用户认可/要求保留：`public/js/main.js`（28117 行单文件）按**自带的 48 个分区**拆成 16 个文件，放在 `public/js/app/`，`index.html` 用 16 行 `<script>` 按原顺序加载。**纯机械切割：零搬移、零逻辑改动。**
+- ⚠️ 本条原写「纯机械切割：零搬移、零逻辑改动」—— **已被上一条推翻**：修复回归时搬了 46 个 function + 2 条 var 垫片进 `00-prelude.js`。其余内容仍成立。
+- 用户认可/要求保留：`public/js/main.js`（28117 行单文件）按**自带的 48 个分区**拆成 16 个文件，放在 `public/js/app/`，`index.html` 用 `<script>` 按原顺序加载。
 - 涉及文件：`public/index.html`（原来那行 `<script src="js/main.js">` 换成 16 行）、`public/js/main.js`（**已删除**）、`public/js/app/01-state.js` … `16-session-boot.js`（新增 16 个）、`tests/lib/source.js`（新增 `APP_JS_FILES` / `readAppSource()`）、`tests/parse-order.test.js`、`tests/quality-notice.test.js`、`tests/third-party-notice.test.js`、`tests/source-config-removal.test.js`、`scripts/probe-static-exposure.js`、`public/js/fx-console-workspace.js`（顶部加说明注释）、`server/server.js`（QQ 缓存注释去掉行号）。
 - 关键参数/实现：只在分区横幅边界落刀，16 个区间首尾相接，覆盖 28115 行（+ 原文件头 2 行 `'use strict';` / 空行）。每个新文件开头注入 7 行（`'use strict';` + 来源注释头）。**验收闸门两条**：① 16 文件剥掉注入头后按序拼回，与原 `main.js` **逐字节一致**（1243520 字符）；② 16 个文件各自 `node --check` 全绿（切点若落在函数体/模板字符串里必然语法错，所以这条同时证明切点在语句边界）。测试侧统一用 `readAppSource()`（16 文件按加载顺序拼接）当「逻辑上的 main.js」，断言与拆分前完全等价（82/82 全绿）。16 个文件的划分：`01-state` / `02-scene-camera` / `03-particles` / `04-stage-lyrics` / `05-lyric-modes-cover` / `06-beat` / `07-shelf` / `08-api-search` / `09-audio-queue` / `10-lyrics-panel-playlist` / `11-fx-console` / `12-system-panels` / `13-update-account` / `14-idle-toast-libs` / `15-shell` / `16-session-boot`。
-- 禁止回退或改坏的点：`index.html` 里 16 个 `js/app/*.js` 的**顺序就是执行顺序**，不可调换、不可加 `defer`/`async`/`type="module"`（任何一个都会改变执行时机）；每个新文件必须各自保留 `'use strict';` —— 漏一个该文件会静默退回非严格模式；不要把 `public/js/main.js` 加回来；想按职责重排（像上游那 12 组分层）是**下一步**，不要在切割提交里混做。
+- 禁止回退或改坏的点：`index.html` 里 17 个 `js/app/*.js`（含 `00-prelude.js`，见上一条）的**顺序就是执行顺序**，不可调换、不可加 `defer`/`async`/`type="module"`（任何一个都会改变执行时机）；每个新文件必须各自保留 `'use strict';` —— 漏一个该文件会静默退回非严格模式；不要把 `public/js/main.js` 加回来；想按职责重排（像上游那 12 组分层）是**下一步**，不要在切割提交里混做。
 
 ### 2026-07-27 - 多音源解析系统 v1.4.0
 
