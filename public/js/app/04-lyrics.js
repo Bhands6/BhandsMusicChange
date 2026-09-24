@@ -906,6 +906,23 @@ function updateStageLyrics3D(dt) {
   if (skullMouthLyrics) lockFit = Math.min(lockFit, 1.12);
   if (!isFinite(stageLyrics.lockFitScale)) stageLyrics.lockFitScale = 1;
   stageLyrics.lockFitScale += (lockFit - stageLyrics.lockFitScale) * (lockFit < stageLyrics.lockFitScale ? 0.18 : 0.10);
+  /* 歌词与场景主体同步（2026-09-24）：场景主体的屏上占比由各预设「几何+机位」配套设计
+   * （实测 9-17 号全部 96-100%），而歌词文本平面世界尺寸恒定（worldW=6.10×0.96）、
+   * 屏上大小 ∝ 1/(相机到歌词的距离) —— 切预设时歌词屏宽极差 1.84 倍（jelly ↔ burst），
+   * 用户感知为「每个场景歌词大小都不一样」。
+   * 补偿锚定 **baselineRadius（setPreset 写入的预设基准机位）** 而非缓动中的 orbit.radius：
+   *  - 切预设进入时：baseline=预设机位 → 补偿随预设变 → 歌词屏宽跨预设归一（用户确认的效果）；
+   *  - 滚轮缩放时：滚轮只改 userRadius、不碰 baseline → 补偿不变 → 歌词世界尺寸固定，
+   *    与粒子背景一起被透视缩放 —— 保持用户习惯的原始滚轮行为（歌词不钉在屏幕上）。
+   * 基准 6.97 = 9-17 号「radius−1.46」均值（rose 附近观感不变）；基准/公式用解析模型而非
+   * Box3 实测反推 —— spark 装饰环每次随机重排，Box3 噪声 ±15%，不可定标。
+   * 只作用于默认漂浮分支：锁定分支已有 lyricCameraLockFit 视口适配、骷髅分支有自己的布局。 */
+  if (!skullMouthLyrics && !cameraLockedLyrics) {
+    /* 分母 6.97 = 9-17 号「radius−1.46」均值（ rose 附近为原观感基准）；
+     * 再除以 0.87 = 整体再放大 ~15%（2026-09-24 用户要求「歌词初始预设再放大一点」）。
+     * 想整体调大/调小歌词：改这个 0.87（越小歌词越大）。 */
+    layoutScale *= clampRange((orbit.baselineRadius - 1.46) / 6.97, 0.5, 2.0) / 0.87;
+  }
   stageLyrics.group.scale.setScalar(layoutScale * stageLyrics.lockFitScale);
   if (skullMouthLyrics) {
     stageLyrics.snapCameraLockFrames = 0;
@@ -956,12 +973,18 @@ function updateStageLyrics3D(dt) {
       lyricCoverWorldPos.set(0, 0, 0);
       lyricCoverWorldQuat.identity();
     }
-    setStageLyricViewBasisFromCameraOrQuaternion(lyricCoverWorldQuat);
+    // ⚠️ 2026-09-24：歌词朝向改用**相机**，不再用粒子的世界四元数。
+    // 原实现 `stageLyricTargetQuaternion(lyricCoverWorldQuat, ...)`：粒子静止时其世界四元数是
+    // identity（平面法线 +Z），而相机是俯视的（预设 phi 0.30~0.34），于是歌词相对镜头恒定歪 ≈phi
+    // —— 实测螺旋星云下 19.7°，用户反馈「歌词不是正对着镜头」。
+    // 现在位置仍跟随粒子（lyricCoverWorldPos），只把朝向与布局 basis 换到相机坐标系：
+    // 拖动/头部追踪时歌词不再跟着粒子转，换来始终正对镜头、可读。
+    setStageLyricViewBasisFromCameraOrQuaternion(null);
     lyricLayoutBase.copy(lyricCoverWorldPos);
     lyricLayoutTarget.copy(lyricLayoutBase);
     applyStageLyricLayoutOffset(lyricLayoutTarget, layoutX, layoutY, layoutZ);
     stageLyrics.group.position.copy(lyricLayoutTarget);
-    stageLyricTargetQuaternion(lyricCoverWorldQuat, layoutTiltX, layoutTiltY);
+    stageLyricTargetQuaternion(camera.quaternion, layoutTiltX, layoutTiltY);
     stageLyrics.group.quaternion.copy(lyricTargetQuat);
   }
   var lyricMotion = lyricMotionProfile();
