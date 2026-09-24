@@ -19,7 +19,7 @@ const path = require('node:path');
 const { REPO_ROOT, readSource, readAppSource, stripComments, extractConst, extractFunction } = require('./lib/source');
 
 const SERVER_JS = 'server/server.js';
-// 原 public/js/main.js 于 2026-09-24 按 48 分区拆成 16 个文件；整文件级断言走拼接后的全文
+// 原 public/js/main.js 于 2026-09-24 先按 48 分区拆成 16 个文件、再按职责重排成 19 个文件；整文件级断言走拼接后的全文
 const APP_JS_LABEL = 'app/*.js（原 main.js）';
 const PARSER_JS = 'server/music-sources/musicParser.js';
 
@@ -44,7 +44,7 @@ for (const rel of [SERVER_JS, PARSER_JS]) {
   }
 }
 
-// 原 main.js 的同一批断言：对 16 个文件的拼接全文做，语义与拆分前完全一致
+// 原 main.js 的同一批断言：对 19 个文件的拼接全文做，语义与拆分前完全一致
 {
   const code = stripComments(appSrc);
   for (const key of LEGACY) {

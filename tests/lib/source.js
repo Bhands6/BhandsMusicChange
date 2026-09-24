@@ -18,38 +18,41 @@ const path = require('node:path');
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /**
- * 应用主体脚本：原 `public/js/main.js`（28117 行单文件）于 2026-09-24 按自带的
- * 48 个分区切成 16 个文件，放在 `public/js/app/`；
- * 随后又加了 `00-prelude.js`（见下），共 17 个。
+ * 应用主体脚本：原 `public/js/main.js`（28117 行单文件）于 2026-09-24
+ * 先按自带的 48 个分区切成 16 个文件，随后按**职责**重排成 18 个（`01-state.js` … `18-session-boot.js`），
+ * 外加最先加载的 `00-prelude.js`（见下），共 19 个，都在 `public/js/app/`。
  * **数组顺序 = index.html 里的加载顺序，不可调换。**
  *
- * 跨文件的测试用 `readAppSource()` 取「逻辑上的 main.js」—— 它是这 17 个文件
+ * 跨文件的测试用 `readAppSource()` 取「逻辑上的 main.js」—— 它是这 19 个文件
  * 按序拼接的结果。
  *
  * ⚠️ 00-prelude.js 是什么：原 main.js 是**单个 script**，顶层 `function` 声明会被提升到
- * 整个文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数。切成 17 个 script 后
+ * 整个文件顶部，所以第 85 行的顶层语句能调用第 2 万行才定义的函数。切成多个独立 script 后
  * 提升只在各自文件内生效 —— 凡是「被更早文件的顶层语句（含其同步调用链）依赖」的
  * function 必须最先可用，都放在 prelude。判定与校验见 `scripts/check-app-hoisting.js`。
- * 所以 `readAppSource()` **不等于**原 main.js 的逐字节拼接（函数位置变了），但语义等价。
+ * 所以 `readAppSource()` **不等于**原 main.js 的逐字节拼接（函数位置变了），但语义等价；
+ * 「按职责重排」这一步的加载期读写顺序等价性由 `scripts/check-app-reorg.js` 对基线校验。
  */
 const APP_JS_FILES = [
   '00-prelude.js',
   '01-state.js',
-  '02-scene-camera.js',
+  '02-scene.js',
   '03-particles.js',
-  '04-stage-lyrics.js',
-  '05-lyric-modes-cover.js',
-  '06-beat.js',
-  '07-shelf.js',
-  '08-api-search.js',
-  '09-audio-queue.js',
-  '10-lyrics-panel-playlist.js',
-  '11-fx-console.js',
-  '12-system-panels.js',
-  '13-update-account.js',
-  '14-idle-toast-libs.js',
-  '15-shell.js',
-  '16-session-boot.js',
+  '04-lyrics.js',
+  '05-lyrics-stage.js',
+  '06-cover.js',
+  '07-beat.js',
+  '08-shelf.js',
+  '09-api-search.js',
+  '10-audio-queue.js',
+  '11-playlist.js',
+  '12-fx-console.js',
+  '13-system-panels.js',
+  '14-account.js',
+  '15-update.js',
+  '16-idle-toast-libs.js',
+  '17-shell.js',
+  '18-session-boot.js',
 ].map((name) => 'public/js/app/' + name);
 
 /** 读仓库内文件（相对仓库根的路径，正斜杠） */
@@ -57,7 +60,7 @@ function readSource(relPath) {
   return fs.readFileSync(path.join(REPO_ROOT, relPath), 'utf8');
 }
 
-/** 读全部 17 个应用主体脚本并按加载顺序拼接（≈ 拆分前的 main.js，函数位置已重排） */
+/** 读全部 19 个应用主体脚本并按加载顺序拼接（≈ 拆分前的 main.js，函数位置已重排） */
 function readAppSource() {
   return APP_JS_FILES.map(readSource).join('\n');
 }

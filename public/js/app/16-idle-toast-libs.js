@@ -1,6 +1,14 @@
 'use strict';
 
 // ============================================================
+//  16-idle-toast-libs.js  —  空场待机引导 / 视觉引导 / 手势 / toast / 动态库加载
+//  由 public/js/app/*.js 于 2026-09-24「按职责重排」生成（零逻辑改动）。
+//  规则与验证见 docs/APP_REORG_PLAN.md 与 scripts/check-app-reorg.js。
+// ============================================================
+
+
+
+// ============================================================
 //  14-idle-toast-libs.js  ←  源 main.js §36–§38（基线 784afe6）
 //  空场待机引导 / toast / 动态库加载
 // ============================================================
@@ -1208,4 +1216,3 @@ function showGestureHUD(label, progress, detail) {
   if (fill) fill.style.width = Math.max(0, Math.min(100, (progress || 0) * 100)) + '%';
   hud.classList.add('show');
 }
-

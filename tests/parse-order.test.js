@@ -17,7 +17,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { readAppSource, extractFunction } = require('./lib/source');
 
-// main.js 已拆成 public/js/app/*.js；readAppSource() = 16 文件按加载顺序拼接，等价于原整份文件
+// main.js 已拆成 public/js/app/*.js；readAppSource() = 19 文件按加载顺序拼接，等价于原整份文件
 const body = extractFunction(readAppSource(), 'shouldPreferThirdPartyParse');
 const ORDERS = ['auto', 'official', 'third-party'];
 

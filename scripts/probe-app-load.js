@@ -103,8 +103,8 @@ app.whenReady().then(async function () {
       if (out.globals[k] !== 'function') fails.push('启动后 window.' + k + ' 不是 function（实际 ' + out.globals[k] + '）');
     }
     if (out.globals.FFT_SIZE !== 'number') fails.push('启动后 window.FFT_SIZE 不是 number（实际 ' + out.globals.FFT_SIZE + '）');
-    if (!out.globals.appScripts || out.globals.appScripts.length < 17) {
-      fails.push('index.html 只加载了 ' + ((out.globals.appScripts || []).length) + ' 个 js/app/*.js（应 ≥17）');
+    if (!out.globals.appScripts || out.globals.appScripts.length < 19) {
+      fails.push('index.html 只加载了 ' + ((out.globals.appScripts || []).length) + ' 个 js/app/*.js（应 ≥19）');
     }
 
     /* ⑤ 资源类噪声只报告不判失败（离屏环境缺图，基线同样有） */

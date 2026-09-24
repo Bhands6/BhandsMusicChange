@@ -2,15 +2,16 @@
 /**
  * 锁住「应用主体脚本」的加载契约。
  *
- * `public/js/main.js`（28117 行单文件）已按自带的 48 个分区拆成
- * `public/js/app/01…16`，外加最先加载的 `public/js/app/00-prelude.js`。
+ * `public/js/main.js`（28117 行单文件）已按自带的 48 个分区拆成 `public/js/app/01…16`，
+ * 随后（2026-09-24 第二步）按**职责**重排成 `01-state.js` … `18-session-boot.js`，
+ * 外加最先加载的 `public/js/app/00-prelude.js`，共 **19** 个。
  * 拆分本身是纯机械的，但它引入了四条新不变量：
  *
- *   1. `index.html` 必须**恰好**按顺序列出这 17 个文件 —— 一个不多、一个不少、顺序不变。
+ *   1. `index.html` 必须**恰好**按顺序列出这 19 个文件 —— 一个不多、一个不少、顺序不变。
  *   2. `00-prelude.js` 必须排第一，且它承载的顶层 function 声明**不许**被挪回后面的文件。
  *   3. 每个文件必须**自带** `'use strict';`（漏一个，那个文件会静默退回非严格模式：
  *      给未声明变量赋值不再抛错，而是悄悄创建全局变量）。
- *   4. 这 17 行 `<script>` 不能带 `defer` / `async` / `type="module"`。
+ *   4. 这 19 行 `<script>` 不能带 `defer` / `async` / `type="module"`。
  *
  * 为什么顺序是硬约束：它们是 **parser-blocking** 顺序执行的 —— 顶层 `var`/`function`
  * 依次挂到 `window`，顶层 `let`/`const` 依次进全局词法环境。顺序错了就是
@@ -18,11 +19,12 @@
  *
  * ⚠️ 关于 00-prelude.js 的存在理由（这是本拆分唯一的语义坑）：
  * 原 main.js 是**单个 script**，顶层 `function` 声明被提升到整个文件顶部，
- * 于是第 85 行的顶层语句可以调用第 2 万行才定义的函数。切成 17 个独立 script 后，
+ * 于是第 85 行的顶层语句可以调用第 2 万行才定义的函数。切成多个独立 script 后，
  * 提升只在各自文件内生效 —— 前一个文件看不到后一个文件里的函数声明，直接 ReferenceError，
  * 而且该 script 剩余的顶层语句**全部不执行**（连带产生一串假故障）。
  * 所以「被更早文件的顶层语句（含其同步调用链）依赖」的 function 必须最先可用。
- * 判定与校验脚本：`scripts/check-app-hoisting.js`（AST 分析 + 离屏加载零错误闸门）。
+ * 判定与校验脚本：`scripts/check-app-hoisting.js`（AST 分析）+ `scripts/probe-app-load.js`
+ * （离屏加载零错误闸门）；「按职责重排」的加载期读写顺序等价性见 `scripts/check-app-reorg.js`。
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,8 +38,8 @@ const html = readSource('public/index.html');
 const LISTED = [...html.matchAll(/<script\s+src="(js\/app\/[^"]+)"><\/script>/g)]
   .map((m) => 'public/' + m[1]);
 
-test('index.html 恰好按顺序列出 17 个应用主体脚本', () => {
-  assert.equal(APP_JS_FILES.length, 17, 'APP_JS_FILES 应该是 17 个（00-prelude + 01…16）');
+test('index.html 恰好按顺序列出 19 个应用主体脚本', () => {
+  assert.equal(APP_JS_FILES.length, 19, 'APP_JS_FILES 应该是 19 个（00-prelude + 01…18）');
   assert.deepEqual(LISTED, APP_JS_FILES,
     'index.html 的 js/app/*.js 列表与 tests/lib/source.js 的 APP_JS_FILES 不一致（顺序即执行顺序）');
 });
@@ -68,9 +70,9 @@ test('每个应用主体脚本都存在、非空、首行是 use strict', () => 
   }
 });
 
-test('index.html 里 17 个 script 标签都不带 defer / async / type=module', () => {
+test('index.html 里 19 个 script 标签都不带 defer / async / type=module', () => {
   const tags = [...html.matchAll(/<script[^>]*src="js\/app\/[^"]+"[^>]*>/g)].map((m) => m[0]);
-  assert.equal(tags.length, 17, '匹配到 ' + tags.length + ' 个 js/app 的 script 标签');
+  assert.equal(tags.length, 19, '匹配到 ' + tags.length + ' 个 js/app 的 script 标签');
   for (const tag of tags) {
     assert.doesNotMatch(tag, /\bdefer\b/, '不能加 defer：' + tag);
     assert.doesNotMatch(tag, /\basync\b/, '不能加 async：' + tag);

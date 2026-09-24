@@ -1,10 +1,15 @@
-# main.js 拆分方案（**已执行 + 已修回归** · 2026-09-24）
+# main.js 拆分方案（**已执行 + 已修回归 + 已按职责重排** · 2026-09-24）
 
 > 生成于 2026-09-23，基线提交 `784afe6`。**本方案已于 2026-09-24 按"推荐项"全部执行完毕。**
 > 相关文档：`docs/PROJECT_AUDIT_2026-09-21.md`（历史审计）、项目记忆 `topics/upstream-mineradio.md`（上游对照）。
 >
 > ⚠️ **第一次拆完是坏的，而且当时的验收全绿。** 下面第 1 节是**被推翻的**验收记录，
 > 第 2 节是真实的回归、根因与修法。留档的原因：这个坑的形态（验收假绿）比坑本身更值钱。
+>
+> ⚠️ **本文只覆盖「第一步：按写入时间机械切成 16 个 + 补 prelude」。**
+> 「第二步：按职责重排成 18 个（+ prelude = 19 个）」见 **`docs/APP_REORG_PLAN.md`**。
+> 两步加起来才是当前 `public/js/app/` 的形态。本文里出现的「17 个文件」都是**第一步结束时**的数字，
+> 不代表现状 —— 现状是 **19 个**（`00-prelude.js` + `01-state.js` … `18-session-boot.js`）。
 
 ## 一、第一次拆分（`d84ee11`）的验收记录 —— **已被推翻**
 
@@ -126,9 +131,10 @@ var toastTimer;                   // 原声明在 14-idle-toast-libs.js，但 11
 
 ### 后续加代码时的规矩
 
-1. 改了 `public/js/app/*.js` 后跑 `node scripts/check-app-hoisting.js` —— 漏了就红，并给出修法。
-2. 再跑 `npm run probe:ui`（含加载期零错误闸门）。
-3. **不要**用 `defer` / `async` / `type="module"` 改这 17 行 script：parser-blocking 顺序执行是硬约束。
+1. 改了 `public/js/app/*.js` 后跑 `npm run check:hoisting` —— 漏了就红，并给出修法。
+2. 若同时**搬动了顶层条目的文件归属**，再跑 `npm run check:reorg`（加载期读写顺序等价；详见 `docs/APP_REORG_PLAN.md`）。
+3. 再跑 `npm run probe:ui`（含加载期零错误闸门 `probe-app-load.js`，排第一位）。
+4. **不要**用 `defer` / `async` / `type="module"` 改这 19 行 script：parser-blocking 顺序执行是硬约束。
 
 ---
 

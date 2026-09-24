@@ -18,7 +18,7 @@
 //
 // 文件末尾还有一节「提升垫片」：顶层 `var` 的对应处理（不能搬声明，只能加裸 var）。
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function readCustomCoverMap() {
   try {
     var raw = localStorage.getItem(CUSTOM_COVER_STORE_KEY);
@@ -29,7 +29,7 @@ function readCustomCoverMap() {
   }
 }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function readCustomLyricMap() {
   try {
     var raw = JSON.parse(localStorage.getItem(CUSTOM_LYRIC_STORE_KEY) || '{}') || {};
@@ -45,13 +45,13 @@ function readCustomLyricMap() {
   }
 }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function readCustomLyricPrefs() {
   try { return JSON.parse(localStorage.getItem(CUSTOM_LYRIC_PREF_STORE_KEY) || '{}') || {}; }
   catch (e) { return {}; }
 }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function readPlaybackQualityPreference() {
   try {
     return normalizePlaybackQuality(localStorage.getItem(PLAYBACK_QUALITY_STORE_KEY) || 'hires');
@@ -60,7 +60,7 @@ function readPlaybackQualityPreference() {
   }
 }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function loadListenStatsState() {
   try {
     var raw = localStorage.getItem(HOME_LISTEN_STATS_KEY);
@@ -77,7 +77,7 @@ function loadListenStatsState() {
   }
 }
 
-// ↓ 原属 06-beat.js
+// ↓ 原属 07-beat.js
 function readLocalBeatMapCache() {
   var out = {};
   try {
@@ -94,13 +94,13 @@ function readLocalBeatMapCache() {
   return out;
 }
 
-// ↓ 原属 06-beat.js
+// ↓ 原属 07-beat.js
 function readLocalBeatPrefs() {
   try { return JSON.parse(localStorage.getItem(LOCAL_BEAT_PREF_STORE_KEY) || '{}') || {}; }
   catch (e) { return {}; }
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function readSavedLyricLayout() {
   try {
     var savedLayoutRaw = localStorage.getItem(LYRIC_LAYOUT_STORE_KEY);
@@ -243,7 +243,7 @@ function readSavedLyricLayout() {
   }
 }
 
-// ↓ 原属 12-system-panels.js
+// ↓ 原属 13-system-panels.js
 function readHotkeySettings() {
   var defaults = getHotkeyDefaults();
   try {
@@ -257,14 +257,14 @@ function readHotkeySettings() {
   }
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function coverParticleGridForResolution(v) {
   var grid = Math.round(118 * normalizeCoverResolution(v));
   grid = Math.max(88, Math.min(183, grid));
   return grid % 2 ? grid : grid + 1;
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function bindModalBackdropClose() {
   [
     ['track-detail-modal', closeTrackDetailModal],
@@ -283,7 +283,7 @@ function bindModalBackdropClose() {
   });
 }
 
-// ↓ 原属 09-audio-queue.js
+// ↓ 原属 10-audio-queue.js
 function updateSearchPillGlassDisplacementMap() {
   var img = document.getElementById('search-pill-glass-map');
   if (!img) return;
@@ -310,7 +310,7 @@ function updateSearchPillGlassDisplacementMap() {
   try { img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', href); } catch (e) {}
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizePerformanceBackgroundMode(v, liveKeepFallback) {
   var value = String(v || '');
   if (value === 'keep' || liveKeepFallback === true) return 'keep';
@@ -318,32 +318,32 @@ function normalizePerformanceBackgroundMode(v, liveKeepFallback) {
   return 'auto';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function clampRange(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function closeLoginModal() {
   stopQrPoll();
   closeGsapModal(document.getElementById('login-modal'));
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function closeUpdatePanel() {
   closeGsapModal(document.getElementById('update-modal'), function(){
     updatePreviewState.open = false;
   });
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function closeUserModal() { closeGsapModal(document.getElementById('user-modal')); }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function currentCoverSong() {
   if (currentIdx >= 0 && playQueue[currentIdx]) return playQueue[currentIdx];
   return currentLocalSong || null;
 }
 
-// ↓ 原属 12-system-panels.js
+// ↓ 原属 13-system-panels.js
 function getHotkeyDefaults() {
   var defaults = { local: {}, global: {} };
   HOTKEY_ACTIONS.forEach(function(action){
@@ -353,17 +353,17 @@ function getHotkeyDefaults() {
   return defaults;
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function hasProviderVip(provider, status) {
   return providerVipLevel(provider, status) !== 'none';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeCoverResolution(v) {
   return clampRange(Number(v) || 1, 0.75, 1.55);
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeCustomBackgroundImage(value) {
   var src = String(value || '').trim();
   if (!src) return '';
@@ -372,7 +372,7 @@ function normalizeCustomBackgroundImage(value) {
   return '';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeCustomBackgroundMedia(value) {
   if (!value) return null;
   if (typeof value === 'string') {
@@ -403,7 +403,7 @@ function normalizeCustomBackgroundMedia(value) {
   return null;
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeDesktopLyricsFps(value) {
   var n = Number(value);
   if (!isFinite(n) || n <= 0) return 0;
@@ -413,14 +413,14 @@ function normalizeDesktopLyricsFps(value) {
   return 120;
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeForegroundFpsMode(v) {
   var value = String(v == null ? '' : v).toLowerCase();
   if (/^(45|60|75|90|120)$/.test(value)) return Number(value);
   return 'vsync';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeHexColor(value, fallback) {
   var hex = String(value || '').trim();
   if (/^#[0-9a-f]{3}$/i.test(hex)) {
@@ -430,7 +430,7 @@ function normalizeHexColor(value, fallback) {
   return /^#[0-9a-f]{6}$/i.test(hex) ? hex.toLowerCase() : fallback;
 }
 
-// ↓ 原属 05-lyric-modes-cover.js
+// ↓ 原属 04-lyrics.js
 // single=单行 / dual=双行 / triple=三行 / cinema=沉浸(5行) / custom=自定义(1-10行)
 // 合法值表 STAGE_LYRIC_DISPLAY_MODES 定义在文件头部（启动恢复先于本区执行）
 function normalizeLyricDisplayMode(mode) {
@@ -438,26 +438,26 @@ function normalizeLyricDisplayMode(mode) {
   return STAGE_LYRIC_DISPLAY_MODES[mode] ? mode : 'single';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeLyricFontKey(value) {
   value = String(value || 'sans');
   return /^(sans|hei|song|bold-song|stone-song|kai-song|serif-en|gothic|editorial|humanist|round|mono|display)$/.test(value) ? value : 'sans';
 }
 
-// ↓ 原属 05-lyric-modes-cover.js
+// ↓ 原属 04-lyrics.js
 // 合法值表 STAGE_LYRIC_MOTION_STYLES 定义在文件头部（同 DISPLAY_MODES 时序处理）
 function normalizeLyricMotionStyle(style) {
   style = String(style || 'glass');
   return STAGE_LYRIC_MOTION_STYLES[style] ? style : 'glass';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeLyricTextureClarity(v) {
   var n = Math.round(Number(v) || 0);
   return (n >= 1 && n <= 4) ? n : fxDefaults.lyricTextureClarity;
 }
 
-// ↓ 原属 05-lyric-modes-cover.js
+// ↓ 原属 04-lyrics.js
 /**
  * 双语翻译模式（移植自上游 setLyricTranslationMode）：
  * off 关闭 / current 仅当前行 / dual 双行 / multi 多行。
@@ -468,19 +468,19 @@ function normalizeLyricTranslationMode(value) {
   return (v === 'current' || v === 'dual' || v === 'multi') ? v : 'off';
 }
 
-// ↓ 原属 12-system-panels.js
+// ↓ 原属 13-system-panels.js
 function normalizeMemorySystemMask(mask) {
   var value = Math.round(Number(mask) || MEMORY_REDUCT_MASK_DEFAULT) & MEMORY_REDUCT_MASK_DEFAULT;
   return value > 0 ? value : MEMORY_REDUCT_MASK_DEFAULT;
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizePerformanceQuality(v) {
   var value = String(v || '');
   return /^(eco|balanced|high|ultra)$/.test(value) ? value : fxDefaults.performanceQuality;
 }
 
-// ↓ 原属 08-api-search.js
+// ↓ 原属 09-api-search.js
 function normalizePlaybackQuality(value) {
   value = String(value || '').toLowerCase();
   if (value === 'jymaster' || value === 'master' || value === 'svip') return 'jymaster';
@@ -491,22 +491,22 @@ function normalizePlaybackQuality(value) {
   return 'hires';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeShelfCameraMode(value) {
   return String(value || '') === 'static' ? 'static' : 'dynamic';
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function normalizeShelfPresence(value) {
   return String(value || '') === 'always' ? 'always' : 'auto';
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function platformStatus(provider) {
   return provider === 'qq' ? qqLoginStatus : loginStatus;
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function providerVipLevel(provider, status) {
   status = status || platformStatus(provider) || {};
   var raw = String(status.vipLevel || status.vip_level || '').toLowerCase();
@@ -520,13 +520,13 @@ function providerVipLevel(provider, status) {
   return vip > 0 ? 'vip' : 'none';
 }
 
-// ↓ 原属 13-update-account.js
+// ↓ 原属 14-account.js
 function providerVipType(provider, status) {
   status = status || platformStatus(provider) || {};
   return Number(status.vipType || status.vip_type || status.vip || status.isVip || status.is_vip || 0) || 0;
 }
 
-// ↓ 原属 09-audio-queue.js
+// ↓ 原属 10-audio-queue.js
 function queueItemKey(song) {
   if (!song) return '';
   if (song.provider === 'qq' || song.source === 'qq' || song.type === 'qq') return 'qq:' + (song.mid || song.songmid || song.id || (song.name + '|' + song.artist));
@@ -536,12 +536,12 @@ function queueItemKey(song) {
   return String(song.name || '') + '|' + String(song.artist || '');
 }
 
-// ↓ 原属 04-stage-lyrics.js
+// ↓ 原属 05-lyrics-stage.js
 function shelfDefaultAngleForCameraMode(mode) {
   return normalizeShelfCameraMode(mode) === 'static' ? -15 : 0;
 }
 
-// ↓ 原属 14-idle-toast-libs.js
+// ↓ 原属 16-idle-toast-libs.js
 function showToast(msg) {
   var t = document.getElementById('toast');
   t.textContent = msg;
@@ -550,7 +550,7 @@ function showToast(msg) {
   toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
 }
 
-// ↓ 原属 16-session-boot.js
+// ↓ 原属 18-session-boot.js
 /**
  * 「音源解析顺序」整块的显隐：只有账号在**官方源**上有会员时才显示。
  *
@@ -569,7 +569,7 @@ function syncSourceParseOrderVisibility() {
   block.style.display = vip ? '' : 'none';
 }
 
-// ↓ 原属 06-beat.js
+// ↓ 原属 07-beat.js
 function unpackLocalBeatEvent(row) {
   if (typeof row === 'number') return row;
   if (!Array.isArray(row)) return row;
@@ -595,7 +595,7 @@ function unpackLocalBeatEvent(row) {
   };
 }
 
-// ↓ 原属 06-beat.js
+// ↓ 原属 07-beat.js
 function unpackLocalBeatMap(stored) {
   if (!stored) return null;
   if (stored.v && stored.v !== 1 && stored.v !== 2) return stored;
@@ -617,7 +617,7 @@ function unpackLocalBeatMap(stored) {
   };
 }
 
-// ↓ 原属 16-session-boot.js
+// ↓ 原属 18-session-boot.js
 function updateKugouLoginStatusText() {
   var el = document.getElementById('kugou-login-status');
   if (!el) return;

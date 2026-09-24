@@ -1,6 +1,14 @@
 'use strict';
 
 // ============================================================
+//  02-scene.js  —  three.js 场景 / 相机系统 / 指针拖拽 / 粒子点纹理
+//  由 public/js/app/*.js 于 2026-09-24「按职责重排」生成（零逻辑改动）。
+//  规则与验证见 docs/APP_REORG_PLAN.md 与 scripts/check-app-reorg.js。
+// ============================================================
+
+
+
+// ============================================================
 //  02-scene-camera.js  ←  源 main.js §2–§5（基线 784afe6）
 //  Three.js 场景 / 相机系统 v7.1 / 指针拖拽 / 粒子点纹理
 // ============================================================
@@ -1421,35 +1429,12 @@ function updateCamera() {
 
 // 焦点跟拍 (hover 0.5s 后镜头移到目标)
 var focusHover = { wantType: null, pendingTimer: null, exitTimer: null };
-function shouldUseWallpaperSafeShelfCamera() {
-  return !!(fx && Number(fx.preset) === 5);
-}
-function shouldUseSkullSafeShelfCamera() {
-  return !!(fx && Number(fx.preset) === SKULL_PRESET_INDEX);
-}
 function shouldUseWallpaperLyricCameraLock() {
   return !!(fx && Number(fx.preset) === 5 && fx.lyricCameraLock);
 }
 function requestStageLyricCameraSnap(frames) {
   if (typeof stageLyrics === 'undefined' || !stageLyrics) return;
   stageLyrics.snapCameraLockFrames = Math.max(stageLyrics.snapCameraLockFrames || 0, frames || 8);
-}
-function shouldDimWallpaperForShelf() {
-  if (!shouldUseWallpaperSafeShelfCamera()) return false;
-  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
-  if (shelfPinnedOpen) return true;
-  return !!(shelfManager.hasOpenContent && shelfManager.hasOpenContent());
-}
-function shouldOffsetLyricsForShelfDetail() {
-  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
-  return !!(shelfManager.hasOpenContent && shelfManager.hasOpenContent());
-}
-function shouldAvoidStageLyricsForShelf() {
-  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
-  if (shelfAlwaysVisible()) return true;
-  if (shelfPinnedOpen) return true;
-  if (shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return true;
-  return !!(shelfVisibility > 0.24 || (shelfHoverCue && shelfHoverCue.value > 0.28));
 }
 function activateFocusZone(type) {
   unlockCenteredView();
@@ -1592,33 +1577,6 @@ function setControlsHidden(hidden) {
     var actuallyHidden = bar.classList.contains('soft-hidden') || !bar.classList.contains('visible');
     btn.textContent = actuallyHidden ? '展开控制台' : '隐藏控制台';
   }
-}
-
-function isBottomControlsSuppressedForShelf() {
-  var shelfContentOpen = false;
-  try {
-    shelfContentOpen = !!(typeof shelfManager !== 'undefined' && shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent());
-  } catch (e) {}
-  return !!(shelfPinnedOpen || shelfContentOpen || (controlsShelfSuppressUntil && performance.now() < controlsShelfSuppressUntil));
-}
-
-function suppressBottomControlsForShelf(duration) {
-  controlsShelfSuppressUntil = performance.now() + (duration == null ? 900 : duration);
-  controlsHovering = false;
-  if (controlsHideTimer) {
-    clearTimeout(controlsHideTimer);
-    controlsHideTimer = null;
-  }
-  document.body.classList.remove('controls-handle-awake');
-  if (miniQueueOpen) closeMiniQueue();
-  var bar = document.getElementById('bottom-bar');
-  if (bar) {
-    bar.classList.remove('visible', 'soft-hidden');
-    bar.style.pointerEvents = '';
-  }
-  updateControlsChromeState();
-  var btn = document.querySelector('.home-console-chip');
-  if (btn) btn.textContent = '展开控制台';
 }
 
 function scheduleControlsHide(delay) {

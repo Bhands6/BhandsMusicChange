@@ -1,6 +1,109 @@
 'use strict';
 
 // ============================================================
+//  08-shelf.js  —  3D 歌单架：双模式 / 二级内容框 / PSP 卡片交互 / 控件
+//  由 public/js/app/*.js 于 2026-09-24「按职责重排」生成（零逻辑改动）。
+//  规则与验证见 docs/APP_REORG_PLAN.md 与 scripts/check-app-reorg.js。
+// ============================================================
+
+
+function shouldUseWallpaperSafeShelfCamera() {
+  return !!(fx && Number(fx.preset) === 5);
+}
+function shouldUseSkullSafeShelfCamera() {
+  return !!(fx && Number(fx.preset) === SKULL_PRESET_INDEX);
+}
+function shouldDimWallpaperForShelf() {
+  if (!shouldUseWallpaperSafeShelfCamera()) return false;
+  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
+  if (shelfPinnedOpen) return true;
+  return !!(shelfManager.hasOpenContent && shelfManager.hasOpenContent());
+}
+function shouldOffsetLyricsForShelfDetail() {
+  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
+  return !!(shelfManager.hasOpenContent && shelfManager.hasOpenContent());
+}
+function shouldAvoidStageLyricsForShelf() {
+  if (!shelfManager || !shelfManager.getMode || shelfManager.getMode() !== 'side') return false;
+  if (shelfAlwaysVisible()) return true;
+  if (shelfPinnedOpen) return true;
+  if (shelfManager.hasOpenContent && shelfManager.hasOpenContent()) return true;
+  return !!(shelfVisibility > 0.24 || (shelfHoverCue && shelfHoverCue.value > 0.28));
+}
+
+function isBottomControlsSuppressedForShelf() {
+  var shelfContentOpen = false;
+  try {
+    shelfContentOpen = !!(typeof shelfManager !== 'undefined' && shelfManager && shelfManager.hasOpenContent && shelfManager.hasOpenContent());
+  } catch (e) {}
+  return !!(shelfPinnedOpen || shelfContentOpen || (controlsShelfSuppressUntil && performance.now() < controlsShelfSuppressUntil));
+}
+
+function suppressBottomControlsForShelf(duration) {
+  controlsShelfSuppressUntil = performance.now() + (duration == null ? 900 : duration);
+  controlsHovering = false;
+  if (controlsHideTimer) {
+    clearTimeout(controlsHideTimer);
+    controlsHideTimer = null;
+  }
+  document.body.classList.remove('controls-handle-awake');
+  if (miniQueueOpen) closeMiniQueue();
+  var bar = document.getElementById('bottom-bar');
+  if (bar) {
+    bar.classList.remove('visible', 'soft-hidden');
+    bar.style.pointerEvents = '';
+  }
+  updateControlsChromeState();
+  var btn = document.querySelector('.home-console-chip');
+  if (btn) btn.textContent = '展开控制台';
+}
+function applyShelfCameraDefaultAngle(force) {
+  if (!fx) return;
+  fx.shelfCameraMode = normalizeShelfCameraMode(fx.shelfCameraMode || fxDefaults.shelfCameraMode);
+  if (force || fx.shelfAngleYManual !== true) {
+    fx.shelfAngleYManual = false;
+    fx.shelfAngleY = shelfDefaultAngleForCameraMode(fx.shelfCameraMode);
+  } else {
+    fx.shelfAngleY = Math.round(clampRange(Number(fx.shelfAngleY) || 0, -30, 30));
+  }
+}
+function normalizedShelfNumber(key, fallback, min, max) {
+  var value = fx && fx[key] != null ? Number(fx[key]) : fallback;
+  if (!isFinite(value)) value = fallback;
+  return clampRange(value, min, max);
+}
+function shelfSettings() {
+  var angleDeg = fx && fx.shelfAngleYManual === true
+    ? normalizedShelfNumber('shelfAngleY', shelfDefaultAngleForCameraMode(fx.shelfCameraMode), -30, 30)
+    : shelfDefaultAngleForCameraMode(fx && fx.shelfCameraMode);
+  return {
+    size: normalizedShelfNumber('shelfSize', fxDefaults.shelfSize, 0.65, 1.45),
+    x: normalizedShelfNumber('shelfOffsetX', fxDefaults.shelfOffsetX, -1.2, 1.2),
+    y: normalizedShelfNumber('shelfOffsetY', fxDefaults.shelfOffsetY, -0.9, 0.9),
+    z: normalizedShelfNumber('shelfOffsetZ', fxDefaults.shelfOffsetZ, -0.9, 0.9),
+    angle: angleDeg * Math.PI / 180,
+    opacity: normalizedShelfNumber('shelfOpacity', fxDefaults.shelfOpacity, 0.25, 1),
+    bgOpacity: normalizedShelfNumber('shelfBgOpacity', fxDefaults.shelfBgOpacity, 0.25, 0.98),
+    accent: normalizeHexColor((fx && fx.shelfAccentColor) || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor)
+  };
+}
+function shelfAlwaysVisible() {
+  return !!(fx && normalizeShelfPresence(fx.shelfPresence) === 'always');
+}
+function shouldUseShelfDynamicCamera(type) {
+  if (!/^shelf-/.test(String(type || ''))) return true;
+  return !(fx && normalizeShelfCameraMode(fx.shelfCameraMode) === 'static');
+}
+function shelfAccentHex() {
+  return normalizeHexColor((fx && fx.shelfAccentColor) || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor);
+}
+function shelfAccentRgba(alpha, fallback) {
+  var rgb = hexToRgb(shelfAccentHex());
+  if (!rgb) return fallback || 'rgba(244,210,138,' + alpha + ')';
+  return 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',' + alpha + ')';
+}
+
+// ============================================================
 //  07-shelf.js  ←  源 main.js §19–§21（基线 784afe6）
 //  3D 歌单架双模式 / 二级内容框 / PSP 卡片交互
 // ============================================================
@@ -2331,3 +2434,67 @@ document.addEventListener('keyup', function(e){
 window.addEventListener('blur', function(){
   if (freeCamera && freeCamera.keys) freeCamera.keys = {};
 });
+
+function setShelfMode(m) {
+  m = /^(off|side|stage)$/.test(String(m || '')) ? m : fxDefaults.shelf;
+  fx.shelf = m;
+  document.querySelectorAll('#shelf-seg button').forEach(function(b){ b.classList.toggle('active', b.dataset.shelf === m); });
+  if (shelfManager) shelfManager.setMode(m);
+  // 舞台模式: 顶部搜索、底部控件让位
+  var searchArea = document.getElementById('search-area');
+  var bottomBar = document.getElementById('bottom-bar');
+  if (searchArea) searchArea.classList.toggle('stage-mode', m === 'stage');
+  if (bottomBar) bottomBar.classList.toggle('stage-mode', m === 'stage');
+  saveLyricLayout();
+}
+
+function updateShelfControlUi() {
+  fx.shelfCameraMode = normalizeShelfCameraMode(fx.shelfCameraMode || fxDefaults.shelfCameraMode);
+  fx.shelfPresence = normalizeShelfPresence(fx.shelfPresence || fxDefaults.shelfPresence);
+  document.querySelectorAll('#shelf-camera-seg [data-shelf-camera]').forEach(function(btn){
+    btn.classList.toggle('active', btn.getAttribute('data-shelf-camera') === fx.shelfCameraMode);
+  });
+  document.querySelectorAll('#shelf-presence-seg [data-shelf-presence]').forEach(function(btn){
+    btn.classList.toggle('active', btn.getAttribute('data-shelf-presence') === fx.shelfPresence);
+  });
+  var color = shelfAccentHex();
+  var picker = document.getElementById('shelf-accent-picker');
+  var value = document.getElementById('shelf-accent-value');
+  if (picker) picker.value = color;
+  if (value) value.textContent = color.toUpperCase();
+}
+function refreshShelfVisuals(reason) {
+  updateShelfControlUi();
+  if (shelfManager && shelfManager.refreshTheme) shelfManager.refreshTheme();
+  if (shelfManager && shelfManager.rebuild && reason === 'mode') shelfManager.rebuild(true);
+}
+function setShelfCameraMode(mode) {
+  fx.shelfCameraMode = normalizeShelfCameraMode(mode);
+  applyShelfCameraDefaultAngle(true);
+  setRange('fx-shelfangle', fx.shelfAngleY);
+  updateShelfControlUi();
+  if (fx.shelfCameraMode === 'static' && orbit && orbit.focus && /^shelf-/.test(String(orbit.focus.type || ''))) {
+    setFocusZone(null, true);
+  }
+  saveLyricLayout();
+  showToast(fx.shelfCameraMode === 'static' ? '3D歌单架: 静态镜头' : '3D歌单架: 动态镜头');
+}
+function setShelfPresence(mode) {
+  fx.shelfPresence = normalizeShelfPresence(mode);
+  updateShelfControlUi();
+  if (shelfManager && shelfManager.setMode) shelfManager.setMode(fx.shelf);
+  if (fx.shelfPresence === 'auto' && !shelfPinnedOpen) {
+    shelfHoverCue.target = 0;
+  }
+  saveLyricLayout();
+  showToast(fx.shelfPresence === 'always' ? '3D歌单架: 常驻' : '3D歌单架: 自动隐藏');
+}
+function setShelfAccentColor(color, silent) {
+  fx.shelfAccentColor = normalizeHexColor(color || fxDefaults.shelfAccentColor, fxDefaults.shelfAccentColor);
+  refreshShelfVisuals('color');
+  saveLyricLayout();
+  if (!silent) showToast('歌单架颜色: ' + fx.shelfAccentColor.toUpperCase());
+}
+function resetShelfAccentColor() {
+  setShelfAccentColor(fxDefaults.shelfAccentColor || '#f4d28a');
+}

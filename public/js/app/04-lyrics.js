@@ -1,6 +1,14 @@
 'use strict';
 
 // ============================================================
+//  04-lyrics.js  —  歌词：解析 / 自定义歌词 / 面板 / 显示模式 / 动画 / 校准 / 时间偏移
+//  由 public/js/app/*.js 于 2026-09-24「按职责重排」生成（零逻辑改动）。
+//  规则与验证见 docs/APP_REORG_PLAN.md 与 scripts/check-app-reorg.js。
+// ============================================================
+
+
+
+// ============================================================
 //  05-lyric-modes-cover.js  ←  源 main.js §13–§17（基线 784afe6）
 //  歌词显示模式 / 动画 / 校准 / 涟漪触发 / 封面深度处理
 // ============================================================
@@ -1273,592 +1281,514 @@ function tickLyricsParticles() {
     if (staleUpcoming) clearUpcomingLyricLines();
   }
 }
-
+function saveCustomLyricMap() {
+  try {
+    localStorage.setItem(CUSTOM_LYRIC_STORE_KEY, JSON.stringify(customLyricMap || {}));
+    return true;
+  } catch (e) {
+    console.warn('custom lyric save failed:', e);
+    return false;
+  }
+}
+function saveCustomLyricPrefs() {
+  try { localStorage.setItem(CUSTOM_LYRIC_PREF_STORE_KEY, JSON.stringify(customLyricPrefs || {})); } catch (e) {}
+}
+function songCustomLyricKey(song) {
+  return songCustomCoverKey(song);
+}
+function currentLyricSong() {
+  if (currentIdx >= 0 && playQueue[currentIdx]) return playQueue[currentIdx];
+  return currentLocalSong || null;
+}
+function getCustomLyricEntry(song) {
+  var key = songCustomLyricKey(song);
+  return key && customLyricMap[key] ? customLyricMap[key] : null;
+}
+function hasCustomLyricForSong(song) {
+  var entry = getCustomLyricEntry(song);
+  return !!(entry && String(entry.text || '').trim());
+}
+function cloneLyricLine(line) {
+  var copy = Object.assign({}, line || {});
+  if (line && Array.isArray(line.words)) copy.words = line.words.map(function(w){ return Object.assign({}, w); });
+  return copy;
+}
+function cloneLyricLines(lines) {
+  return (Array.isArray(lines) ? lines : []).map(cloneLyricLine);
+}
+function setOriginalLyricsState(lines, hasNativeKaraoke, timingSource) {
+  originalLyricsState = {
+    lines: cloneLyricLines(lines || []),
+    hasNativeKaraoke: !!hasNativeKaraoke,
+    timingSource: timingSource || 'fallback'
+  };
+}
+function applyLyricsState(lines, hasNativeKaraoke, timingSource) {
+  lyricsHasNativeKaraoke = !!hasNativeKaraoke;
+  lyricsTimingSource = timingSource || 'fallback';
+  lyricsLines = cloneLyricLines(lines || []);
+  if (!lyricsLines.length) lyricsLines = withLyricFallback([]);
+  if (lyricsLines.length && lyricsLines[0].fallback) lyricsTimingSource = 'fallback';
+  renderLyrics();
+  updateCustomLyricControls();
+}
+function applyOriginalLyricsState() {
+  lyricSourceMode = 'original';
+  applyLyricsState(originalLyricsState.lines, originalLyricsState.hasNativeKaraoke, originalLyricsState.timingSource);
+}
+function parseCustomLyricText(text) {
+  var raw = String(text || '').trim();
+  if (!raw) return [];
+  var lrcLines = parseLyricText(raw);
+  if (lrcLines.length && !lrcLines.every(function(line){ return isNoLyricText(line.text); })) {
+    return lrcLines.map(function(line){
+      var copy = cloneLyricLine(line);
+      copy.source = 'custom-lrc';
+      return copy;
+    });
+  }
+  var rows = raw.split(/\r?\n/).map(function(line){ return line.trim(); }).filter(function(line){ return line && !isNoLyricText(line); });
+  if (!rows.length) return [];
+  var duration = audio && isFinite(audio.duration) && audio.duration > 8 ? audio.duration : 0;
+  var gap = duration ? Math.max(2.8, Math.min(7.2, duration / Math.max(1, rows.length))) : 4.8;
+  return finalizeLyricLineDurations(rows.map(function(line, i){
+    return { t: i * gap, duration: gap, text: line, source: 'custom-text', charCount: Math.max(1, line.length) };
+  }));
+}
+function applyCustomLyricState(song, silent) {
+  song = song || currentLyricSong();
+  var entry = getCustomLyricEntry(song);
+  if (!entry || !String(entry.text || '').trim()) {
+    if (!silent) openCustomLyricModal();
+    updateCustomLyricControls();
+    return false;
+  }
+  var lines = parseCustomLyricText(entry.text);
+  if (!lines.length) {
+    if (!silent) showToast('自定义歌词内容为空');
+    updateCustomLyricControls();
+    return false;
+  }
+  lyricSourceMode = 'custom';
+  lyricsHasNativeKaraoke = false;
+  lyricsTimingSource = lines[0] && lines[0].source === 'custom-lrc' ? 'custom-lrc' : 'custom-text';
+  lyricsLines = withLyricFallback(lines);
+  if (lyricsLines.length && lyricsLines[0].fallback) lyricsTimingSource = 'fallback';
+  renderLyrics();
+  updateCustomLyricControls();
+  return true;
+}
+function preferredLyricSourceForSong(song) {
+  var key = songCustomLyricKey(song);
+  var hasCustom = hasCustomLyricForSong(song);
+  if (!hasCustom) return 'original';
+  var pref = key ? customLyricPrefs[key] : '';
+  if (pref === 'custom') return 'custom';
+  if (pref === 'original') return 'original';
+  return originalLyricsState.timingSource === 'fallback' ? 'custom' : 'original';
+}
+function applyPreferredLyricsForCurrent(silent) {
+  var song = currentLyricSong();
+  if (preferredLyricSourceForSong(song) === 'custom' && applyCustomLyricState(song, true)) return;
+  applyOriginalLyricsState();
+  if (!silent) updateCustomLyricControls();
+}
+function setLyricSourceMode(mode, silent) {
+  var song = currentLyricSong();
+  var key = songCustomLyricKey(song);
+  mode = mode === 'custom' ? 'custom' : 'original';
+  if (mode === 'custom') {
+    if (!applyCustomLyricState(song, true)) {
+      if (!silent) openCustomLyricModal();
+      return false;
+    }
+    if (!silent) openCustomLyricModal();
+  } else {
+    applyOriginalLyricsState();
+  }
+  if (key) {
+    customLyricPrefs[key] = mode;
+    saveCustomLyricPrefs();
+  }
+  if (!silent) showToast(mode === 'custom' ? '已切换到自定义歌词' : '已切换到原歌词');
+  updateCustomLyricControls();
+  return true;
+}
+function updateCustomLyricControls() {
+  var song = currentLyricSong();
+  var hasCustom = hasCustomLyricForSong(song);
+  var originalBtn = document.getElementById('lyric-source-original');
+  var customBtn = document.getElementById('lyric-source-custom');
+  if (originalBtn) {
+    originalBtn.classList.toggle('active', lyricSourceMode !== 'custom');
+    originalBtn.title = '使用网易云或本地解析歌词';
+  }
+  if (customBtn) {
+    customBtn.classList.toggle('active', lyricSourceMode === 'custom');
+    customBtn.classList.toggle('has-custom', hasCustom);
+    customBtn.title = hasCustom ? '打开并编辑自定义歌词' : '新增自定义歌词';
+  }
+}
+function setCustomLyricStatus(text, tone) {
+  var el = document.getElementById('custom-lyric-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('good', tone === 'good');
+  el.classList.toggle('fail', tone === 'fail');
+}
+function openCustomLyricModal() {
+  var song = currentLyricSong();
+  if (!song) {
+    showToast('先播放或选择一首歌');
+    return;
+  }
+  if (immersiveMode) setImmersiveMode(false);
+  var entry = getCustomLyricEntry(song);
+  var title = document.getElementById('custom-lyric-title');
+  var sub = document.getElementById('custom-lyric-sub');
+  var input = document.getElementById('custom-lyric-input');
+  if (title) title.textContent = song.name || '当前歌曲';
+  if (sub) sub.textContent = (song.artist || (song.type === 'podcast' ? 'Podcast' : '')) + (entry ? ' · 已保存自定义歌词' : ' · 可粘贴 LRC 或逐行输入');
+  if (input) input.value = entry ? (entry.text || '') : '';
+  setCustomLyricStatus(entry ? '已读取本地自定义歌词' : '提示：带 [00:12.00] 时间轴会更精准；纯文本会自动铺开', entry ? 'good' : '');
+  openGsapModal(document.getElementById('custom-lyric-modal'));
+  setTimeout(function(){ if (input) input.focus(); }, 120);
+}
+function closeCustomLyricModal() {
+  closeGsapModal(document.getElementById('custom-lyric-modal'));
+}
+function saveCustomLyricForCurrent() {
+  var song = currentLyricSong();
+  var key = songCustomLyricKey(song);
+  var input = document.getElementById('custom-lyric-input');
+  var text = input ? String(input.value || '').trim() : '';
+  if (!song || !key) {
+    setCustomLyricStatus('请先播放或选择一首歌', 'fail');
+    showToast('先播放或选择一首歌');
+    return;
+  }
+  if (!text) {
+    setCustomLyricStatus('请输入歌词内容', 'fail');
+    return;
+  }
+  var lines = parseCustomLyricText(text);
+  if (!lines.length) {
+    setCustomLyricStatus('没有识别到可显示的歌词行', 'fail');
+    return;
+  }
+  customLyricMap[key] = { text: text, updatedAt: Date.now() };
+  customLyricPrefs[key] = 'custom';
+  var saved = saveCustomLyricMap();
+  saveCustomLyricPrefs();
+  applyCustomLyricState(song, true);
+  setCustomLyricStatus(saved ? ('已保存 ' + lines.length + ' 行，并切换为自定义歌词') : '已应用，但本地存储空间不足', saved ? 'good' : 'fail');
+  showToast(saved ? '自定义歌词已保存' : '自定义歌词已应用');
+  setTimeout(function(){ closeCustomLyricModal(); }, 520);
+}
+function deleteCustomLyricForCurrent() {
+  var song = currentLyricSong();
+  var key = songCustomLyricKey(song);
+  if (!song || !key) {
+    setCustomLyricStatus('请先播放或选择一首歌', 'fail');
+    return;
+  }
+  if (!customLyricMap[key]) {
+    setCustomLyricStatus('当前歌曲没有自定义歌词', 'fail');
+    return;
+  }
+  delete customLyricMap[key];
+  delete customLyricPrefs[key];
+  saveCustomLyricMap();
+  saveCustomLyricPrefs();
+  applyOriginalLyricsState();
+  var input = document.getElementById('custom-lyric-input');
+  if (input) input.value = '';
+  setCustomLyricStatus('已删除，恢复原歌词', 'good');
+  showToast('已恢复原歌词');
+}
 
 // ============================================================
-//  涟漪触发系统 — 3×3 九宫格 + bass 上升沿
+//  10-lyrics-panel-playlist.js  ←  源 main.js §26–§28（基线 784afe6）
+//  歌词面板 / 播放列表面板 / 文件拖放
 // ============================================================
-var rippleIdx = 0;
-var lastRippleAt = 0;
-var lastBassRising = false;
-var BASS_THRESHOLD = 0.30;
-var RIPPLE_COOLDOWN = 0.32;
 
-var regions = [];
-for (var ry = 0; ry < 3; ry++) for (var rx = 0; rx < 3; rx++) {
-  regions.push({
-    x: (rx / 2 - 0.5) * PLANE_SIZE * 0.72,
-    y: (ry / 2 - 0.5) * PLANE_SIZE * 0.72,
+// ============================================================
+//  歌词
+// ============================================================
+async function fetchLyric(songOrId, token) {
+  try {
+    var song = (songOrId && typeof songOrId === 'object') ? songOrId : null;
+    // 本地曲目：歌词来自导入时提取的 .lrc sidecar / 内嵌歌词（持久化本地音乐库）
+    if (song && song.type === 'local' && (song.localFileId || song.localKey) && window.desktopWindow &&
+        typeof window.desktopWindow.readLocalMusicLyric === 'function') {
+      var localLyric = await window.desktopWindow.readLocalMusicLyric(song.localFileId || song.localKey);
+      if (token !== trackSwitchToken) return;
+      var localLines = parseLyricText((localLyric && localLyric.lyric) || '');
+      var localState = withLyricFallback(localLines);
+      setOriginalLyricsState(localState, false, localLines.length ? 'lrc-line' : 'fallback');
+      applyPreferredLyricsForCurrent(true);
+      return;
+    }
+    var provider = songProviderKey(song);
+    var endpoint;
+    if (provider === 'qq') {
+      var mid = song.mid || song.songmid || song.id || '';
+      var qqId = song.qqId || (/^\d+$/.test(String(song.id || '')) ? song.id : '');
+      endpoint = '/api/qq/lyric?mid=' + encodeURIComponent(mid) + '&id=' + encodeURIComponent(qqId);
+    } else {
+      var songId = song ? song.id : songOrId;
+      endpoint = '/api/lyric?id=' + encodeURIComponent(songId);
+    }
+    var r = await apiJson(endpoint);
+    if (token !== trackSwitchToken) return;
+    var nativeLines = parseYrcText(r.yrc || '');
+    var lrcLines = parseLyricText(r.lyric || '');
+    var hasNativeKaraoke = nativeLines.some(function(line){ return line.words && line.words.length; });
+    var timingSource = hasNativeKaraoke ? 'yrc-word' : (nativeLines.length ? 'yrc-line' : (lrcLines.length ? 'lrc-line' : 'fallback'));
+    var lines = withLyricFallback(nativeLines.length ? nativeLines : lrcLines);
+    if (lines.length && lines[0].fallback) timingSource = 'fallback';
+    // 双语翻译：接口早已返回 tlyric（netease / QQ 都有），此前客户端未消费；
+    // 这里并进 line.translation，渲染层按 fx.lyricTranslationMode 决定是否显示
+    mergeLyricTranslations(lines, parseLyricTranslationLines(r.tlyric || ''));
+    setOriginalLyricsState(lines, hasNativeKaraoke, timingSource);
+    applyPreferredLyricsForCurrent(true);
+  } catch (e) {
+    if (token !== trackSwitchToken) return;
+    var fallbackLines = withLyricFallback([]);
+    setOriginalLyricsState(fallbackLines, false, 'fallback');
+    applyPreferredLyricsForCurrent(true);
+  }
+}
+function currentLyricFallbackText() {
+  var song = currentLyricSong() || {};
+  var title = (song.name || document.getElementById('thumb-title').textContent || '').trim();
+  var artist = (song.artist || document.getElementById('thumb-artist').textContent || '').trim();
+  if (!title) return '';
+  return artist ? title + ' - ' + artist : title;
+}
+function isNoLyricText(text) {
+  var compact = String(text || '').replace(/\s+/g, '').replace(/[，,。.!！?？、~～]/g, '');
+  return !compact ||
+    compact === '纯音乐请欣赏' ||
+    compact === '暂无歌词' ||
+    compact === '暂无歌词敬请期待' ||
+    compact === '此歌曲为没有填词的纯音乐请您欣赏';
+}
+function withLyricFallback(lines) {
+  lines = Array.isArray(lines) ? lines.filter(function(line){ return line && String(line.text || '').trim(); }) : [];
+  if (lines.length && !lines.every(function(line){ return isNoLyricText(line.text); })) return lines;
+  var text = currentLyricFallbackText();
+  return text ? [{ t:0, text:text, duration:9999, charCount:Math.max(1, text.length), fallback:true }] : [];
+}
+function lyricTagTimeToSeconds(min, sec, frac) {
+  var t = (parseInt(min, 10) || 0) * 60 + (parseInt(sec, 10) || 0);
+  if (frac) t += (parseInt(frac, 10) || 0) / Math.pow(10, Math.min(3, frac.length));
+  return t;
+}
+function finalizeLyricLineDurations(lines) {
+  lines.sort(function(a, b){ return a.t - b.t; });
+  for (var i = 0; i < lines.length; i++) {
+    var next = lines[i + 1];
+    var inferred = next && next.t > lines[i].t ? next.t - lines[i].t : 4.8;
+    if (!isFinite(lines[i].duration) || lines[i].duration <= 0) lines[i].duration = inferred;
+    lines[i].duration = Math.max(0.45, Math.min(12, lines[i].duration));
+    lines[i].charCount = Math.max(1, lines[i].charCount || String(lines[i].text || '').length);
+  }
+  return lines;
+}
+function parseLyricText(text) {
+  var lines = [], reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
+  text.split(/\r?\n/).forEach(function(line){
+    line = String(line);
+    // 网易云 /api/lyric 的 lyric 字段偶发返回 YRC JSON 行（{"t":ms,"c":[{"tx":"..."}]}），
+    // LRC 时间戳正则一行都匹配不到 → 整首解析为空 → 回退成「歌名-歌手」假歌词。
+    // 逐行检测：命中 JSON 行就地提取文本，其余行仍走下方 LRC 路径。
+    var trimmed = line.trim();
+    if (trimmed.charAt(0) === '{' && trimmed.indexOf('"t"') !== -1) {
+      try {
+        var obj = JSON.parse(trimmed);
+        var ms = Number(obj && obj.t);
+        var txt = Array.isArray(obj && obj.c)
+          ? obj.c.map(function (seg) { return (seg && seg.tx != null) ? String(seg.tx) : ''; }).join('')
+          : '';
+        txt = txt.trim();
+        if (isFinite(ms) && ms >= 0 && txt) lines.push({ t: ms / 1000, text: txt, source: 'yrc-json' });
+      } catch (e) { /* 非法 JSON 行：走下方 LRC 路径，匹配不到即丢弃 */ }
+      return;
+    }
+    var times = [], m;
+    reg.lastIndex = 0;
+    while ((m = reg.exec(line))) times.push(lyricTagTimeToSeconds(m[1], m[2], m[3]));
+    if (!times.length) return;
+    var txt = line.replace(reg, '').trim();
+    if (!txt) return;
+    times.forEach(function(t){ lines.push({ t: t, text: txt, source:'lrc' }); });
   });
+  return finalizeLyricLineDurations(lines);
 }
-
-function triggerRipple(x, y, strength) {
-  var r = ripples[rippleIdx];
-  r.x = x; r.y = y; r.age = 0; r.str = strength;
-  rippleIdx = (rippleIdx + 1) % RIPPLE_MAX;
-}
-
-function updateRipples(dt) {
-  var isBassHit = bass > BASS_THRESHOLD && !lastBassRising;
-  lastBassRising = bass > BASS_THRESHOLD * 0.75;
-  var now = uniforms.uTime.value;
-  if (isBassHit && (now - lastRippleAt) > RIPPLE_COOLDOWN) {
-    lastRippleAt = now;
-    var count = 2 + (Math.random() < 0.5 ? 0 : 1);
-    var used = {};
-    for (var k = 0; k < count; k++) {
-      var idx, tries = 0;
-      do { idx = Math.floor(Math.random() * 9); tries++; } while (used[idx] && tries < 12);
-      used[idx] = true;
-      var reg = regions[idx];
-      var jx = reg.x + (Math.random() - 0.5) * 0.7;
-      var jy = reg.y + (Math.random() - 0.5) * 0.7;
-      var str = 0.65 + bass * 1.4 + Math.random() * 0.25;
-      triggerRipple(jx, jy, str);
-    }
-  }
-
-  for (var i = 0; i < RIPPLE_MAX; i++) {
-    var r = ripples[i];
-    if (r.str > 0.005) {
-      r.age += dt;
-      if (r.age > 2.0) { r.str = 0; r.age = -10; }
-    }
-    var off = i * 4;
-    rippleData[off]   = r.x;
-    rippleData[off+1] = r.y;
-    rippleData[off+2] = r.age;
-    rippleData[off+3] = r.str;
-  }
-  rippleTex.needsUpdate = true;
-
-  var active = 0;
-  for (var i = 0; i < RIPPLE_MAX; i++) if (ripples[i].str > 0.005) active++;
-  uniforms.uRippleCount.value = active;
-}
-
-// ============================================================
-//  封面 + 边缘 + 启发式深度 处理 (CPU 端)
-//   生成 256×256 RGBA 纹理: R=depth G=edge B=fg-mask A=lum
-// ============================================================
-function coverDepthCacheId(raw) {
-  var str = String(raw || '');
-  if (!str) return '';
-  var h = 2166136261;
-  for (var i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
-  }
-  return str.length + ':' + (h >>> 0).toString(36);
-}
-function getCoverDepthCache(raw) {
-  var id = coverDepthCacheId(raw);
-  if (!id || !coverDepthCache[id]) return null;
-  coverDepthCache[id].at = Date.now();
-  var idx = coverDepthCacheKeys.indexOf(id);
-  if (idx >= 0) {
-    coverDepthCacheKeys.splice(idx, 1);
-    coverDepthCacheKeys.push(id);
-  } else coverDepthCacheKeys.push(id);
-  return coverDepthCache[id];
-}
-function setCoverDepthCache(raw, canvas, aiEnhanced) {
-  var id = coverDepthCacheId(raw);
-  if (!id || !canvas) return;
-  var idx = coverDepthCacheKeys.indexOf(id);
-  if (idx >= 0) coverDepthCacheKeys.splice(idx, 1);
-  coverDepthCacheKeys.push(id);
-  coverDepthCache[id] = { canvas: canvas, ai: !!aiEnhanced, at: Date.now() };
-  while (coverDepthCacheKeys.length > 18) {
-    var drop = coverDepthCacheKeys.shift();
-    delete coverDepthCache[drop];
-  }
-}
-
-function buildEdgeAndDepth(srcCanvas) {
-  var W = 256, H = 256, N = W * H;
-  var normalized = document.createElement('canvas');
-  normalized.width = W;
-  normalized.height = H;
-  var sctx = normalized.getContext('2d');
-  sctx.drawImage(srcCanvas, 0, 0, W, H);
-  var src = sctx.getImageData(0, 0, W, H).data;
-  var lum = new Float32Array(N), blur = new Float32Array(N), tmp = new Float32Array(N);
-  // 1) Luminance
-  for (var i = 0; i < N; i++) {
-    var di = i * 4;
-    lum[i] = (src[di] * 0.299 + src[di+1] * 0.587 + src[di+2] * 0.114) / 255;
-  }
-  // 2) Box blur 2 次 (深度基础)
-  function blurH(s, d, r) {
-    for (var y = 0; y < H; y++) {
-      var sum = 0;
-      for (var x = -r; x <= r; x++) sum += s[y * W + Math.max(0, Math.min(W-1, x))];
-      for (var x = 0; x < W; x++) {
-        d[y * W + x] = sum / (2*r + 1);
-        var xR = Math.min(W-1, x + r + 1), xL = Math.max(0, x - r);
-        sum += s[y * W + xR] - s[y * W + xL];
-      }
-    }
-  }
-  function blurV(s, d, r) {
-    for (var x = 0; x < W; x++) {
-      var sum = 0;
-      for (var y = -r; y <= r; y++) sum += s[Math.max(0, Math.min(H-1, y)) * W + x];
-      for (var y = 0; y < H; y++) {
-        d[y * W + x] = sum / (2*r + 1);
-        var yD = Math.min(H-1, y + r + 1), yU = Math.max(0, y - r);
-        sum += s[yD * W + x] - s[yU * W + x];
-      }
-    }
-  }
-  blurH(lum, tmp, 4); blurV(tmp, blur, 4);
-
-  // 3) Sobel 边缘 (在 blur 上做 - 减少噪声)
-  var edge = new Float32Array(N);
-  for (var y = 1; y < H-1; y++) for (var x = 1; x < W-1; x++) {
-    var gx = -blur[(y-1)*W + (x-1)] - 2*blur[y*W + (x-1)] - blur[(y+1)*W + (x-1)]
-            + blur[(y-1)*W + (x+1)] + 2*blur[y*W + (x+1)] + blur[(y+1)*W + (x+1)];
-    var gy = -blur[(y-1)*W + (x-1)] - 2*blur[(y-1)*W + x] - blur[(y-1)*W + (x+1)]
-            + blur[(y+1)*W + (x-1)] + 2*blur[(y+1)*W + x] + blur[(y+1)*W + (x+1)];
-    edge[y*W + x] = Math.min(1.0, Math.sqrt(gx*gx + gy*gy) * 1.4);
-  }
-  // 4) 启发式深度:亮度 + 中心 mask + 边缘累积
-  var depth = new Float32Array(N);
-  for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
-    var i = y*W + x;
-    var cx = (x / (W-1) - 0.5) * 2.0;
-    var cy = (y / (H-1) - 0.5) * 2.0;
-    var rr = Math.sqrt(cx*cx + cy*cy);
-    var centerBias = 1.0 - Math.min(1, rr * 0.75);
-    var bright = blur[i];
-    depth[i] = Math.min(1.0, bright * 0.45 + centerBias * 0.55);
-  }
-  // 5) fg-mask: 中心 + 高对比区
-  var fg = new Float32Array(N);
-  for (var i = 0; i < N; i++) {
-    var d = depth[i];
-    var e = edge[i];
-    fg[i] = Math.min(1.0, d * 0.6 + e * 0.5);
-  }
-
-  // 输出 256×256 RGBA
-  var out = document.createElement('canvas'); out.width = W; out.height = H;
-  var octx = out.getContext('2d'), imgOut = octx.createImageData(W, H);
-  for (var i = 0; i < N; i++) {
-    var di = i * 4;
-    imgOut.data[di]   = Math.round(depth[i] * 255);
-    imgOut.data[di+1] = Math.round(edge[i] * 255);
-    imgOut.data[di+2] = Math.round(fg[i] * 255);
-    imgOut.data[di+3] = Math.round(lum[i] * 255);
-  }
-  octx.putImageData(imgOut, 0, 0);
+/**
+ * 解析译文歌词文本（上游 tlyric 与主歌词同为 LRC 格式）。
+ * @returns {{t:number, text:string}[]} 按时间升序
+ */
+function parseLyricTranslationLines(text) {
+  var out = [], reg = /\[(\d{1,2}):(\d{1,2})(?:\.(\d{1,3}))?\]/g;
+  String(text || '').split(/\r?\n/).forEach(function(line){
+    var times = [], m;
+    reg.lastIndex = 0;
+    while ((m = reg.exec(line))) times.push(lyricTagTimeToSeconds(m[1], m[2], m[3]));
+    if (!times.length) return;
+    var txt = line.replace(reg, '').trim();
+    if (!txt) return;
+    times.forEach(function(t){ out.push({ t: t, text: txt }); });
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
   return out;
 }
 
-// AI 深度估计 (Xenova/depth-anything-small) - 异步加载, 失败回退
-async function ensureAIDepthPipeline() {
-  if (aiDepthReady && aiDepthPipeline) return aiDepthPipeline;
-  if (aiDepthBusy) return null;
-  aiDepthBusy = true;
-  try {
-    showAIDepthChip('加载 AI 深度模型 (首次需下载 50MB)…');
-    var mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-    mod.env.allowLocalModels = false;
-    if (mod.env.backends && mod.env.backends.onnx && mod.env.backends.onnx.wasm) mod.env.backends.onnx.wasm.numThreads = 1;
-    aiDepthPipeline = await mod.pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
-    aiDepthReady = true;
-    return aiDepthPipeline;
-  } catch (e) {
-    console.warn('AI depth pipeline failed:', e);
-    return null;
-  } finally {
-    aiDepthBusy = false;
-  }
-}
+/** 译文与原文行的时间容差（秒）：两边时间戳一般完全一致，容差只兜浮点/毫秒截断 */
+var LYRIC_TRANSLATION_TIME_TOLERANCE = 0.6;
 
-function makeAIDepthInputCanvas(srcCanvas) {
-  if (!srcCanvas) return srcCanvas;
-  var size = 160;
-  var cv = document.createElement('canvas');
-  cv.width = cv.height = size;
-  var ctx = cv.getContext('2d');
-  try {
-    ctx.drawImage(srcCanvas, 0, 0, size, size);
-    return cv;
-  } catch (e) {
-    return srcCanvas;
-  }
-}
-
-async function estimateAIDepth(srcCanvas, token) {
-  if (!fx.aiDepth) return null;
-  if (performance.now() < aiDepthFailUntil) return null;
-  showAIDepthChip('后台增强封面深度…');
-  try {
-    var pipe = await ensureAIDepthPipeline();
-    if (!pipe) { hideAIDepthChip(); return null; }
-    if (token !== coverProcessToken) { hideAIDepthChip(); return null; }
-    var inputCanvas = makeAIDepthInputCanvas(srcCanvas);
-    var input = inputCanvas;
-    try {
-      if (inputCanvas && inputCanvas.toDataURL) input = inputCanvas.toDataURL('image/jpeg', 0.82);
-    } catch (e) {
-      input = inputCanvas;
+/**
+ * 把译文按时间就近合并进主歌词行（写入 line.translation）。
+ * 上游做法是在解析阶段就把译文并进行对象，这里保持同样的数据形态，
+ * 渲染层只读 line.translation，不再关心数据来源。
+ * @param {Array} lines 主歌词行（会被就地修改）
+ * @param {Array} transLines parseLyricTranslationLines 的结果
+ */
+function mergeLyricTranslations(lines, transLines) {
+  if (!Array.isArray(lines) || !lines.length) return lines;
+  if (!Array.isArray(transLines) || !transLines.length) return lines;
+  for (var i = 0; i < lines.length; i++) {
+    var best = null, bestDiff = Infinity;
+    for (var j = 0; j < transLines.length; j++) {
+      var diff = Math.abs(transLines[j].t - lines[i].t);
+      if (diff < bestDiff) { bestDiff = diff; best = transLines[j]; }
+      // 已按时间升序：一旦超出容差且时间在原文之后，再往后只会更远
+      if (transLines[j].t > lines[i].t + LYRIC_TRANSLATION_TIME_TOLERANCE) break;
     }
-    var result = await pipe(input);
-    if (token !== coverProcessToken) { hideAIDepthChip(); return null; }
-    var raw = result && (result.depth || result.predicted_depth || result);
-    var rawCv = raw && raw.toCanvas ? await raw.toCanvas() : raw;
-    hideAIDepthChip();
-    return rawCv;
-  } catch (e) {
-    console.warn('AI depth estimation failed:', e);
-    aiDepthFailUntil = performance.now() + 120000;
-    hideAIDepthChip();
-    return null;
+    if (best && bestDiff <= LYRIC_TRANSLATION_TIME_TOLERANCE) lines[i].translation = best.text;
   }
+  return lines;
 }
 
-function mergeAIDepthIntoEdgeTexture(heuristicCanvas, aiCanvas) {
-  // 把 AI 深度 (灰度) 写入 R 通道, 保留启发式的 G/B/A
-  var W = heuristicCanvas.width || 256, H = heuristicCanvas.height || 256;
-  var hctx = heuristicCanvas.getContext('2d');
-  var hImg = hctx.getImageData(0, 0, W, H);
-
-  var aiTmp = document.createElement('canvas'); aiTmp.width = W; aiTmp.height = H;
-  var actx = aiTmp.getContext('2d');
-  actx.drawImage(aiCanvas, 0, 0, W, H);
-  var aData = actx.getImageData(0, 0, W, H).data;
-
-  // 归一化 AI 深度
-  var aiVals = new Float32Array(W * H), minV = 1, maxV = 0;
-  for (var i = 0; i < aiVals.length; i++) {
-    var di = i * 4;
-    var v = (aData[di] * 0.299 + aData[di+1] * 0.587 + aData[di+2] * 0.114) / 255;
-    aiVals[i] = v; if (v < minV) minV = v; if (v > maxV) maxV = v;
-  }
-  var range = Math.max(0.001, maxV - minV);
-  // 判断是否反相 (中心应该比边缘深, 表示前景在中)
-  var centerSum = 0, centerCount = 0, edgeSum = 0, edgeCount = 0;
-  for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
-    var i = y * W + x;
-    var cx = x / (W-1) - 0.5, cy = y / (H-1) - 0.5;
-    var rr = Math.sqrt(cx*cx + cy*cy);
-    if (rr < 0.22) { centerSum += aiVals[i]; centerCount++; }
-    else if (rr > 0.46) { edgeSum += aiVals[i]; edgeCount++; }
-  }
-  var invert = (centerSum / Math.max(1, centerCount)) < (edgeSum / Math.max(1, edgeCount));
-
-  for (var i = 0; i < aiVals.length; i++) {
-    var n = (aiVals[i] - minV) / range;
-    if (invert) n = 1.0 - n;
-    hImg.data[i*4] = Math.round(n * 255);
-  }
-  hctx.putImageData(hImg, 0, 0);
-  return heuristicCanvas;
-}
-
-function queueAIDepthForCover(srcCanvas, edgeCanvas, token, opts, cacheSeed, force) {
-  opts = opts || {};
-  if (!fx.aiDepth || !srcCanvas || !edgeCanvas) return;
-  if (!force && isHiddenForBackgroundOptimization()) return;
-  if (performance.now() < aiDepthFailUntil || aiDepthBusy) return;
-  var now = performance.now();
-  if (!force && now - aiDepthLastRunAt < aiDepthMinGapMs) return;
-  aiDepthLastRunAt = now;
-  scheduleVisualApply(async function(){
-    if (!fx.aiDepth || token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    await yieldToIdle(force ? 900 : 2600);
-    if (!fx.aiDepth || token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    var aiCanvas = await estimateAIDepth(srcCanvas, token);
-    if (!aiCanvas || token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    mergeAIDepthIntoEdgeTexture(edgeCanvas, aiCanvas);
-    coverEdgeTex.image = edgeCanvas;
-    coverEdgeTex.needsUpdate = true;
-    setCoverDepthState(1, 1.0, 360);
-    setCoverDepthCache(cacheSeed, edgeCanvas, true);
-    showToast('AI 深度已后台增强');
-  }, force ? 240 : 1800, force ? 1200 : 3000);
-}
-
-function queueAIDepthForCurrentCover(force) {
-  if (!coverTex || !coverTex.image || !coverEdgeTex || !coverEdgeTex.image) return;
-  if (!uniforms.uHasCover.value || !uniforms.uHasDepth.value) return;
-  queueAIDepthForCover(coverTex.image, coverEdgeTex.image, coverProcessToken, {}, '', !!force);
-}
-
-// 颜色渐变 tween (切歌时旧封面→新封面)
-var colorMixTween = null;
-function startColorMixTween(durationMs) {
-  if (colorMixTween) cancelAnimationFrame(colorMixTween.raf);
-  durationMs = Math.max(1, durationMs || 1);
-  var start = performance.now();
-  uniforms.uColorMixT.value = 0;
-  function step(now) {
-    var t = Math.min(1, (now - start) / durationMs);
-    t = visualEase(t);
-    uniforms.uColorMixT.value = t;
-    if (t < 1) colorMixTween = { raf: requestAnimationFrame(step) };
-    else colorMixTween = null;
-  }
-  colorMixTween = { raf: requestAnimationFrame(step) };
-}
-
-// 粒子整体透明度 tween (启动 fade-in)
-var alphaTween = null;
-var floatAlphaTween = null;
-var IDLE_PARTICLE_ALPHA = 0;
-function tweenParticleAlpha(from, to, durationMs) {
-  if (alphaTween) cancelAnimationFrame(alphaTween.raf);
-  var start = performance.now();
-  function step(now) {
-    var t = Math.min(1, (now - start) / durationMs);
-    t = t * t * (3 - 2 * t);
-    uniforms.uAlpha.value = from + (to - from) * t;
-    if (t < 1) alphaTween = { raf: requestAnimationFrame(step) };
-    else alphaTween = null;
-  }
-  alphaTween = { raf: requestAnimationFrame(step) };
-}
-function tweenFloatAlpha(from, to, durationMs) {
-  if (floatAlphaTween) cancelAnimationFrame(floatAlphaTween.raf);
-  var start = performance.now();
-  function step(now) {
-    var t = Math.min(1, (now - start) / durationMs);
-    t = t * t * (3 - 2 * t);
-    uniforms.uFloatAlpha.value = from + (to - from) * t;
-    if (t < 1) floatAlphaTween = { raf: requestAnimationFrame(step) };
-    else floatAlphaTween = null;
-  }
-  floatAlphaTween = { raf: requestAnimationFrame(step) };
-}
-function revealIdleParticles(target, durationMs) {
-  if (!uniforms || !uniforms.uFloatAlpha) return;
-  if (floatAlphaTween) { cancelAnimationFrame(floatAlphaTween.raf); floatAlphaTween = null; }
-  uniforms.uFloatAlpha.value = 0;
-  if (floatGroup) destroyFloatLayer();
-  return;
-  var next = typeof target === 'number' ? target : IDLE_PARTICLE_ALPHA;
-  var from = uniforms.uFloatAlpha.value || 0;
-  if (from >= next - 0.01) return;
-  tweenFloatAlpha(from, next, durationMs || 1800);
-}
-
-// 加载形态 tween (uLoading 0..1)
-var loadingTween = null;
-var loadingShownAt = 0;
-var loadingHideTimer = null;
-var coverDepthTween = null;
-function visualEase(t) {
-  t = Math.max(0, Math.min(1, t));
-  return t * t * (3 - 2 * t);
-}
-function tweenLoading(to, durationMs, onComplete) {
-  if (loadingTween) cancelAnimationFrame(loadingTween.raf);
-  durationMs = Math.max(1, durationMs || 1);
-  if (isHiddenForBackgroundOptimization() || isDeepBackgroundMode()) {
-    uniforms.uLoading.value = to;
-    loadingTween = null;
-    if (onComplete) onComplete();
-    return;
-  }
-  var start = performance.now();
-  var from = uniforms.uLoading.value;
-  function step(now) {
-    var t = Math.min(1, (now - start) / durationMs);
-    var eased = visualEase(t);
-    uniforms.uLoading.value = from + (to - from) * eased;
-    if (t < 1) loadingTween = { raf: requestAnimationFrame(step) };
-    else {
-      uniforms.uLoading.value = to;
-      loadingTween = null;
-      if (onComplete) onComplete();
+function parseYrcText(text) {
+  var lines = [];
+  String(text || '').split(/\r?\n/).forEach(function(line){
+    var m = line.match(/^\[(\d+),(\d+)\](.*)$/);
+    if (!m) return;
+    var lineStartMs = parseInt(m[1], 10) || 0;
+    var lineDurMs = parseInt(m[2], 10) || 0;
+    var body = m[3] || '';
+    var words = [], fullText = '';
+    var reg = /\((\d+),(\d+),\d+\)([^()]*)/g, wm;
+    while ((wm = reg.exec(body))) {
+      var txt = (wm[3] || '').replace(/\s+/g, ' ');
+      if (!txt) continue;
+      var rawStart = parseInt(wm[1], 10) || 0;
+      var rawDur = parseInt(wm[2], 10) || 0;
+      var absStartMs = rawStart >= lineStartMs - 500 ? rawStart : lineStartMs + rawStart;
+      var c0 = fullText.length;
+      fullText += txt;
+      words.push({ text:txt, t:absStartMs / 1000, d:Math.max(0.06, rawDur / 1000), c0:c0, c1:fullText.length });
     }
-  }
-  loadingTween = { raf: requestAnimationFrame(step) };
-}
-function showLoading() {
-  loadingShownAt = performance.now();
-  if (loadingHideTimer) {
-    clearTimeout(loadingHideTimer);
-    loadingHideTimer = null;
-  }
-  var current = uniforms.uLoading.value || 0;
-  tweenLoading(Math.max(current, 0.56), current > 0.04 ? 86 : 118);
-}
-function hideLoading() {
-  if (loadingHideTimer) clearTimeout(loadingHideTimer);
-  if (isHiddenForBackgroundOptimization() || isDeepBackgroundMode()) {
-    forceLoadingSettled('background-hide');
-    return;
-  }
-  var elapsed = loadingShownAt ? performance.now() - loadingShownAt : 999;
-  var wait = Math.max(0, 72 - elapsed);
-  loadingHideTimer = setTimeout(function(){
-    loadingHideTimer = null;
-    var current = uniforms.uLoading.value || 0;
-    if (current <= 0.015 || isHiddenForBackgroundOptimization() || isDeepBackgroundMode()) {
-      if (loadingTween) {
-        cancelAnimationFrame(loadingTween.raf);
-        loadingTween = null;
-      }
-      uniforms.uLoading.value = 0;
-      return;
+    if (!fullText) fullText = body.replace(/\(\d+,\d+,\d+\)/g, '').replace(/\s+/g, ' ');
+    var leading = (fullText.match(/^\s+/) || [''])[0].length;
+    fullText = fullText.replace(/\s+/g, ' ').trim();
+    if (!fullText) return;
+    if (words.length) {
+      words.forEach(function(w){
+        w.c0 = Math.max(0, Math.min(fullText.length, w.c0 - leading));
+        w.c1 = Math.max(w.c0, Math.min(fullText.length, w.c1 - leading));
+      });
+      words = words.filter(function(w){ return w.c1 > w.c0; });
     }
-    tweenLoading(0, current > 0.38 ? 126 : 96);
-  }, wait);
+    lines.push({ t:lineStartMs / 1000, duration:lineDurMs / 1000, text:fullText, words:words, charCount:Math.max(1, fullText.length), source: words.length ? 'yrc-word' : 'yrc-line' });
+  });
+  return finalizeLyricLineDurations(lines);
 }
-function forceLoadingSettled(reason) {
-  if (loadingHideTimer) {
-    clearTimeout(loadingHideTimer);
-    loadingHideTimer = null;
-  }
-  if (loadingTween) {
-    cancelAnimationFrame(loadingTween.raf);
-    loadingTween = null;
-  }
-  uniforms.uLoading.value = 0;
-  loadingShownAt = 0;
-  if (reason && window.__bhandsmusicDebugLoading) console.log('[LoadingSettled]', reason);
+function renderLyrics() {
+  // v8: 歌词渲染由 stageLyrics 在每帧 tickLyricsParticles 里推动
+  clearStageLyrics();
 }
-function recoverVisualsAfterBackground(reason) {
-  applyRendererPowerMode();
-  if (typeof scheduleMainRendererViewportRefresh === 'function') scheduleMainRendererViewportRefresh(reason || 'restore');
-  if (audio && audio.src && !audio.paused && ((uniforms.uLoading.value || 0) > 0.015 || loadingTween || loadingHideTimer)) {
-    forceLoadingSettled(reason || 'restore');
-  }
-  if (typeof markRenderInteraction === 'function') markRenderInteraction('restore', 1100);
-}
-
-function setCoverDepthState(depthTo, aiTo, durationMs) {
-  depthTo = Math.max(0, Math.min(1, Number(depthTo) || 0));
-  aiTo = Math.max(0, Math.min(1, Number(aiTo) || 0));
-  if (coverDepthTween) {
-    cancelAnimationFrame(coverDepthTween.raf);
-    coverDepthTween = null;
-  }
-  durationMs = Math.max(1, durationMs || 1);
-  var depthFrom = uniforms.uHasDepth.value || 0;
-  var aiFrom = uniforms.uAiBoost.value || 0;
-  if (durationMs <= 1 || (Math.abs(depthFrom - depthTo) < 0.001 && Math.abs(aiFrom - aiTo) < 0.001)) {
-    uniforms.uHasDepth.value = depthTo;
-    uniforms.uAiBoost.value = aiTo;
-    return;
-  }
-  var start = performance.now();
-  function step(now) {
-    var t = Math.min(1, (now - start) / durationMs);
-    var eased = visualEase(t);
-    uniforms.uHasDepth.value = depthFrom + (depthTo - depthFrom) * eased;
-    uniforms.uAiBoost.value = aiFrom + (aiTo - aiFrom) * eased;
-    if (t < 1) coverDepthTween = { raf: requestAnimationFrame(step) };
-    else {
-      uniforms.uHasDepth.value = depthTo;
-      uniforms.uAiBoost.value = aiTo;
-      coverDepthTween = null;
-    }
-  }
-  coverDepthTween = { raf: requestAnimationFrame(step) };
-}
-
-function coverApplyStillCurrent(opts) {
-  opts = opts || {};
-  return !opts.trackToken || opts.trackToken === trackSwitchToken;
-}
-
-function setControlCoverSrc(src) {
-  var cover = document.getElementById('control-cover');
-  if (!cover) return;
-  if (!src) {
-    cover.style.backgroundImage = '';
-    cover.classList.add('cover-empty');
-    return;
-  }
-  cover.style.backgroundImage = 'url("' + String(src).replace(/"/g, '\\"') + '")';
-  cover.classList.remove('cover-empty');
-}
-
-function updateControlTrackInfo(song) {
-  song = song || {};
-  var title = document.getElementById('control-title');
-  var artist = document.getElementById('control-artist');
-  if (title) title.textContent = song.name || '';
-  if (artist) artist.textContent = song.artist || '';
-}
-
-function applyCoverCanvas(cv, thumbSrc, opts) {
-  opts = opts || {};
-  if (!cv || !coverApplyStillCurrent(opts)) return;
-  var token = ++coverProcessToken;
-  if (opts.coverSource && opts.coverSourceKind) {
-    currentCoverSource = { kind: opts.coverSourceKind, src: opts.coverSource };
-  }
-  var cacheSeed = (opts.coverKey || thumbSrc || '') + '|tex=' + (cv.width || 0) + 'x' + (cv.height || 0);
-  var cachedDepth = getCoverDepthCache(cacheSeed);
-  // 切歌颜色渐变: 把当前 coverTex 当作 prevCoverTex
-  if (uniforms.uHasCover.value > 0.5 && coverTex.image) {
-    var prevW = coverTex.image.width || 256;
-    var prevH = coverTex.image.height || 256;
-    var prevScale = Math.min(1, 256 / Math.max(prevW, prevH, 1));
-    var prevCv = document.createElement('canvas');
-    prevCv.width = Math.max(1, Math.round(prevW * prevScale));
-    prevCv.height = Math.max(1, Math.round(prevH * prevScale));
-    try {
-      prevCv.getContext('2d').drawImage(coverTex.image, 0, 0, prevCv.width, prevCv.height);
-      prevCoverTex.image = prevCv;
-      prevCoverTex.needsUpdate = true;
-    } catch (e) {}
-  }
-  coverTex.image = cv; coverTex.needsUpdate = true;
-  coverPickerCanvas = cv;
-  uniforms.uHasCover.value = 1;
-  if (cachedDepth && cachedDepth.canvas) {
-    coverEdgeTex.image = cachedDepth.canvas;
-    coverEdgeTex.needsUpdate = true;
-    setCoverDepthState(1, cachedDepth.ai ? 1.0 : 0.55, opts.deferHeavy ? 180 : 120);
+function toggleLyricsPanel(force) {
+  // 控制栏"词"按钮：纯显示/隐藏两态（对齐上游）；行数由控制台"歌词行数"切换
+  if (force === false) fx.particleLyrics = false;
+  else if (force === true) fx.particleLyrics = true;
+  else fx.particleLyrics = !fx.particleLyrics;
+  if (fx.particleLyrics) {
+    createLyricsParticles();
+    showToast('歌词已开启');
   } else {
-    setCoverDepthState(opts.deferHeavy ? (uniforms.uHasDepth.value > 0.5 ? 0.22 : 0) : 0, opts.deferHeavy ? 0.20 : 0, opts.deferHeavy ? 120 : 1);
+    clearStageLyrics();
+    showToast('歌词已关闭');
   }
-
-  if (thumbSrc) {
-    document.getElementById('thumb-cover').src = thumbSrc;
-    setControlCoverSrc(thumbSrc);
-  }
-  if (shelfManager) shelfManager.onCoverChange(thumbSrc);
-
-  // 启动颜色渐变 (1.4 秒)
-  var colorMixMs = opts.colorMixDuration || (fx.preset === 0 ? 520 : 1400);
-  startColorMixTween(opts.fromResolutionChange ? (fx.preset === 0 ? 300 : 520) : colorMixMs);
-
-  function refreshCoverDependentColors() {
-    if (token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    if (floatGroup) refreshFloatColorsFromCover(cv);
-    if (backCoverGroup) refreshBackCoverColorsFromCanvas(cv);
-    updateLyricPaletteFromCover(cv);
-  }
-
-  function runHeavyCoverWork() {
-    if (token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    if (opts.deferHeavy && typeof isRenderInteractionActive === 'function' && isRenderInteractionActive()) {
-      scheduleVisualApply(runHeavyCoverWork, 420, heavyTimeout || 1800);
-      return;
-    }
-    var edgeCv = buildEdgeAndDepth(cv);
-    if (token !== coverProcessToken || !coverApplyStillCurrent(opts)) return;
-    setCoverDepthCache(cacheSeed, edgeCv, false);
-    coverEdgeTex.image = edgeCv; coverEdgeTex.needsUpdate = true;
-    setCoverDepthState(1, 0.55, opts.deferHeavy ? 260 : 180);
-    refreshCoverDependentColors();
-
-    queueAIDepthForCover(cv, edgeCv, token, opts, cacheSeed, false);
-  }
-  if (cachedDepth && cachedDepth.canvas) {
-    scheduleVisualApply(refreshCoverDependentColors, opts.deferHeavy ? 260 : 90, opts.deferHeavy ? 1200 : 700);
-    if (!cachedDepth.ai) queueAIDepthForCover(cv, cachedDepth.canvas, token, opts, cacheSeed, false);
-    return;
-  }
-  var heavyDelay = opts.deferHeavy ? (opts.delay || 620) : (opts.delay || 120);
-  var heavyTimeout = opts.deferHeavy ? (opts.timeout || 1800) : (opts.timeout || 900);
-  scheduleVisualApply(runHeavyCoverWork, heavyDelay, heavyTimeout);
+  lyricsVisible = fx.particleLyrics;
+  updateLyricsToggleButton();
+  saveLyricLayout();
 }
+function updateLyricsToggleButton() {
+  var btn = document.getElementById('lyrics-toggle-btn');
+  if (!btn) return;
+  var on = !!fx.particleLyrics;
+  btn.classList.toggle('active', on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  btn.title = on ? '歌词' : '歌词（已隐藏）';
+}
+// 视觉控制台"歌词行数"五态分段高亮（single/dual/triple/cinema/custom）
+function syncLyricDisplayModeSeg() {
+  var seg = document.getElementById('lyric-display-mode-seg');
+  if (!seg) return;
+  var current = normalizeLyricDisplayMode(fx.lyricDisplayMode);
+  var buttons = seg.querySelectorAll('button[data-mode]');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-mode') === current);
+  }
+}
+function refreshStageLyricDisplayMode() {
+  // 行数变化：上方停驻行按歌词历史重建（不能只 unpark —— 前文会消失且不会自动回来），
+  // 预告行按新槽位重建，当前行保留。
+  rebuildParkedLyricLines(stageLyrics.currentIdx);
+  clearUpcomingLyricLines();
+  if (stageLyricUpcomingCount() > 0 && stageLyrics.currentIdx >= 0 && lyricsLines.length) {
+    syncUpcomingLyricLines(stageLyrics.currentIdx);
+  }
+  if (stageLyrics.current && stageLyrics.current.userData) stageLyrics.current.userData.age = 0.48;
+}
+// 控制台"歌词行数"五态切换（对齐上游 setLyricDisplayMode）
+function setLyricDisplayMode(mode) {
+  fx.lyricDisplayMode = normalizeLyricDisplayMode(mode);
+  syncLyricDisplayModeSeg();
+  refreshStageLyricDisplayMode();
+  saveLyricLayout();
+  showToast('歌词行数已切换');
+}
+// 控制台"歌词动画"五态切换（对齐上游 setLyricMotionStyle）
+function setLyricMotionStyle(style) {
+  fx.lyricMotionStyle = normalizeLyricMotionStyle(style);
+  if (fx.lyricMotionStyle === 'glitch' && lyricGlitchIntensityValue() <= 0 && lyricGlitchJitterValue() <= 0) {
+    // 故障参数从未调过（全 0）：切到故障态自动填入上游默认，保证立即可见
+    fx.lyricGlitchIntensity = 1.0;
+    fx.lyricGlitchSlice = 0.72;
+    fx.lyricGlitchChroma = 0.86;
+    fx.lyricGlitchRate = 1.0;
+    fx.lyricGlitchJitter = 0.72;
+    updateFxInputs();
+  }
+  syncLyricMotionStyleSeg();
+  saveLyricLayout();
+  showToast('歌词动画已切换');
+}
+function syncLyricMotionStyleSeg() {
+  var seg = document.getElementById('lyric-motion-style-seg');
+  if (!seg) return;
+  var current = normalizeLyricMotionStyle(fx.lyricMotionStyle);
+  var buttons = seg.querySelectorAll('button[data-motion]');
+  for (var i = 0; i < buttons.length; i++) {
+    buttons[i].classList.toggle('active', buttons[i].getAttribute('data-motion') === current);
+  }
+  var glitchControls = document.getElementById('lyric-glitch-controls');
+  if (glitchControls) glitchControls.classList.toggle('show', current === 'glitch');
+  var bindBtn = document.getElementById('lyric-glitch-camera-bind');
+  if (bindBtn) bindBtn.classList.toggle('active', !!fx.lyricGlitchCameraBind);
+}
+function updateLyricsHighlight() { /* v8: 由 tickLyricsParticles 接管 */ }

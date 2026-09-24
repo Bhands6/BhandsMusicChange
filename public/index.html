@@ -1125,6 +1125,14 @@ try {
 </div> <!-- /desktop-window-shell -->
 
 <!-- ==================== 应用主体脚本 ==================== -->
+<!-- 原 public/js/main.js（28117 行单文件）于 2026-09-24 拆成 17 个文件，
+     随后按职责重排为 18 个（见 docs/APP_REORG_PLAN.md）。
+     **顺序即执行顺序，不可调换、不可加 defer/async/module**。
+     ⚠️ 00-prelude.js 必须排第一：原 main.js 是单个 script，顶层 function 声明提升到整个
+     文件顶部；拆成多个独立 script 后提升只在各自文件内生效 —— 被更早文件顶层语句
+     （含同步调用链）依赖的 46 个声明都放在 prelude 里。
+     判定见 scripts/check-app-hoisting.js，运行期闸门见 scripts/probe-app-load.js。
+     加载期读写顺序由 scripts/check-app-reorg.js 对基线校验。 -->
 <!-- 原 public/js/main.js（28117 行单文件）于 2026-09-24 按自带的 48 个分区
      切成 public/js/app/01…16，并加 00-prelude.js，共 17 个。
      **顺序即执行顺序，不可调换、不可加 defer/async/module**。
@@ -1142,22 +1150,24 @@ try {
 <script src="sonic-topography-preset.js"></script>          <!-- 预设7 音域回响 Sonic-Topography（作者 Ajin，移植自上游） -->
 <script src="sonic-workshop-preset.js"></script>            <!-- 预设8 音域回响 Wallpaper Engine（作者 CmzYa，WE 创意工坊 iframe 桥接） -->
 <script src="js/web-fx-presets.js"></script>               <!-- Web 移植 9 粒子特效（极光/万花筒/迸发/声波地形/螺旋星云/水母花/玫瑰/心跳/字符雨） -->
-<script src="js/app/00-prelude.js"></script>                <!-- 被更早文件顶层语句依赖的 function 声明（原靠单 script 全文件提升） -->
-<script src="js/app/01-state.js"></script>                  <!-- 全局状态 / 常量表 / 热键表 -->
-<script src="js/app/02-scene-camera.js"></script>           <!-- Three.js 场景 / 相机系统 v7.1 / 指针拖拽 / 粒子点纹理 -->
-<script src="js/app/03-particles.js"></script>              <!-- 主粒子 shader / 背景星河 / 浮空粒子 / 安魂层 / 封面背面粒子 -->
-<script src="js/app/04-stage-lyrics.js"></script>           <!-- 舞台歌词系统 v9 -->
-<script src="js/app/05-lyric-modes-cover.js"></script>      <!-- 歌词显示模式 / 动画 / 校准 / 涟漪触发 / 封面深度处理 -->
-<script src="js/app/06-beat.js"></script>                   <!-- 离线节拍预解析 v7.2 -->
-<script src="js/app/07-shelf.js"></script>                  <!-- 3D 歌单架双模式 / 二级内容框 / PSP 卡片交互 -->
-<script src="js/app/08-api-search.js"></script>             <!-- API 助手 / 搜索 -->
-<script src="js/app/09-audio-queue.js"></script>            <!-- 音频上下文与频谱分析 / 播放队列 -->
-<script src="js/app/10-lyrics-panel-playlist.js"></script>  <!-- 歌词面板 / 播放列表面板 / 文件拖放 -->
-<script src="js/app/11-fx-console.js"></script>             <!-- 控制台：预设卡片 + 主滑块 + 开关 + 三态 -->
-<script src="js/app/12-system-panels.js"></script>          <!-- 输出设备 / 本地缓存面板 / 内存管家 / 第三方音源设置 -->
-<script src="js/app/13-update-account.js"></script>         <!-- 更新提示预览 / 登录系统 -->
-<script src="js/app/14-idle-toast-libs.js"></script>        <!-- 空场待机引导 / toast / 动态库加载 -->
-<script src="js/app/15-shell.js"></script>                  <!-- Resize 快捷键 / UI 半隐藏 v8 / 启动页 splash -->
-<script src="js/app/16-session-boot.js"></script>           <!-- 会话持久化 / 自动播放 / 酷狗扫码 / 预解析 / 解析顺序 / 启动 / 主循环 -->
+<script src="js/app/00-prelude.js"></script>                                  <!-- 被更早文件顶层语句依赖的 function 声明（原靠单 script 全文件提升） -->
+<script src="js/app/01-state.js"></script>                                    <!-- 全局状态 / 常量表 / store key / 热键表 / 预设 -->
+<script src="js/app/02-scene.js"></script>                                    <!-- three.js 场景 / 相机系统 / 指针拖拽 / 粒子点纹理 -->
+<script src="js/app/03-particles.js"></script>                                <!-- 粒子系统：主粒子 / 背景星河 / 浮空层 / 安魂层 / 封面背面层 / 涟漪 -->
+<script src="js/app/04-lyrics.js"></script>                                   <!-- 歌词：解析 / 自定义歌词 / 面板 / 显示模式 / 动画 / 校准 / 时间偏移 -->
+<script src="js/app/05-lyrics-stage.js"></script>                             <!-- 歌词舞台渲染：three.js mesh / 纹理 / 字体 / mask / glow / 调色 -->
+<script src="js/app/06-cover.js"></script>                                    <!-- 封面：加载 / 裁剪弹窗 / 边缘与深度 / AI 深度 / 画布 -->
+<script src="js/app/07-beat.js"></script>                                     <!-- 节拍分析：离线预解析 / podcast DJ / 本地节拍 -->
+<script src="js/app/08-shelf.js"></script>                                    <!-- 3D 歌单架：双模式 / 二级内容框 / PSP 卡片交互 / 控件 -->
+<script src="js/app/09-api-search.js"></script>                               <!-- API 助手（网易云 / QQ 请求封装）/ 搜索 / 首页发现 -->
+<script src="js/app/10-audio-queue.js"></script>                              <!-- 音频上下文 / 频谱分析 / 播放队列 -->
+<script src="js/app/11-playlist.js"></script>                                 <!-- 播放列表面板 / 拖放 / 本地音乐导入 / 播放进度 -->
+<script src="js/app/12-fx-console.js"></script>                               <!-- 控制台：面板机制 / 预设卡片 / 主滑块 / 开关 / 调色台 / 歌词控件 / 自定义背景 -->
+<script src="js/app/13-system-panels.js"></script>                            <!-- 输出设备 / 本地缓存 / 内存管家 / 第三方音源设置 / 系统设置 -->
+<script src="js/app/14-account.js"></script>                                  <!-- 登录 / 会员：网易云 / QQ / 酷狗扫码 / 账号胶囊 -->
+<script src="js/app/15-update.js"></script>                                   <!-- 更新提示预览 / 下载 / 补丁 -->
+<script src="js/app/16-idle-toast-libs.js"></script>                          <!-- 空场待机引导 / 视觉引导 / 手势 / toast / 动态库加载 -->
+<script src="js/app/17-shell.js"></script>                                    <!-- 外壳：Resize / 快捷键 / UI 半隐藏 / splash / 加载过渡 / 沉浸模式 / 桌面 overlay -->
+<script src="js/app/18-session-boot.js"></script>                             <!-- 会话持久化 / 启动自动播放 / 酷狗扫码 / 恢复态预解析 / 启动序列 / 主循环 -->
 </body>
 </html>
