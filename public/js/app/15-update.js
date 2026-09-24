@@ -74,11 +74,15 @@ function setUpdatePreviewVisible(visible) {
 async function checkLatestUpdate() {
   try {
     var data = await apiJson('/api/update/latest?t=' + Date.now());
+    updatePreviewState.checkFailed = false;
     applyLatestUpdateInfo(data);
   } catch (e) {
+    // 检测失败要如实显示，不能伪装成「已就绪」（2026-09-24 审查修正）
     updatePreviewState.preview = true;
     updatePreviewState.updateAvailable = false;
-    updatePreviewState.hero = '当前版本，更新检测已就绪。';
+    updatePreviewState.checkFailed = true;
+    updatePreviewState.hero = '更新检测失败，请检查网络后重试。';
+    updatePreviewState.notes = [];
     renderUpdatePreviewPanel();
     setUpdatePreviewVisible(true);
   }
@@ -178,7 +182,7 @@ function syncUpdatePreviewStateClass() {
     else if (isReady && updatePreviewState.installerOpened) label.textContent = '安装包已打开';
     else if (isReady && updatePreviewState.installerPath) label.textContent = updatePreviewState.cached ? '打开已下载安装包' : '打开安装包';
     else if (isReady) label.textContent = updatePreviewState.configured ? '打开安装包' : '预览完成';
-    else label.textContent = updatePreviewState.patchAvailable ? '安装快速补丁' : ((canDownloadUpdate || canOpenRelease) ? '下载完整安装包' : '立即更新');
+    else label.textContent = updatePreviewState.patchAvailable ? '安装快速补丁' : ((canDownloadUpdate || canOpenRelease) ? '下载完整安装包' : '检查更新');
   }
   if (btn) btn.disabled = false;
   var foot = document.getElementById('update-footnote');
@@ -208,6 +212,8 @@ function openUpdatePanel() {
   var mask = document.getElementById('update-modal');
   var entry = document.getElementById('update-entry');
   if (!mask) return;
+  // 上次检测失败时重开面板顺带重查，避免用户看到过期的「检测失败」
+  if (updatePreviewState.checkFailed) checkLatestUpdate();
   renderUpdatePreviewPanel();
   if (entry && window.gsap) {
     window.gsap.fromTo(entry, { scale: 0.93 }, { scale: 1, duration: 0.42, ease: 'back.out(1.7)', overwrite: 'auto' });
@@ -342,6 +348,10 @@ async function pollUpdateDownloadJob(id) {
     var job = await apiJson('/api/update/download/status?id=' + encodeURIComponent(id) + '&t=' + Date.now());
     applyUpdateDownloadJob(job);
   } catch (e) {
+    // 单次轮询失败先静默容忍（网络抖动很常见），连续失败 3 次才判错 ——
+    // 服务端 job 仍在下载，一次抖动就报「失败」会让用户误放弃（2026-09-24 审查修正）
+    updatePreviewState.pollFails = (updatePreviewState.pollFails || 0) + 1;
+    if (updatePreviewState.pollFails <= 3) return;
     if (updatePreviewState.pollTimer) clearInterval(updatePreviewState.pollTimer);
     updatePreviewState.pollTimer = null;
     updatePreviewState.status = 'error';
@@ -358,6 +368,9 @@ async function pollUpdatePatchJob(id) {
     var job = await apiJson('/api/update/patch/status?id=' + encodeURIComponent(id) + '&t=' + Date.now());
     applyUpdateDownloadJob(job);
   } catch (e) {
+    // 同上：容忍 3 次单次失败
+    updatePreviewState.pollFails = (updatePreviewState.pollFails || 0) + 1;
+    if (updatePreviewState.pollFails <= 3) return;
     if (updatePreviewState.pollTimer) clearInterval(updatePreviewState.pollTimer);
     updatePreviewState.pollTimer = null;
     updatePreviewState.status = 'error';
@@ -395,6 +408,7 @@ function applyUpdateDownloadJob(job) {
     showToast('更新下载失败：' + updatePreviewState.errorReason);
     return;
   }
+  updatePreviewState.pollFails = 0;   // 轮询恢复正常，重置宽容计数
   if (job.id) updatePreviewState.downloadJobId = job.id;
   updatePreviewState.mode = job.mode || updatePreviewState.mode || 'installer';
   if (updatePreviewState.mode === 'patch') updatePreviewState.patchJobId = job.id || updatePreviewState.patchJobId;
@@ -471,6 +485,7 @@ function startUpdatePreviewDownload() {
     restartForAppliedPatch();
     return;
   }
+  if (updatePreviewState.status === 'downloading' || updatePreviewState.status === 'opening') return;
   if (updatePreviewState.configured && updatePreviewState.updateAvailable) {
     if (updatePreviewState.patchAvailable && updatePreviewState.patchUrl && !updatePreviewState.patchFallbackTried) {
       startRealUpdatePatch();
@@ -484,32 +499,24 @@ function startUpdatePreviewDownload() {
     }
     return;
   }
-  if (updatePreviewState.status === 'ready') {
-    if (window.gsap) {
-      var modal = document.querySelector('#update-modal .update-modal');
-      if (modal) window.gsap.fromTo(modal, { boxShadow: '0 30px 100px rgba(0,0,0,.62),0 0 0 1px rgba(244,210,138,.16)' }, { boxShadow: '0 30px 100px rgba(0,0,0,.62),0 0 34px rgba(244,210,138,.18)', duration: 0.52, yoyo: true, repeat: 1, ease: 'sine.inOut' });
-    }
-    showToast('正式接入后将重启并安装新版');
+  /* 2026-09-24 审查修正：未配置仓库 / 检测失败 / 已是最新时，原实现会跑一段
+   * Math.random() 假进度并提示「正式接入后将重启并安装新版」，用户会误以为真的
+   * 更新了。现在如实分流：检测失败 → 重新检测；未配置 → 打开发布页或明确提示。 */
+  if (updatePreviewState.checkFailed) {
+    showToast('更新检测失败，正在重新检测');
+    checkLatestUpdate();
     return;
   }
-  if (updatePreviewState.status === 'downloading') return;
-  if (updatePreviewState.timer) clearInterval(updatePreviewState.timer);
-  updatePreviewState.status = 'downloading';
-  updateUpdatePreviewProgress(0);
-  var btn = document.getElementById('update-primary-btn');
-  if (btn && window.gsap) window.gsap.fromTo(btn, { scale: 0.985 }, { scale: 1, duration: 0.34, ease: 'back.out(1.45)', overwrite: true });
-  updatePreviewState.timer = setInterval(function(){
-    var next = updatePreviewState.progress + 3.2 + Math.random() * 7.5;
-    if (next >= 100) {
-      clearInterval(updatePreviewState.timer);
-      updatePreviewState.timer = null;
-      updatePreviewState.status = 'ready';
-      updateUpdatePreviewProgress(100);
-      pulseUpdateReady();
+  if (!updatePreviewState.configured) {
+    if (releaseLink) {
+      window.open(releaseLink, '_blank');
+      showToast('在线更新未配置，已打开发布页');
     } else {
-      updateUpdatePreviewProgress(next);
+      showToast('在线更新未配置，无法检查新版本');
     }
-  }, 260);
+    return;
+  }
+  showToast('当前版本已是最新');
 }
 
 function pulseUpdateReady() {

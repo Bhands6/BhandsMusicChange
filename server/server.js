@@ -581,8 +581,9 @@ function publicDownloadUrls(candidates) {
 }
 function normalizeVersion(value) {
   var raw = String(value || '').trim();
-  // 优先提取 x.y.z 格式的版本号（兼容 BhandsMusic-V1.2.0 等带前缀的 tag）
-  var m = raw.match(/(\d+\.\d+\.\d+)/);
+  // 优先提取 x.y.z[.w] 格式的版本号（兼容 BhandsMusic-V1.2.0 等带前缀的 tag；
+  // 2026-09-24 审查修正：原来只取前三段，四段构建号会被截断判等）
+  var m = raw.match(/(\d+(?:\.\d+){1,3})/);
   if (m) return m[1];
   return raw.replace(/^v/i, '').replace(/[+].*$/, '').replace(/-.+$/, '');
 }
@@ -868,6 +869,9 @@ function classifyUpdateError(err) {
   }
   if (/ENOTFOUND|EAI_AGAIN|DNS|fetch failed|getaddrinfo/i.test(code + ' ' + message)) {
     return { code: code || 'UPDATE_DNS_FAILED', reason: '域名解析失败，可能是当前网络无法连接该更新线路。', detail };
+  }
+  if (/EACCES|EPERM|ACCESS[-_ ]?DENIED/i.test(code + ' ' + message)) {
+    return { code: code || 'UPDATE_ACCESS_DENIED', reason: '没有写入权限：若把应用装到了 Program Files 等受保护目录，补丁/安装包无法落盘，请以管理员运行或安装到用户目录。', detail };
   }
   if (/ECONNRESET|ECONNREFUSED|socket|network/i.test(code + ' ' + message)) {
     return { code: code || 'UPDATE_NETWORK_FAILED', reason: '网络连接被中断，已尝试切换更新线路。', detail };
