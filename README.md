@@ -15,21 +15,7 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 </p>
 
 ## 立即下载 Windows 安装包
-
-| 下载入口 | 推荐人群 | 链接 |
-| --- | --- | --- |
-| GitHub Release  | 能稳定访问 GitHub 的用户 | [点击下载 v1.5.0](https://github.com/Bhands6/BhandsMusicChange/releases/tag/BhandsMusic-v1.5.0) |
-
-安装时只需要下载并运行 `BhandsMusic-1.5.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
-
-## 下载或安装被拦截怎么办
-
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名是 `BhandsMusic-1.5.0-Setup.exe`。
-
-1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
-2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
-3. 如果杀毒软件明确显示木马、高危或已经隔离，不要强行运行；删除该文件后重新从 GitHub Release 下载。
-
+ [点击下载 v1.5.0](https://github.com/Bhands6/BhandsMusicChange/releases/tag/BhandsMusic-v1.5.0) 
 
 ## 当前版本
 
@@ -57,13 +43,6 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 - GitHub Releases 更新检测与下载入口
 - 首次启动内置「默认测试」视觉用户存档，软件内默认视觉参数与该存档一致
 
-## 使用说明
-
-Windows 用户可以在 GitHub Releases 中下载安装包。
-
-正式分发以 `BhandsMusic-1.5.0-Setup.exe` 为准。安装包会创建桌面快捷方式；直接运行打包版 `BhandsMusic.exe` 时，应用也会在首次启动时补创建桌面快捷方式。
-
-已经安装过旧版本的用户，建议卸载旧版本后，再使用新版安装包纯净安装。
 
 ## 开发运行
 
@@ -75,11 +54,7 @@ npm run build:win
 
 桌面版入口由 Electron 主进程加载本地服务。`npm run build:win` 会生成 Windows NSIS 安装包，产物位于 `dist/`。
 
-## 更新机制
 
-BhandsMusic 会请求 GitHub Releases latest 检测新版本。远端版本高于本地版本时，应用内更新入口会展示 Release 内容、下载安装包到本机用户数据目录，并通过系统打开安装包。
-
-本地验证更新链路时，可以通过 `BHANDSMUSIC_UPDATE_MANIFEST` 指向一个本地 manifest JSON 或 HTTP 地址来模拟线上 Release。
 
 ## 第三方音乐平台说明
 
