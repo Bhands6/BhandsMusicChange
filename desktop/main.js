@@ -2498,6 +2498,11 @@ async function createWindow() {
       x: mx, y: my,
       frame: false,
       transparent: true,
+      // ⚠️ 必须显式全透明（对齐 mainWindow / desktopLyricsWindow）：缺省的不透明底色
+      //    会盖掉 transparent，导致关闭对话框弹出一整块直角窗口底 —— dialog 的 18px
+      //    圆角外露出窗口矩形（2026-09-24 用户反馈「弹出的是个角不是圆的」）
+      backgroundColor: '#00000000',
+      hasShadow: false,          // 全屏遮罩窗口：DWM 阴影会沿直角窗口矩形露出轮廓
       resizable: false,
       skipTaskbar: true,
       parent: mainWindow,
