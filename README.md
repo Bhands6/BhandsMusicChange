@@ -5,9 +5,6 @@
 </h1>
 
 BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一个完整的现场：多音源解析兜住曲库，18 种 GLSL 粒子视觉随节拍实时生长，3D 歌词舞台与歌单架让界面本身成为演出的一部分。
-
-桌面端基于 Electron + Three.js。接入网易云、QQ 音乐账号，并支持 GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API 四种第三方音源 —— 自动选择可用音源、按档位智能降级音质；另有天气电台、每日推荐、私人电台、听歌画像、独立桌面歌词窗口、壁纸模式与自由镜头取景。
-
 本项目基于开源项目 [Mineradio](https://github.com/XxHuberrr/Mineradio) 二次开发。
 
 <p align="center">
