@@ -38,12 +38,6 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 **当前版本：`v2.0.0`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
 
 
-## 当前版本
-
-当前版本：`v2.0.0`
-
-状态：多音源解析 + 智能音质降级。
-
 ## 核心特性
 
 - **多音源解析**：支持 GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API 四种第三方音源
