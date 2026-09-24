@@ -46,6 +46,8 @@ tmp/
 *.png.tmp
 verification/
 screenshots/
+# README 的界面预览截图需要入库（docs/screenshots/），其余 screenshots 目录仍忽略
+!docs/screenshots/
 
 # 内置换源服务二进制：构建前由 build/fetch-go-music-api.js 按需拉取，不入库
 vendor/go-music-api/
