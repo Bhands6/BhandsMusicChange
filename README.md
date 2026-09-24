@@ -3,22 +3,21 @@
   <br>
   <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架 · 多音源解析</sub>
 </h1>
-<p align="center">
-BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能音质降级，配合天气电台、歌词舞台、粒子视觉和 3D 歌单架，为你打造一个更接近现场的私人音乐空间。
 
+BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能音质降级，配合天气电台、歌词舞台、粒子视觉和 3D 歌单架，为你打造一个更接近现场的私人音乐空间。
 本项目基于开源项目 [Mineradio](https://github.com/XxHuberrr/Mineradio) 二次开发。
-</p>
+
 <p align="center">
   <img src="./public/assets/IdleIcon.png" width="720" alt="BhandsMusic 暗场启动页"/>
 </p>
 
 ## ✨ 界面预览
 
-**首页**（启动动画 / 主界面）
+**首页**（未登录 / 登录）
 
 <p align="center">
-  <img src="docs/screenshots/01-splash.jpg" width="48%" alt="启动动画">
   <img src="docs/screenshots/home.jpg" width="48%" alt="首页：我的歌单 / 每日推荐 / 继续听 / 听歌画像 / 排行榜">
+  <img src="docs/screenshots/01-splash.jpg" width="48%" alt="启动动画">
 </p>
 
 ## 🌌 粒子视觉效果
@@ -38,17 +37,6 @@ BhandsMusic 是一款沉浸式音乐播放器，支持多音源解析与智能�
 
 **当前版本：`v2.0.0`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
 
-安装时只需要下载并运行 `BhandsMusic-2.0.0-Setup.exe`。不要下载 `Source code`、`.blockmap`、`latest.yml`，也不要把 `win-unpacked` 当成正式安装包。
-
-已经安装过旧版本的用户，建议先卸载旧版本，再使用新版安装包纯净安装。
-
-## 下载或安装被拦截怎么办
-
-小众 Electron 桌面软件、未签名安装包有时会被浏览器、Windows Defender 或 SmartScreen 提示风险。请先确认安装包来自上面的 GitHub Release 官方入口，文件名形如 `BhandsMusic-2.0.0-Setup.exe`。
-
-1. 浏览器下载栏提示风险时，打开下载列表，点这条下载右侧的 `...` 三个点，选择 `保留` / `仍要保留` / `显示更多` 后继续保留。
-2. Windows SmartScreen 弹出蓝色拦截窗口时，点 `更多信息`，再点 `仍要运行`。
-3. 如果杀毒软件明确显示木马、高危或已经隔离，不要强行运行；删除该文件后重新从 GitHub Release 下载。
 
 ## 当前版本
 
