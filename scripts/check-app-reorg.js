@@ -90,11 +90,17 @@ function collect() {
       //    否则 prelude 的 `// ↓ 原属` 标签一改、每个文件的第一块一带上 header，
       //    hash 就全变了，会把「没变」误报成「条目消失」。
       const code = raw.slice(st.range[0], st.range[1]);
-      const hash = sha(code.replace(/\s+/g, ' ').trim());
       if (st.type === 'FunctionDeclaration') {
-        fnDecls.push({ file, hash, name: st.id && st.id.name });
+        /* ⚠️ function 声明的身份 hash **只取函数名**，不取函数体源码。
+         * 原因：function 声明是 hoist 的、位置无关（重排允许随意搬），它的用途是
+         * 「hash 守恒」= 确保重排中函数没丢/没多。若把函数体源码算进 hash，
+         * 那么「正常改函数体内一行」会被误报成「旧条目消失 + 新条目出现」——
+         * 2026-09-24 改歌词朝向（04-lyrics.js 的 updateStageLyrics3D）时正是这么误红的。
+         * 函数体有没有被改坏，由 tests/ 里的行为断言负责，不归这道「重排等价」闸门管。 */
+        fnDecls.push({ file, hash: sha('fn:' + ((st.id && st.id.name) || 'anonymous')), name: st.id && st.id.name });
         continue;
       }
+      const hash = sha(code.replace(/\s+/g, ' ').trim());
       const kind = st.type === 'VariableDeclaration' ? st.kind
         : (st.type === 'ClassDeclaration' ? 'class' : 'statement');
       const names = declaredNames(st);
