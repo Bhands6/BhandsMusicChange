@@ -56,15 +56,15 @@
 
   // 相机机位（对齐 Web PRESET_CAMERA；键为桌面索引）
   var PRESET_CAMERA = {
-    9:  { radius: 8.4, phi: 0.05 },  // aurora
-    10: { radius: 6.8, phi: 0.07 },  // kaleido
-    11: { radius: 6.6, phi: 0.06 },  // burst
-    12: { radius: 9.2, phi: 0.30 },  // sonic
-    13: { radius: 8.8, phi: 0.34 },  // spiral
-    14: { radius: 10.6, phi: 0.06 }, // jelly
-    15: { radius: 8.2, phi: 0.05 },  // rose
-    16: { radius: 9.0, phi: 0.03 },  // heart
-    17: { radius: 9.5, phi: 0.02 }   // rain
+    9:  { radius: 8.4,  phi: 0.05 },  // aurora
+    10: { radius: 6.8,  phi: 0.07 },  // kaleido
+    11: { radius: 6.6,  phi: 0.06 },  // burst
+    12: { radius: 7.6,  phi: 0.30 },  // sonic（2026-09-24 由 9.2 推近：实测亮像素占宽 82%→96%）
+    13: { radius: 8.0,  phi: 0.34 },  // spiral（2026-09-24 由 8.8 推近）
+    14: { radius: 10.6, phi: 0.06 },  // jelly
+    15: { radius: 8.2,  phi: 0.05 },  // rose
+    16: { radius: 9.0,  phi: 0.03 },  // heart
+    17: { radius: 9.5,  phi: 0.02 }   // rain
   };
 
   // ---- GLSL：常量 + 辅助（插在 hash11 之后）----

@@ -5,14 +5,14 @@
  * 为什么需要它：单个探针必须用
  *   `./node_modules/electron/dist/electron.exe scripts/probe-xxx.js`
  * 启动（`node_modules/.bin/electron` 会让 require('electron').app 变 undefined），
- * 7 个探针手敲 7 次容易漏。这里统一 spawn，并在跑完后读 `scripts/out/*.json`
+ * 8 个探针手敲 8 次容易漏。这里统一 spawn，并在跑完后读 `scripts/out/*.json`
  * 做一次冒烟判定：最后一条日志必须是 `RESULT ...`（而不是 `ERROR ...`），
  * 且载荷里的 `fails[]` 必须为空 / `verdict` 不能以 FAIL 开头。
  *
  * 第一个探针 `probe-app-load.js` 是**加载期零错误闸门**：它用 preload 在主文档脚本之前
  * 挂错误监听，专门堵「应用起不来但探针全绿」这个盲区（2026-09-24 拆分 main.js 就是这么
  * 漏掉跨 script 函数提升 ReferenceError 的，见 scripts/probe-app-load.js 头部）。
- * 它挂了，后面 6 个的结论都不作数。
+ * 它挂了，后面 7 个的结论都不作数。
  *
  * 更细的断言在各探针内部（它们自己会打印期望/实际），这里只管「有没有崩 + 有没有自判失败」。
  * 非 Electron 的探针（static / cuefield / e2e-parse-level）用 `npm run probe:*` 单独跑。
@@ -38,7 +38,7 @@ function electronBin() {
 }
 
 const PROBES = [
-  // 加载期零错误闸门：必须排第一 —— 它挂了，后面 6 个探针的结论都不作数
+  // 加载期零错误闸门：必须排第一 —— 它挂了，后面 7 个探针的结论都不作数
   // （2026-09-24 拆分 main.js 引入跨 script 提升 ReferenceError，应用黑屏而探针全绿，
   //   根因就是缺这道闸；详见 scripts/probe-app-load.js 头部）
   ['probe-app-load.js', 'app-load-probe.json'],
@@ -48,6 +48,9 @@ const PROBES = [
   ['probe-thirdparty-notice.js', 'thirdparty-notice-probe.json'],
   ['probe-kugou-row.js', 'kugou-row-probe.json'],
   ['probe-local-beat-trigger.js', 'local-beat-trigger-probe.json'],
+  // 取景探针（最慢，放最后）：判「预设机位确实被 setPreset 应用 + readPixels 测量链路有效」。
+  // 刻意**不**锁 radius 具体值 —— 那是审美参数，用户随时会调；它只堵「跑完但什么都没测到」的假绿。
+  ['probe-preset-framing.js', 'preset-framing-probe.json'],
 ];
 
 const bin = electronBin();
