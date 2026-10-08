@@ -705,11 +705,14 @@ async function loadPlaylistIntoQueueById(id, autoplay, title, opts) {
   updateEmptyHomeVisibility();
   showLoading();
   var qqPlaylistId = String(id || '').indexOf('qq:') === 0 ? String(id).slice(3) : '';
+  var isQQDaily = String(id || '') === 'qq-daily';
   var r = null;
   try {
-    r = qqPlaylistId
-      ? await apiJson('/api/qq/playlist/tracks?id=' + encodeURIComponent(qqPlaylistId))
-      : await apiJson('/api/playlist/tracks?id=' + encodeURIComponent(id));
+    r = isQQDaily
+      ? await apiJson('/api/qq/daily/recommend')
+      : (qqPlaylistId
+        ? await apiJson('/api/qq/playlist/tracks?id=' + encodeURIComponent(qqPlaylistId))
+        : await apiJson('/api/playlist/tracks?id=' + encodeURIComponent(id)));
   } catch (e) {
     console.warn('[PlaylistLoadApi]', id, e);
     showToast('歌单加载失败');
@@ -720,9 +723,10 @@ async function loadPlaylistIntoQueueById(id, autoplay, title, opts) {
     if (r.error) { showToast('歌单加载失败: ' + r.error); return; }
     if (!r.tracks || !r.tracks.length) { showToast('歌单为空'); return; }
     playQueue = r.tracks.map(cloneSong);
-    var isLikedCtx = !qqPlaylistId && isLikedPlaylistContext(id, title, r.playlist);
+    var isQQCtx = isQQDaily || !!qqPlaylistId;
+    var isLikedCtx = !isQQCtx && isLikedPlaylistContext(id, title, r.playlist);
     if (isLikedCtx) markSongsLiked(playQueue, true);
-    if (!qqPlaylistId) syncLikeStatusForSongs(playQueue);
+    if (!isQQCtx) syncLikeStatusForSongs(playQueue);
     shelfForceQueue = !!(opts && opts.forceQueue) || isLikedCtx;
     currentIdx = 0;
     safeRenderQueuePanel('playlist-load');

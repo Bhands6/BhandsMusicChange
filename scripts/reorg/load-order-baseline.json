@@ -115,7 +115,8 @@
     "c85aba0c007cc9fe": 1,
     "eea9a2abcb447099": 1,
     "6bb9d112cded5c08": 1,
-    "283e52d3ab50b6cb": 1,
+    "eaf8946efa39a325": 1,
+    "2d12487eed84ad96": 1,
     "cc576a7ccda6002f": 1,
     "deeb3b49c0ce0100": 1,
     "071d31a4d435dae9": 1,
@@ -444,6 +445,7 @@
     "9ac0c55bc0994d3b": 1,
     "415847f41cd2018f": 1,
     "c5058d4eaa5e9e60": 1,
+    "2633529d443469f8": 1,
     "66a4bed3f348606f": 1,
     "3af00fb8a689f895": 1,
     "d81a92317ee2f98f": 1,
@@ -1246,6 +1248,10 @@
     "c64873c20ed6cb90": 1,
     "a66b01b058e98ddc": 1,
     "2531b634a736c795": 1,
+    "0d390ad54fe8dd7b": 1,
+    "25e7ffebe93fc711": 1,
+    "51b0448c671526ae": 1,
+    "9bac1345e0b6e250": 1,
     "992fe089d125762d": 1,
     "45b0e92659f9edd8": 1,
     "d2f68c8d8d51fb9f": 1,
@@ -1288,6 +1294,7 @@
     "c9f01363be01831f": 1,
     "ac61ee947f8892c1": 1,
     "9176c478ef87d66a": 1,
+    "ce94dbec468e24fb": 1,
     "8365ac94f391a154": 1,
     "30970bcdf0285e54": 1,
     "712163454e09a0bf": 1,
@@ -4295,6 +4302,14 @@
       "fda7e807ca701bea": false,
       "40aae9d97b64df31": false
     },
+    "homeActiveDiscoverData": {
+      "5624be9892e126d8": false,
+      "79b7c839245f5cde": false,
+      "11cba9b9bdd3d372": false,
+      "9503d2715a8b28b2": false,
+      "fda7e807ca701bea": false,
+      "40aae9d97b64df31": false
+    },
     "homeDiscoverState": {
       "5624be9892e126d8": true,
       "79b7c839245f5cde": true,
@@ -4693,7 +4708,7 @@
       "40aae9d97b64df31": true,
       "48d43e1c74a26e76": true
     },
-    "qqDailyFirstSong": {
+    "qqHomeDailyState": {
       "5624be9892e126d8": true,
       "79b7c839245f5cde": true,
       "11cba9b9bdd3d372": true,
@@ -6129,6 +6144,10 @@
       "11cba9b9bdd3d372": false,
       "9503d2715a8b28b2": false
     },
+    "loadQQHomeDaily": {
+      "11cba9b9bdd3d372": false,
+      "9503d2715a8b28b2": false
+    },
     "loginStatusCheckFailed": {
       "11cba9b9bdd3d372": true,
       "9503d2715a8b28b2": true
@@ -6163,6 +6182,10 @@
     },
     "providerVipBadge": {
       "11cba9b9bdd3d372": false
+    },
+    "qqHomeDailyToken": {
+      "11cba9b9bdd3d372": true,
+      "9503d2715a8b28b2": true
     },
     "qqLoginWasLoggedIn": {
       "11cba9b9bdd3d372": true

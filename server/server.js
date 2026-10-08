@@ -1861,8 +1861,7 @@ async function handleDiscoverHome() {
     const raw = body.data && (body.data.dailySongs || body.data.recommend) || body.recommend || [];
     dailySongs = (Array.isArray(raw) ? raw : [])
       .map(mapSongRecord)
-      .filter(song => song.id && song.name)
-      .slice(0, 12);
+      .filter(song => song.id && song.name);
   }
 
   return {
@@ -2597,6 +2596,105 @@ async function handleQQPlaylistTracks(id) {
     trackCount: tracks.length,
   };
   return { loggedIn: true, provider: 'qq', playlist, tracks };
+}
+
+// QQ 每日推荐：QQ 已不再用固定 disstid，也没有稳定的公开 songList 推荐流
+// （实测 music.recommend.RecommendFeed / get_recommend_feed 对已登录用户恒返回
+//   data.songList=[]，data.v_shelf 里才有内容）。
+// 真实机制：推荐流每天在 v_shelf 里下发一个「每日30首」卡片，它的 id 是**当天动态生成**的
+//   （形如 v_shelf[0].v_niche[].v_card[]，title="每日30首" / title_template="为你打造"，
+//     jumptype=10014，id="4671290167"），该 id 再交给歌单接口可取到完整 30 首。
+// 所以：先从 v_shelf 解析出这个 id，再用歌单接口拿全量；解析不到才算失败。
+const QQ_DAILY_CARD_TITLES = ['每日30首', '每日30首 ', '为你打造'];
+
+function collectQQShelfCards(node) {
+  const cards = [];
+  const walk = (n) => {
+    if (!n || typeof n !== 'object') return;
+    if (Array.isArray(n)) { n.forEach(walk); return; }
+    if (Array.isArray(n.v_card)) cards.push(...n.v_card);
+    ['v_shelf', 'v_niche', 'v_group'].forEach(k => { if (n[k]) walk(n[k]); });
+  };
+  walk(node);
+  return cards;
+}
+
+function findQQDailyCardId(shelf) {
+  const cards = collectQQShelfCards(shelf);
+  for (const card of cards) {
+    const title = String(card.title || '').trim();
+    const tmpl = String(card.title_template || '').trim();
+    const hit = QQ_DAILY_CARD_TITLES.some(t => title === t.trim() || tmpl === t.trim());
+    if (!hit) continue;
+    // id 形如 "4671290167"（纯数字歌单 id）；排除 "0_8" 这类榜单占位
+    const id = String(card.id || '').trim();
+    if (/^\d{5,}$/.test(id)) return id;
+  }
+  return '';
+}
+
+async function handleQQDailyRecommend() {
+  const info = await getQQLoginInfo();
+  if (!info.loggedIn || !info.userId) return { loggedIn: false, provider: 'qq', tracks: [] };
+  const uin = String(info.userId);
+  let dailyPlaylistId = '';
+  let cover = '';
+  try {
+    const body = await qqMusicRequest({
+      comm: { ct: 24, cv: 0 },
+      req: {
+        module: 'music.recommend.RecommendFeed',
+        method: 'get_recommend_feed',
+        param: { uin, guid: '', scene: 0, cmd: 2, sin: 0, ei: 1, ct: 24, page: 1 },
+      },
+    }, { cookie: true });
+    const data = body && body.req && body.req.data;
+    dailyPlaylistId = findQQDailyCardId(data && data.v_shelf);
+    if (dailyPlaylistId && data) {
+      const hitCard = collectQQShelfCards(data.v_shelf)
+        .find(c => String(c.id || '').trim() === dailyPlaylistId);
+      if (hitCard && hitCard.cover) cover = String(hitCard.cover);
+    }
+  } catch (e) {
+    console.warn('[QQDailyRecommend] feed failed:', e.message);
+  }
+  if (!dailyPlaylistId) {
+    return {
+      loggedIn: true,
+      provider: 'qq',
+      error: 'QQ_DAILY_CARD_UNAVAILABLE',
+      playlist: { provider: 'qq', id: 'qq-daily', name: '每日推荐', cover: '', trackCount: 0 },
+      tracks: [],
+    };
+  }
+  // 用当天生成的歌单 id 取全量（走已登录态，歌单名形如「<昵称>的今日私享」）
+  const detail = await qqGetJSON('https://c.y.qq.com/qzone/fcg-bin/fcg_ucc_getcdinfo_byids_cp.fcg', {
+    type: 1,
+    utf8: 1,
+    disstid: dailyPlaylistId,
+    loginUin: uin,
+    format: 'json',
+    inCharset: 'utf8',
+    outCharset: 'utf-8',
+    notice: 0,
+    platform: 'yqq.json',
+    needNewCode: 0,
+  }, { headers: { Referer: 'https://y.qq.com/n/yqq/playlist' }, cookie: true });
+  const cd = detail && detail.cdlist && detail.cdlist[0] ? detail.cdlist[0] : {};
+  const rawTracks = Array.isArray(cd.songlist) ? cd.songlist : [];
+  const tracks = rawTracks.map(mapQQPlaylistTrack).filter(s => s.name && (s.mid || s.id));
+  return {
+    loggedIn: true,
+    provider: 'qq',
+    playlist: {
+      provider: 'qq',
+      id: 'qq-daily',
+      name: '每日推荐',
+      cover: cover || cd.logo || cd.diss_cover || '',
+      trackCount: tracks.length,
+    },
+    tracks,
+  };
 }
 
 function qqAlbumCover(albumMid, size) {
@@ -3786,7 +3884,7 @@ const server = http.createServer(async (req, res) => {
           toplist: {
             module: 'musicToplist.ToplistInfoServer',
             method: 'GetDetail',
-            param: { topid: Number(topid), num: 20 }
+            param: { topid: Number(topid), num: 100 }   // 全量：点榜单时队列要加全部（2026-10-08，原 20）
           }
         })
       }, { headers: { Referer: 'https://y.qq.com/n/ryqq_v2/toplist/' + topid } });
@@ -3795,13 +3893,21 @@ const server = http.createServer(async (req, res) => {
       var tracks = songList.map(function(item) {
         var s = item && item.singer ? item : (item && item.songinfo) || {};
         var singer = s.singer || (item && item.singer) || [];
+        var songMid = s.mid || s.songmid || '';
         return {
-          id: 'qq_' + (s.mid || s.songmid || ''),
+          id: 'qq_' + songMid,
+          // mid/songmid/mediaMid 供前端官方解析链取用（resolveSongSourceQuietly /
+          // playQueueAt 主链都是 song.mid || song.songmid || song.id 的取值顺序，
+          // 缺这三个字段会拿 'qq_' 复合 id 当 mid 去请求官方 API → 必失败 →
+          // 每首都慢速降级第三方，下一首预取也不可靠。2026-10-08 补齐，对齐 mapQQPlaylistTrack）
+          mid: songMid,
+          songmid: songMid,
+          mediaMid: (s.file && s.file.media_mid) || s.strMediaMid || s.media_mid || '',
           name: s.name || s.songname || '',
           artist: (Array.isArray(singer) ? singer.map(function(a) { return a.name; }).join('/') : (singer.name || '')),
           album: (s.album && s.album.name) || s.albumname || '',
           cover: (s.album && s.album.mid) ? ('https://y.gtimg.cn/music/photo_new/T002R300x300M000' + s.album.mid + '.jpg') : (s.albummid ? ('https://y.gtimg.cn/music/photo_new/T002R300x300M000' + s.albummid + '.jpg') : ''),
-          duration: s.interval || 0,
+          duration: (Number(s.interval) || 0) * 1000,  // 毫秒，对齐 mapQQPlaylistTrack —— 前端把 duration 传给换源时长校验时按毫秒算（2026-10-08 修：秒单位会让期望时长恒 0，校验全灭）
           provider: 'qq',
         };
       }).filter(function(t) { return t.id && t.name; });
@@ -3833,6 +3939,17 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       console.error('[QQPlaylistTracks]', err);
       sendJSON(res, { provider: 'qq', error: err.message, tracks: [] }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/qq/daily/recommend') {
+    try {
+      const data = await handleQQDailyRecommend();
+      sendJSON(res, data);
+    } catch (err) {
+      console.error('[QQDailyRecommend]', err);
+      sendJSON(res, { provider: 'qq', loggedIn: false, error: err.message, tracks: [] }, 500);
     }
     return;
   }
@@ -4513,11 +4630,16 @@ const server = http.createServer(async (req, res) => {
       const config = readMusicSourcesConfig();
 
       // 元数据兜底：歌手为空时按网易云 ID 回查补齐（详见 fillMetaFromNetease 注释）
+      // duration 单位启发式：恢复态快照里的旧队列对象可能是秒单位（2026-10-08 前的榜单映射），
+      // 换源时长校验按毫秒算会把期望时长归零（"期望 0s" 校验全灭）。
+      // 阈值 6000 安全：秒制最长歌 ~1800（20 分钟）< 6000；毫秒制最短歌 ~30000（30 秒）> 6000，无重叠。
+      let metaDuration = Number(duration) || 0;
+      if (metaDuration > 0 && metaDuration < 6000) metaDuration = metaDuration * 1000;
       let meta = {
         name: name || '',
         artists: Array.isArray(artists) ? artists : [],
         album: album || '',
-        duration: duration || 0
+        duration: metaDuration
       };
       if (meta.artists.length === 0) {
         const filled = await fillMetaFromNetease(id, meta);
@@ -4525,7 +4647,10 @@ const server = http.createServer(async (req, res) => {
       }
 
       const result = await parseMusic({
-        id: parseInt(String(id), 10),
+        // QQ 榜单歌的 id 是 'qq_'+mid 复合串，parseInt 会得到 NaN → 失败缓存 key
+        // 全部撞车成 "NaN_strategy"（一首失败全队连坐进冷却）。NaN 安全转换：
+        // 数字 id 照旧，非数字 id（'qq_xxx' / mid 串）原样作为缓存 key（2026-10-08）
+        id: Number.isFinite(parseInt(String(id), 10)) ? parseInt(String(id), 10) : String(id),
         name: meta.name,
         artists: meta.artists,
         album: meta.album,

@@ -128,7 +128,9 @@ var hotSongTracks = [];        // 热歌榜预加载歌曲
 var hotSongCover = '';         // 热歌榜封面
 var rapTracks = [];            // 中文说唱榜预加载歌曲
 var rapCover = '';             // 中文说唱榜封面
-var qqDailyFirstSong = null;   // QQ每日推荐第一首歌信息
+// QQ 每日推荐全量（网易云未登录 / QQ 已登录时，首页数据源走这里；见 loadQQHomeDaily）
+var qqHomeDailyState = { loading: false, loaded: false, tracks: [], playlist: null, error: '', updatedAt: 0 };
+var qqHomeDailyToken = 0;
 var homeVisualPresetActive = false;
 var homeVisualPrevPreset = 0;
 var HOME_LISTEN_STATS_KEY = 'bhandsmusic-listen-stats-v1';
