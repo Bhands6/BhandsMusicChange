@@ -86,6 +86,30 @@ const NETEASE_LOGIN_URL = 'https://music.163.com/#/login';        // 网易云�
 const QQ_LOGIN_PARTITION = 'persist:bhandsmusic-qqmusic-login';     // QQ 音乐登录的 session 分区（持久化）
 const QQ_LOGIN_URL = 'https://y.qq.com/n/ryqq/profile';           // QQ 音乐登录页地址
 
+// 登录页会请求但已失效/无用的边缘域名（2026-10-08 实测：TLS 握手被对端直接断开，
+// open.login.qq.com / wup.im.qq.com 公网 DNS 已废弃，gdt.qq.com / lives.l.qq.com 解析不稳定）。
+// 页面对它们反复重试会在终端刷 "handshake failed ... net_error -100" 日志风暴，但不影响扫码登录。
+// 在 webRequest 层 cancel（DNS 之前掐掉）即可从源头消除噪音。
+const DEAD_LOGIN_DOMAINS = [
+  'open.login.qq.com',  // QQ 互联 OAuth（已下线）
+  'wup.im.qq.com',      // 老长连接上报（已下线）
+  'gdt.qq.com',         // 广点通广告
+  'lives.l.qq.com',     // 直播推广上报
+];
+
+// ptlogin 扫码页的"本机客户端快速登录探测"域名（2026-10-08 [NETOBS] 观测实锤的 SSL 刷屏真凶）：
+// 这些伪本地域名泛解析到 127.0.0.1，页面 JS 轮询 4303~4309/9410/16873/13013~14015 等端口
+// 检测本机是否运行 QQ/微信客户端以实现一键登录。本机客户端没运行时每个端口探测都是一次
+// https://127.0.0.1 的 TLS 握手失败（net_error -100），扫码页会刷出几十条 ERROR。
+// 处理方式是**条件放行**：请求到达时先用 Node 层 TCP 探测本机端口 ——
+// 客户端在运行 → 放行（快速登录可用，客户端持有腾讯本地证书，握手正常无日志）；
+// 客户端没运行 → cancel（请求在 DNS/TLS 之前掐掉，效果等同失败但不产生握手错误日志）。
+const LOCAL_FAST_LOGIN_DOMAINS = [
+  'localhost.ptlogin2.qq.com',  // QQ 客户端快速登录探测
+  'localhost.sec.qq.com',       // QQ 安全助手探测
+  'localhost.weixin.qq.com',    // 微信快速登录探测
+];
+
 // ==================== Chromium 性能优化开关 ====================
 // 在应用启动前设置 Chromium 命令行参数，优化音视频播放和渲染性能
 const CHROMIUM_PERFORMANCE_SWITCHES = [
@@ -2572,14 +2596,96 @@ if (!gotSingleInstanceLock) {
     }
   });
 
-  // 忽略 SSL 证书错误（兼容国内音乐平台）
+  // SSL 证书错误处理：仅对音乐平台登录窗口的独立分区放行（兼容国内平台老旧证书链），
+  // 其余窗口（主窗口等）保持严格校验并记录日志，防止中间人攻击
+  const loginSessions = new Set();
+  const getLoginSessions = () => {
+    if (loginSessions.size === 0) {
+      try {
+        loginSessions.add(session.fromPartition(QQ_LOGIN_PARTITION));
+        loginSessions.add(session.fromPartition(NETEASE_LOGIN_PARTITION));
+      } catch (e) {
+        console.warn('login session init failed:', e.message);
+      }
+    }
+    return loginSessions;
+  };
   app.on('certificate-error', (event, webContents, url, error, certificate, callback) => {
-    event.preventDefault();
-    callback(true);
+    const wcSession = webContents && webContents.session;
+    if (wcSession && getLoginSessions().has(wcSession)) {
+      event.preventDefault();
+      callback(true);
+      return;
+    }
+    console.warn('[cert] 证书校验失败已拦截:', url, error);
+    callback(false);
   });
 
   // 应用就绪后初始化
   app.whenReady().then(async () => {
+    // 拦截登录页会请求的死域名与伪本地快速登录探测（见 DEAD_LOGIN_DOMAINS /
+    // LOCAL_FAST_LOGIN_DOMAINS 注释）。注意 webRequest.onBeforeRequest 同一 session
+    // 只能注册一个 listener（后注册会覆盖前一个），所以两组域名必须合并在同一个回调里分流：
+    //   - DEAD_LOGIN_DOMAINS：已废弃/广告域名 → 无条件 cancel
+    //   - LOCAL_FAST_LOGIN_DOMAINS：先 TCP 探测本机端口，QQ/微信客户端在运行才放行，
+    //     否则 cancel —— 既保留"一键快速登录"，又不产生 TLS 握手失败日志
+    try {
+      const fastLoginSet = new Set(LOCAL_FAST_LOGIN_DOMAINS);
+      const blockedFilters = DEAD_LOGIN_DOMAINS.concat(LOCAL_FAST_LOGIN_DOMAINS)
+        .map((host) => '*://' + host + '/*');
+      // 探测结果短 TTL 缓存：key = 端口（本地端口数量有限，无泄漏风险）
+      const fastLoginProbeCache = new Map();
+      const FAST_LOGIN_PROBE_TTL = 5000;
+
+      /** TCP 探测 127.0.0.1:port 是否有客户端监听（带短缓存，避免扫码页轮询风暴） */
+      const probeLocalFastLogin = (port) => new Promise((resolve) => {
+        const cached = fastLoginProbeCache.get(port);
+        if (cached && Date.now() - cached.at < FAST_LOGIN_PROBE_TTL) {
+          resolve(cached.alive);
+          return;
+        }
+        let settled = false;
+        const finish = (alive) => {
+          if (settled) return;
+          settled = true;
+          try { sock.destroy(); } catch (e) {}
+          fastLoginProbeCache.set(port, { alive, at: Date.now() });
+          resolve(alive);
+        };
+        const sock = net.connect({ host: '127.0.0.1', port });
+        sock.setTimeout(1500, () => finish(false));
+        sock.once('connect', () => finish(true));
+        sock.once('error', () => finish(false));
+      });
+
+      const targetSessions = [
+        session.defaultSession,
+        session.fromPartition(QQ_LOGIN_PARTITION),
+        session.fromPartition(NETEASE_LOGIN_PARTITION),
+      ];
+      for (const targetSession of targetSessions) {
+        targetSession.webRequest.onBeforeRequest({ urls: blockedFilters }, async (details, callback) => {
+          let host = '';
+          let port = 443;
+          try {
+            const parsed = new URL(details.url);
+            host = parsed.hostname;
+            port = Number(parsed.port) || 443;
+          } catch (e) {
+            callback({ cancel: true });
+            return;
+          }
+          if (!fastLoginSet.has(host)) {
+            callback({ cancel: true });   // 死域名：无条件掐掉
+            return;
+          }
+          const alive = await probeLocalFastLogin(port);
+          callback(alive ? {} : { cancel: true });  // 客户端在 → 放行；不在 → 静默掐掉
+        });
+      }
+    } catch (e) {
+      console.warn('dead domain interceptor register failed:', e.message);
+    }
     // 本地音乐库：注册 bhandsmusic-local:// 流式播放协议
     try {
       await localMusicLibrary.installProtocol(require('electron').protocol);

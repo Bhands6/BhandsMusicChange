@@ -11,8 +11,10 @@
 <title>BhandsMusic</title>
 <meta name="referrer" content="no-referrer">
 
-<!-- 字体：Cinzel Decorative（标题装饰）、Inter（西文正文）、JetBrains Mono（等宽）、Noto Sans SC（中文）、UnifrakturCook（哥特装饰） -->
-<link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=Inter:wght@200;300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&family=UnifrakturCook:wght@700&display=swap" rel="stylesheet">
+<!-- 字体说明：原引用 Google Fonts（fonts.googleapis.com / fonts.gstatic.com），2026-10-08 移除 ——
+     该域名在国内网络环境不可达（TLS 握手被断），每次页面渲染文本都会触发大量字体分片请求失败，
+     造成终端 "handshake failed ... net_error -100" 刷屏。字体从未加载成功，页面一直使用下方
+     --font-sans / --font-mono 变量里的系统字体兜底渲染，移除后视觉零变化且加载更快。 -->
 
 <!-- 第三方库 -->
 <script src="vendor/three.r128.min.js"></script>   <!-- Three.js r128 — 3D 渲染引擎 -->
