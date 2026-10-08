@@ -83,6 +83,7 @@ async function refreshLoginStatus(force) {
       myPodcastCollections = [];
       myPodcastItems = {};
       likedSongMap = {};
+      homeDiscoverState.loaded = false;   // 对齐 QQ 掉登录分支：掉登录后首页数据标记过期，下次登录重新拉（2026-10-08）
       updateLikeButtons();
     }
     return info;
@@ -606,9 +607,22 @@ async function logoutActiveAccount() {
     originalTracks = []; originalCover = '';
     hotSongTracks = []; hotSongCover = '';
     rapTracks = []; rapCover = '';
-    qqDailyFirstSong = null;
+    qqHomeDailyState = { loading: false, loaded: false, tracks: [], playlist: null, error: '', updatedAt: 0 };
+  qqHomeDailyToken++;
     playQueue = []; currentIdx = -1; shelfForceQueue = false;
     try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
+    // 登出重置播放 UI：控制栏、迷你封面、进度、歌词都不能残留上一首（2026-10-08）
+    // 顺序敏感：先清 thumb-title/thumb-artist 再清歌词 —— withLyricFallback 会拿这两处
+    // DOM 文本生成"标题 - 歌手"兜底行，反过来清会把残留标题填回歌词舞台
+    updateControlTrackInfo({});
+    var thumbTitleEl = document.getElementById('thumb-title');
+    var thumbArtistEl = document.getElementById('thumb-artist');
+    if (thumbTitleEl) thumbTitleEl.textContent = '';
+    if (thumbArtistEl) thumbArtistEl.textContent = '';
+    loadCoverFromUrl('');   // 清粒子封面纹理 + thumb-cover + album-bg（含 currentCoverSource=null 防 stale 重设）
+    setOriginalLyricsState([], false, 'none');
+    applyOriginalLyricsState();
+    try { updatePlaybackProgressUi(); } catch (e) {}
     setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);
     renderHomeDiscover();
     renderHomeTiles();
@@ -653,9 +667,22 @@ async function doLogout() {
   originalTracks = []; originalCover = '';
   hotSongTracks = []; hotSongCover = '';
   rapTracks = []; rapCover = '';
-  qqDailyFirstSong = null;
+  qqHomeDailyState = { loading: false, loaded: false, tracks: [], playlist: null, error: '', updatedAt: 0 };
+  qqHomeDailyToken++;
   playQueue = []; currentIdx = -1; shelfForceQueue = false;
   try { if (audio && !audio.paused) audio.pause(); audio.src = ''; } catch (e) {}
+  // 登出重置播放 UI：控制栏、迷你封面、进度、歌词都不能残留上一首（2026-10-08）
+  // 顺序敏感：先清 thumb-title/thumb-artist 再清歌词 —— withLyricFallback 会拿这两处
+  // DOM 文本生成"标题 - 歌手"兜底行，反过来清会把残留标题填回歌词舞台
+  updateControlTrackInfo({});
+  var thumbTitleEl = document.getElementById('thumb-title');
+  var thumbArtistEl = document.getElementById('thumb-artist');
+  if (thumbTitleEl) thumbTitleEl.textContent = '';
+  if (thumbArtistEl) thumbArtistEl.textContent = '';
+  loadCoverFromUrl('');   // 清粒子封面纹理 + thumb-cover + album-bg（含 currentCoverSource=null 防 stale 重设）
+  setOriginalLyricsState([], false, 'none');
+  applyOriginalLyricsState();
+  try { updatePlaybackProgressUi(); } catch (e) {}
   setHomeArt('hero-daily-art', 'assets/IdleIcon.png', 800);
   renderHomeDiscover();
   renderHomeTiles();
