@@ -542,6 +542,15 @@ function buildMirrorUrl(originalUrl, mirror) {
   if (base.includes('{url}')) return base.replace(/\{url\}/g, source);
   return base.replace(/\/+$/, '/') + source;
 }
+function isMirrorPrefixedUrl(url, mirrors) {
+  const raw = String(url || '');
+  if (!/^https?:\/\//i.test(raw)) return false;
+  return (mirrors || []).some(mirror => {
+    try {
+      return raw.toLowerCase().startsWith(new URL(mirror).origin.toLowerCase() + '/');
+    } catch (_) { return false; }
+  });
+}
 function uniqueDownloadCandidates(urls, opts) {
   opts = opts || {};
   const directUrls = (Array.isArray(urls) ? urls : [urls])
@@ -551,6 +560,10 @@ function uniqueDownloadCandidates(urls, opts) {
   const mirrors = opts.useMirrors === false ? [] : (UPDATE_CONFIG.mirrors || []);
   const mirrored = [];
   directUrls.forEach(source => {
+    // 2026-10-08 修复：source 已是镜像前缀 URL（如 ghfast.top/https://github.com/...，
+    // 来自 downloadUrls 的嵌套展开）时不再二次拼镜像——那会生成「双重前缀」必挂垃圾候选，
+    // 之前 13 条线路里近一半是这种。
+    if (isMirrorPrefixedUrl(source, mirrors)) return;
     mirrors.forEach((mirror, index) => {
       const url = buildMirrorUrl(source, mirror);
       if (url) mirrored.push({
@@ -615,6 +628,8 @@ function extractReleaseNotes(body) {
     if (!text) return;
     if (/^(what'?s changed|changes|changelog|full changelog|更新日志)$/i.test(text)) return;
     if (/^https?:\/\//i.test(text)) return;
+    // 2026-10-09：跳过纯版本号行（tag 标题在弹窗大标题里已显示，避免 "01 v2.1.0" 冗余行）
+    if (/^v?\d+(?:\.\d+){1,3}$/i.test(text)) return;
     if (text.length > 72) return;
     notes.push(text);
   });
@@ -886,13 +901,170 @@ function classifyUpdateError(err) {
   }
   return { code: code || 'UPDATE_FAILED', reason: '更新失败：' + detail, detail };
 }
+/* ==================== 更新下载：系统代理检测 + 线路竞速 ====================
+ * 背景（2026-10-08 实测）：配置的公共 GitHub 加速线路大部分限速 200~400KB/s、
+ * 部分已下线，而用户开着代理/VPN 访问 GitHub 直连本可以很快——但 Node 的全局
+ * fetch（undici）不读系统代理设置，流量照样直连。
+ * 方案：下载前检测系统代理（env → Electron resolveProxy → 注册表），检测到
+ * 代理就让更新相关请求统一走 ProxyAgent；同时对全部候选线路并发 1MB Range
+ * 探测限速，按实测速度排序后再下载（开代理时直连自然胜出，没开代理时活着的
+ * 镜像胜出，死线路直接沉底）。
+ */
+let systemProxyCache = { url: '', at: 0 };
+let updateProxyAgent = null;
+let updateProxyAgentUrl = '';
+function normalizeProxyUrl(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return '';
+  const withScheme = /^https?:\/\//i.test(text) ? text : ('http://' + text);
+  try {
+    const u = new URL(withScheme);
+    if (!u.hostname) return '';
+    return u.origin;
+  } catch (_) { return ''; }
+}
+async function detectSystemProxy(force) {
+  const now = Date.now();
+  if (!force && systemProxyCache.url && now - systemProxyCache.at < 30000) return systemProxyCache.url;
+  let proxy = '';
+  // 1) 环境变量（命令行/CI 惯例）
+  if (!proxy) {
+    proxy = normalizeProxyUrl(
+      process.env.HTTPS_PROXY || process.env.https_proxy
+      || process.env.HTTP_PROXY || process.env.http_proxy
+      || process.env.ALL_PROXY || process.env.all_proxy || ''
+    );
+  }
+  // 2) Electron Chromium 代理解析（含 PAC/系统代理的真实决策；server.js 跑在主进程内）
+  if (!proxy && process.versions && process.versions.electron) {
+    try {
+      const { session } = require('electron');
+      const decision = await session.defaultSession.resolveProxy('https://github.com');
+      const m = String(decision || '').match(/\b(?:PROXY|HTTPS|SOCKS)\s+([^\s;]+)/i);
+      if (m) proxy = normalizeProxyUrl(m[1]);
+    } catch (_) {}
+  }
+  // 3) Windows 注册表兜底（Clash/v2rayN 的「系统代理」模式写这里；纯 node 场景也走这条）
+  if (!proxy && process.platform === 'win32') {
+    try {
+      const out = require('child_process').execSync(
+        'reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyEnable & reg query "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings" /v ProxyServer',
+        { encoding: 'utf8', timeout: 4000 }
+      );
+      if (/ProxyEnable\s+REG_DWORD\s+0x1\b/i.test(out)) {
+        const ps = (out.match(/ProxyServer\s+REG_SZ\s+(\S+)/i) || [])[1] || '';
+        // ProxyServer 可能是 "127.0.0.1:7890" 或 "http=...;https=...;ftp=..." 形式
+        const perProto = ps.match(/https=([^;\s]+)/i);
+        proxy = normalizeProxyUrl(perProto ? perProto[1] : ps.split(';')[0]);
+      }
+    } catch (_) {}
+  }
+  systemProxyCache = { url: proxy, at: now };
+  return proxy;
+}
+async function updateAwareFetch(url, init) {
+  const proxy = await detectSystemProxy();
+  if (!proxy) return fetch(url, init);
+  const { fetch: undiciFetch, ProxyAgent } = require('undici');
+  if (!updateProxyAgent || updateProxyAgentUrl !== proxy) {
+    updateProxyAgent = new ProxyAgent(proxy);
+    updateProxyAgentUrl = proxy;
+  }
+  return undiciFetch(url, Object.assign({}, init, { dispatcher: updateProxyAgent }));
+}
 async function fetchWithTimeout(url, opts, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs || 12000);
   try {
-    return await fetch(url, Object.assign({}, opts || {}, { signal: controller.signal }));
+    return await updateAwareFetch(url, Object.assign({}, opts || {}, { signal: controller.signal }));
   } finally {
     clearTimeout(timer);
+  }
+}
+const PROBE_READ_MS = 2500;   // 读流测速窗口（留 ~0.9s 给连接阶段，总探测 3.4s 封顶）
+async function probeCandidateSpeed(url, timeoutMs, maxBytes) {
+  const cap = Number(maxBytes) > 0 ? maxBytes : 1048576;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs || 3400);
+  const startedAt = Date.now();
+  let received = 0;
+  try {
+    const resp = await updateAwareFetch(url, {
+      headers: {
+        'User-Agent': `BhandsMusic/${APP_VERSION}`,
+        'Range': `bytes=0-${cap - 1}`,
+      },
+      signal: controller.signal,
+    });
+    if (!resp.ok) return null;
+    const reader = resp.body.getReader();
+    // 慢线路读不满 1MB：按读窗口时间截断，避免把活着的慢线路误判成「失败」
+    while (received < cap && Date.now() - startedAt < PROBE_READ_MS) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      received += chunk.value.byteLength;
+    }
+    try { await reader.cancel(); } catch (_) {}
+    const elapsed = Date.now() - startedAt;
+    return received > 0 && elapsed > 0 ? Math.round((received * 1000) / elapsed) : 1;
+  } catch (_) {
+    return null; // 连接失败/超时：线路不可用
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function rankDownloadCandidatesByProbe(candidates) {
+  const list = (Array.isArray(candidates) ? candidates : []).slice();
+  if (!list.length) return list;
+  const results = await Promise.all(list.map(async item => {
+    const speed = await probeCandidateSpeed(item.url, 3400, 1048576);
+    return { item, speed };
+  }));
+  // 探测成功（有速度）的按速度降序在前；null（连接失败）的沉底保持原相对顺序（稳定排序兜底）
+  results.sort((a, b) => (b.speed == null ? -1 : b.speed) - (a.speed == null ? -1 : a.speed));
+  results.forEach(r => {
+    if (r.speed != null) console.log('[UpdateProbe] ' + (r.item.label || r.item.url) + ' → ' + r.speed + ' B/s');
+    else console.log('[UpdateProbe] ' + (r.item.label || r.item.url) + ' → 不可用');
+  });
+  return results.map(r => r.item);
+}
+/* ==================== 更新下载：启动清理 ====================
+ * 用户诉求（2026-10-09）：安装完成后清理安装包，别让 158MB 的安装包一直囤着。
+ * 下载目录在 userData/updates/downloads（main.js 用 env 指入，dev 与打包版共用）。
+ * 启动时跑一次，判定规则：
+ * 1. *.download 中断残片 → 无条件删（半截文件毫无价值）
+ * 2. 安装包版本 > 当前运行版本 → 保留（用户下载了新版本还没装，删了就得重下 158MB）
+ * 3. 安装包版本 < 当前运行版本 → 旧版垃圾，删
+ * 4. 安装包版本 == 当前运行版本 且 文件时间早于本次启动 → 刚用它装完了当前版本，删
+ */
+function cleanupUpdateDownloadsOnBoot() {
+  try {
+    if (!fs.existsSync(UPDATE_DOWNLOAD_DIR)) return;
+    const bootTime = Date.now();
+    let removed = 0;
+    fs.readdirSync(UPDATE_DOWNLOAD_DIR).forEach(name => {
+      const full = path.join(UPDATE_DOWNLOAD_DIR, name);
+      let stat = null;
+      try { stat = fs.statSync(full); } catch (_) { return; }
+      if (!stat || !stat.isFile()) return;
+      try {
+        if (/\.download$/i.test(name)) {
+          fs.unlinkSync(full);
+          removed++;
+          return;
+        }
+        if (!/^BhandsMusic-\d+(?:\.\d+){1,3}-Setup\.exe$/i.test(name)) return;
+        const cmp = compareVersions(normalizeVersion(name), APP_VERSION);
+        if (cmp > 0) return; // 比当前运行版本还新 = 还没安装的更新包，保留
+        if (cmp < 0 || stat.mtimeMs < bootTime) {
+          fs.unlinkSync(full);
+          removed++;
+        }
+      } catch (_) {}
+    });
+    if (removed > 0) console.log('[UpdateCleanup] 启动清理安装包 ' + removed + ' 个: ' + UPDATE_DOWNLOAD_DIR);
+  } catch (e) {
+    console.warn('[UpdateCleanup] 清理失败:', e && e.message);
   }
 }
 async function fetchTextFromCandidates(candidates, timeoutMs) {
@@ -1183,11 +1355,25 @@ function ensureMirrorCanBeVerified(job, candidate) {
 }
 async function downloadUpdateAssetWithMirrors(job) {
   const tmpPath = job.filePath + '.download';
-  const candidates = Array.isArray(job.downloadCandidates) && job.downloadCandidates.length
+  const candidates0 = Array.isArray(job.downloadCandidates) && job.downloadCandidates.length
     ? job.downloadCandidates
     : uniqueDownloadCandidates(job.downloadUrl || '');
-  const failures = [];
   fs.mkdirSync(UPDATE_DOWNLOAD_DIR, { recursive: true });
+  // 2026-10-08：下载前对全部候选线路并发 1MB Range 探测（约 3.4s），
+  // 按实测速度排序——开代理/VPN 时 GitHub 直连会自然胜出，没开时活着的
+  // 加速线路胜出，死线路沉底但保留串行兜底重试。探测失败不阻断下载。
+  let candidates = candidates0;
+  if (candidates0.length > 1) {
+    job.message = '正在测速选择最快线路…';
+    job.updatedAt = Date.now();
+    try {
+      candidates = await rankDownloadCandidatesByProbe(candidates0);
+    } catch (probeErr) {
+      console.warn('[UpdateProbe] 测速失败，回退默认线路顺序:', probeErr && probeErr.message);
+      candidates = candidates0;
+    }
+  }
+  const failures = [];
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
@@ -5075,6 +5261,9 @@ const server = http.createServer(async (req, res) => {
   if (isBlockedStaticPath(filePath)) { res.writeHead(404); res.end('Not Found'); return; }
   serveStatic(res, filePath);
 });
+
+// 启动清理：装完即删安装包 / 旧版垃圾 / 中断残片（见 cleanupUpdateDownloadsOnBoot 注释）
+cleanupUpdateDownloadsOnBoot();
 
 server.listen(PORT, HOST, () => {
   console.log('======================================================');
