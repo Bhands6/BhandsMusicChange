@@ -101,7 +101,12 @@ function applyLatestUpdateInfo(data) {
   updatePreviewState.patchAvailable = !!(release.patchAvailable && release.patch && release.patch.downloadUrl);
   updatePreviewState.patchUrl = updatePreviewState.patchAvailable ? release.patch.downloadUrl : '';
   updatePreviewState.patchFallbackTried = false;
-  updatePreviewState.hero = release.summary || (updatePreviewState.updateAvailable ? '发现新版本，建议更新。' : '当前版本，更新检测已就绪。');
+  var summaryText = String(release.summary || '').trim();
+  var firstNote = Array.isArray(release.notes) && release.notes[0] ? String(release.notes[0]).trim() : '';
+  // 2026-10-09：server 端 summary 的兜底数据源就是 notes[0]，下方 01-03 列表已展示同一条，
+  // hero 再渲染一次就重复了（用户反馈"1、下载竞速选线。"出现两行）→ 判重后回退默认文案。
+  if (summaryText && firstNote && summaryText === firstNote) summaryText = '';
+  updatePreviewState.hero = summaryText || (updatePreviewState.updateAvailable ? '发现新版本，建议更新。' : '当前版本，更新检测已就绪。');
   if (Array.isArray(release.notes) && release.notes.length) {
     updatePreviewState.notes = release.notes.slice(0, 4);
   }
