@@ -558,6 +558,8 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 .update-secondary-btn{height:44px;padding:0;border-radius:13px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.035);color:rgba(255,255,255,.55);font-family:inherit;font-size:12px;cursor:pointer;transition:background .18s,border-color .18s,color .18s,transform .18s}
 .update-secondary-btn:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.18);color:rgba(255,255,255,.82);transform:translateY(-1px)}
 .update-footnote{display:block;margin-top:12px;min-height:17px;font-size:11.5px;line-height:1.45;color:rgba(255,244,214,.54)}
+.update-vpn-hint{margin-top:5px;min-height:0;font-size:11px;line-height:1.4;color:rgba(255,244,214,.36)}
+.modal.update-modal.error .update-vpn-hint{color:rgba(255,244,214,.36)}
 .modal.update-modal.ready .update-primary-btn{border-color:rgba(244,210,138,.46);background:rgba(244,210,138,.13);color:#fff0bf}
 .modal.update-modal.error .update-primary-btn{border-color:rgba(255,190,126,.46);background:rgba(255,158,86,.12);color:#ffe3c2}
 .modal.update-modal.error .update-footnote{color:rgba(255,212,170,.82)}
