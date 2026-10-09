@@ -47,10 +47,28 @@ function updateProgressDetailText() {
   return parts.join(' · ');
 }
 function initUpdatePreview() {
+  updatePreviewState.autoPromptPending = true; // 启动检测到更新后自动弹下载界面（用户关过后本会话不再弹）
   renderUpdatePreviewPanel();
   setUpdatePreviewVisible(true);
   checkLatestUpdate();
   setTimeout(startUpdateIconBreathing, 760);
+}
+
+// 2026-10-09 新增：启动时检测到更新 → 自动弹出下载更新界面。
+// 由 applyLatestUpdateInfo（检测完成）驱动；splash 未退场时轮询等待，避免弹窗压在启动页下。
+function maybeAutoOpenUpdateModal() {
+  if (!updatePreviewState.autoPromptPending) return;
+  if (updatePreviewState.checkFailed || !updatePreviewState.updateAvailable) {
+    updatePreviewState.autoPromptPending = false;
+    return;
+  }
+  if (document.body.classList.contains('splash-active')) {
+    setTimeout(maybeAutoOpenUpdateModal, 1600);
+    return;
+  }
+  updatePreviewState.autoPromptPending = false;
+  if (updatePreviewState.autoPromptDismissed || updatePreviewState.open) return;
+  openUpdatePanel();
 }
 
 function setUpdatePreviewVisible(visible) {
@@ -110,6 +128,7 @@ function applyLatestUpdateInfo(data) {
   if (Array.isArray(release.notes) && release.notes.length) {
     updatePreviewState.notes = release.notes.slice(0, 4);
   }
+  maybeAutoOpenUpdateModal();  // 启动自动弹：检测完成即评估（含 splash 等待）
   renderUpdatePreviewPanel();
   setUpdatePreviewVisible(updatePreviewState.updateAvailable || updatePreviewState.preview);
 }

@@ -182,6 +182,8 @@ var aiDepthLastRunAt = 0, aiDepthMinGapMs = 18000;
 var updatePreviewState = {
   visible: false,
   open: false,
+  autoPromptPending: false,   // 启动自动弹窗待执行（initUpdatePreview 置位，检测完成后消费）
+  autoPromptDismissed: false, // 本次会话用户手动关过更新弹窗 → 不再自动弹（入口图标仍在）
   status: 'idle',
   progress: 0,
   timer: null,

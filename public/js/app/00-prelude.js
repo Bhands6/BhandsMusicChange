@@ -329,6 +329,8 @@ function closeLoginModal() {
 
 // ↓ 原属 14-account.js
 function closeUpdatePanel() {
+  // 2026-10-09：用户手动关过更新弹窗 → 本次会话不再自动弹出（更新入口图标仍保留提示）
+  updatePreviewState.autoPromptDismissed = true;
   closeGsapModal(document.getElementById('update-modal'), function(){
     updatePreviewState.open = false;
   });
