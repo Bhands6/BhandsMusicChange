@@ -147,6 +147,8 @@ try {
 <section id="empty-home" aria-label="BhandsMusic home">
   <div class="empty-home-shell">
     <div class="home-hero" id="hero-daily-bg" onclick="playHomeDailyCard()" style="cursor:pointer">
+      <!-- 兜底图（IdleIcon）用 contain 避免裁字，留边区域由这层同图模糊放大铺满 -->
+      <div class="home-hero-cover-blur" id="hero-daily-art-blur"></div>
       <div class="home-hero-cover-full" id="hero-daily-art"></div>
       <div class="home-hero-cover-overlay"></div>
       <div class="home-hero-bottom">

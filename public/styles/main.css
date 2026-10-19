@@ -289,7 +289,12 @@ body.home-wallpaper-preview #canvas-container{filter:none}
 .home-hero-cover-full{position:absolute;inset:-1px;z-index:0;background-size:cover;background-position:center top;background-color:rgba(255,255,255,.04);opacity:0;transition:opacity .6s ease}
 /* 兜底图（IdleIcon，含烙死的 BhandsMusic 大字）改 contain：按容器比例裁两侧会切到文字，
    完整显示后上下留出的空带由 hero 自身深色渐变承接（setHomeArt 只对兜底图挂这个类）。 */
-.home-hero-cover-full.art-contain{background-size:contain;background-position:center center;background-repeat:no-repeat}
+.home-hero-cover-full.art-contain{background-size:contain;background-position:center center;background-repeat:no-repeat;-webkit-mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1851' height='1008'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23fff' stop-opacity='0'/><stop offset='0.16' stop-color='%23fff' stop-opacity='1'/><stop offset='0.84' stop-color='%23fff' stop-opacity='1'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><rect width='1851' height='1008' fill='url(%23g)'/></svg>");-webkit-mask-size:contain;-webkit-mask-position:center center;-webkit-mask-repeat:no-repeat;mask-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1851' height='1008'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='%23fff' stop-opacity='0'/><stop offset='0.16' stop-color='%23fff' stop-opacity='1'/><stop offset='0.84' stop-color='%23fff' stop-opacity='1'/><stop offset='1' stop-color='%23fff' stop-opacity='0'/></linearGradient></defs><rect width='1851' height='1008' fill='url(%23g)'/></svg>");mask-size:contain;mask-position:center center;mask-repeat:no-repeat}
+/* 上面的留边用「同图模糊放大」铺满，避免竖容器里图缩成中间一条：
+   filter 会把整元素（含背景）模糊，所以必须单独做一层，垫在清晰图之下。
+   亮度必须贴近原图，否则留边过暗会让清晰图的上下边缘显出硬边（贴条感）。 */
+.home-hero-cover-blur{position:absolute;inset:-1px;z-index:0;background-size:cover;background-position:center center;background-repeat:no-repeat;filter:blur(18px) saturate(1.08) brightness(.92);transform:scale(1.08);opacity:0;transition:opacity .5s ease;pointer-events:none}
+.home-hero-cover-blur.show{opacity:1}
 .home-hero-cover-full.has-cover{opacity:1}
 .home-hero-cover-overlay{position:absolute;inset:-1px;z-index:1;background:linear-gradient(180deg,rgba(9,10,14,.2) 0%,rgba(9,10,14,.5) 50%,rgba(9,10,14,.85) 100%);pointer-events:none}
 .home-hero-cover-wrap{position:relative;z-index:2;display:flex;justify-content:center;padding:24px 24px 0}

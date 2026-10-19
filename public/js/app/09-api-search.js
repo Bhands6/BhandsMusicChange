@@ -301,7 +301,15 @@ function setHomeArt(id, url, size) {
   // 兜底图 IdleIcon 把 "BhandsMusic" 大字烙进了图片，cover 会按容器比例从两侧裁剪，
   // 高窗口下会切到首尾字母（2026-10-19 实测 1440 高时每侧裁约 37%，文字留白仅 30.3%）。
   // 只对兜底图改 contain：完整显示不裁字；真实封面仍用 cover 铺满。
-  el.classList.toggle('art-contain', /(^|\/)assets\/IdleIcon\.png(\?|$)/i.test(String(url || '')));
+  var isFallbackArt = /(^|\/)assets\/IdleIcon\.png(\?|$)/i.test(String(url || ''));
+  el.classList.toggle('art-contain', isFallbackArt);
+  // 配套的模糊铺底层（存在 id="<id>-blur" 的兄弟节点时才处理，目前只有 hero 用）：
+  // contain 留出的上下空带由同图模糊放大填充，保持满铺观感。
+  var blurEl = document.getElementById(id + '-blur');
+  if (blurEl) {
+    blurEl.style.backgroundImage = (isFallbackArt && src) ? 'url("' + cssImageUrl(src) + '")' : '';
+    blurEl.classList.toggle('show', !!(isFallbackArt && src));
+  }
 }
 function compactHomeCount(n) {
   n = Number(n) || 0;
