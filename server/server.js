@@ -142,7 +142,10 @@ const BEATMAP_CACHE_DIR = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || (
 );
 // cuefield 反馈记录：桌面端 main.js 注入 userData 下的路径；裸跑（如本地调试）时退回仓库根。
 const CUEFIELD_FEEDBACK_FILE = process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE || path.join(PROJECT_ROOT, 'cuefield-feedback.jsonl');
-const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json');  // 音源配置文件
+// 音源配置（含酷狗登录凭据）：必须可由主进程覆盖为 userData 路径。
+// ⚠️ 打包后 PROJECT_ROOT 是 app.asar（只读），若仍写项目根，登录凭据会「保存失败但接口报成功」，
+//    随后 /api/kugou/login/status 读到默认配置 → 界面永远显示未登录（2026-10-19 实锤）。
+const MUSIC_SOURCES_CONFIG_FILE = process.env.BHANDSMUSIC_MUSIC_SOURCES_CONFIG || path.join(PROJECT_ROOT, '.music-sources.json');
 
 /* ==================== 音源配置管理 ==================== */
 
@@ -187,13 +190,16 @@ function readMusicSourcesConfig() {
 /**
  * 保存音源配置
  * @param {Object} config
+ * @returns {boolean} 是否真正写盘成功（打包后 app.asar 只读，必须把失败暴露给调用方）
  */
 function saveMusicSourcesConfig(config) {
   try {
     fs.writeFileSync(MUSIC_SOURCES_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
     console.log('[MusicSources] 配置已保存');
+    return true;
   } catch (e) {
-    console.error('[MusicSources] 保存配置失败:', e.message);
+    console.error('[MusicSources] 保存配置失败:', MUSIC_SOURCES_CONFIG_FILE, e.message);
+    return false;
   }
 }
 
@@ -5114,10 +5120,10 @@ const server = http.createServer(async (req, res) => {
         const config = readMusicSourcesConfig();
         config.kugouCookie = cookieStr;
         if (!config.kugouVipToken && token) config.kugouVipToken = token;
-        saveMusicSourcesConfig(config);
+        const persisted = saveMusicSourcesConfig(config);
         kugouQrSessions.delete(key);
-        console.log('[KugouLogin] 扫码登录成功，凭据已保存（' + cookieStr.split(';').length + ' 项）');
-        sendJSON(res, { status: 4, success: true });
+        console.log('[KugouLogin] 扫码登录成功，凭据' + (persisted ? '已保存' : '保存失败') + '（' + cookieStr.split(';').length + ' 项）');
+        sendJSON(res, { status: 4, success: true, persisted });
         return;
       }
       sendJSON(res, { status: status, pending: status === 1 || status === 2 });
@@ -5211,9 +5217,9 @@ const server = http.createServer(async (req, res) => {
       const config = readMusicSourcesConfig();
       config.kugouCookie = cookieStr;
       config.kugouVipToken = token;
-      saveMusicSourcesConfig(config);
-      console.log('[KugouLogin] 验证码登录成功，凭据已保存');
-      sendJSON(res, { success: true });
+      const persisted = saveMusicSourcesConfig(config);
+      console.log('[KugouLogin] 验证码登录成功，凭据' + (persisted ? '已保存' : '保存失败'));
+      sendJSON(res, { success: true, persisted });
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
     }

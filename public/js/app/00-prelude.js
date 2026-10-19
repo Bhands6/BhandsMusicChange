@@ -635,13 +635,20 @@ function updateKugouLoginStatusText() {
     el.textContent = !loggedIn ? '未登录' : (sourceOn ? '已登录 · 音质已启用' : '已登录 · 音源未开');
     el.style.color = (loggedIn && sourceOn) ? 'var(--c-accent,#7cf)' : 'rgba(255,255,255,.45)';
     if (row) {
+      // 圆点跟登录态走：这一行不是音源开关，.on 只表示「已登录」。
+      // 之前没人给这行加 .on，登录后文字变了、点还是灰的（2026-10-19）。
+      row.classList.toggle('on', loggedIn);
       row.title = !loggedIn
         ? '扫码登录酷狗概念版，解锁会员音质（FLAC/320k）'
         : (sourceOn
           ? '已登录酷狗概念版，会员音质已参与解析（点击可重新登录）'
           : '已登录，但「酷狗音源」开关没打开，会员音质不会生效 —— 点下方开关开启');
     }
-  }).catch(function () { el.textContent = ''; });
+  }).catch(function () {
+    // 接口失败不能把文案清空：那会让用户完全失去判断依据
+    el.textContent = '状态未知';
+    el.style.color = 'rgba(255,255,255,.45)';
+  });
 }
 
 // ============================================================

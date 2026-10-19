@@ -2330,6 +2330,22 @@ async function createWindow() {
     process.env.BHANDSMUSIC_BEAT_CACHE_DIR = getDefaultBeatCacheDir();
   }
   process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(app.getPath('userData'), 'cuefield-feedback.jsonl');
+  // 音源配置（含酷狗 / 第三方音源登录凭据）必须落在 userData：
+  // 打包后 PROJECT_ROOT 指向 app.asar（只读），写在项目根会抛 ENOTDIR 且被 catch 吞掉，
+  // 表现为「扫码提示登录成功，但状态永远是未登录 / 重启掉登录」（2026-10-19 实锤）。
+  try {
+    const musicSourcesConfig = path.join(app.getPath('userData'), 'music-sources.json');
+    if (!fs.existsSync(musicSourcesConfig)) {
+      const legacyConfig = path.join(__dirname, '..', '.music-sources.json');
+      if (fs.existsSync(legacyConfig)) {
+        fs.copyFileSync(legacyConfig, musicSourcesConfig);
+        console.log('[startup] 已迁移音源配置到 userData:', musicSourcesConfig);
+      }
+    }
+    process.env.BHANDSMUSIC_MUSIC_SOURCES_CONFIG = musicSourcesConfig;
+  } catch (err) {
+    console.warn('[startup] 音源配置路径初始化失败:', err && err.message);
+  }
 
   // 内置换源服务（go-music-api）：随包分发的平台原生二进制，由主进程托管启动。
   // 不 await，避免拖慢窗口创建（实测就绪约 600ms）；就绪后 go-music-service 会清掉

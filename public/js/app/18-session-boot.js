@@ -363,11 +363,16 @@ function pollKugouQrStatus(key, attempts) {
     fetch('/api/kugou/login/qr/check?key=' + encodeURIComponent(key)).then(function (r) { return r.json(); }).then(function (j) {
       var note = document.getElementById('kugou-qr-note');
       if (j && j.status === 4) {
-        if (note) note.textContent = '✅ 登录成功！会员音质已启用';
+        // persisted=false 表示凭据没写进磁盘（典型：打包后 config 路径落在只读的 app.asar）
+        var saved = j.persisted !== false;
+        if (note) {
+          note.textContent = saved ? '✅ 登录成功！会员音质已启用' : '⚠️ 登录成功，但凭据写入失败（重启后会掉登录）';
+          note.style.color = saved ? '' : '#ffb46b';
+        }
         enableKugouSourceOnLogin();
-        showToast('酷狗会员登录成功，已启用会员音质');
+        showToast(saved ? '酷狗会员登录成功，已启用会员音质' : '登录成功，但凭据保存失败：重启后可能需要重新登录');
         updateKugouLoginStatusText();
-        setTimeout(closeKugouQrLogin, 1600);
+        setTimeout(closeKugouQrLogin, saved ? 1600 : 3200);
         return;
       }
       if (j && j.status === 2 && note) note.textContent = '已扫码，请在手机上确认…';
@@ -479,11 +484,13 @@ function renderSmsTab(body) {
     note.textContent = '登录中…';
     fetch('/api/kugou/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code)).then(function (r) { return r.json(); }).then(function (j) {
       if (j && j.success) {
-        note.textContent = '✅ 登录成功！会员音质已启用';
+        var savedCell = j.persisted !== false;
+        note.textContent = savedCell ? '✅ 登录成功！会员音质已启用' : '⚠️ 登录成功，但凭据写入失败（重启后会掉登录）';
+        note.style.color = savedCell ? 'rgba(255,255,255,.5)' : '#ffb46b';
         enableKugouSourceOnLogin();
-        showToast('酷狗会员登录成功，已启用会员音质');
+        showToast(savedCell ? '酷狗会员登录成功，已启用会员音质' : '登录成功，但凭据保存失败：重启后可能需要重新登录');
         updateKugouLoginStatusText();
-        setTimeout(closeKugouQrLogin, 1600);
+        setTimeout(closeKugouQrLogin, savedCell ? 1600 : 3200);
       } else {
         note.textContent = (j && j.error) || '登录失败';
         note.style.color = '#ff8a8a';
