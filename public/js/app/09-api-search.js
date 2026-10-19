@@ -298,6 +298,10 @@ function setHomeArt(id, url, size) {
   el.style.backgroundImage = src ? 'url("' + cssImageUrl(src) + '")' : '';
   el.classList.toggle('has-cover', !!src);
   el.classList.toggle('home-skeleton', !src && homeDiscoverState.loading);
+  // 兜底图 IdleIcon 把 "BhandsMusic" 大字烙进了图片，cover 会按容器比例从两侧裁剪，
+  // 高窗口下会切到首尾字母（2026-10-19 实测 1440 高时每侧裁约 37%，文字留白仅 30.3%）。
+  // 只对兜底图改 contain：完整显示不裁字；真实封面仍用 cover 铺满。
+  el.classList.toggle('art-contain', /(^|\/)assets\/IdleIcon\.png(\?|$)/i.test(String(url || '')));
 }
 function compactHomeCount(n) {
   n = Number(n) || 0;

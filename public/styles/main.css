@@ -287,6 +287,9 @@ body.home-wallpaper-preview #canvas-container{filter:none}
 .home-hero-bg{position:absolute;inset:0;z-index:0;background-size:cover;background-position:center;filter:blur(2px) saturate(1.2);transform:scale(1.03);opacity:0;transition:opacity .6s ease}
 .home-hero-bg.has-cover{opacity:1}
 .home-hero-cover-full{position:absolute;inset:-1px;z-index:0;background-size:cover;background-position:center top;background-color:rgba(255,255,255,.04);opacity:0;transition:opacity .6s ease}
+/* 兜底图（IdleIcon，含烙死的 BhandsMusic 大字）改 contain：按容器比例裁两侧会切到文字，
+   完整显示后上下留出的空带由 hero 自身深色渐变承接（setHomeArt 只对兜底图挂这个类）。 */
+.home-hero-cover-full.art-contain{background-size:contain;background-position:center center;background-repeat:no-repeat}
 .home-hero-cover-full.has-cover{opacity:1}
 .home-hero-cover-overlay{position:absolute;inset:-1px;z-index:1;background:linear-gradient(180deg,rgba(9,10,14,.2) 0%,rgba(9,10,14,.5) 50%,rgba(9,10,14,.85) 100%);pointer-events:none}
 .home-hero-cover-wrap{position:relative;z-index:2;display:flex;justify-content:center;padding:24px 24px 0}
