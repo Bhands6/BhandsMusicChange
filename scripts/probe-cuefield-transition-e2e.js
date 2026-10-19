@@ -15,7 +15,14 @@ process.env.PORT = '3999';
 process.env.HOST = '127.0.0.1';
 process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(TMP, 'fb.jsonl');
 
-const CACHE = 'D:/BhandsMusicCache/beatmaps';
+// 节拍缓存目录：Windows 默认 D 盘，其余平台没有盘符（写死 D:/ 会直接 ENOENT）
+const CACHE = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || (
+  process.platform === 'win32' ? 'D:/BhandsMusicCache/beatmaps' : path.join(os.tmpdir(), 'bhands-beat-cache')
+);
+if (!fs.existsSync(CACHE)) {
+  console.error('未找到节拍缓存目录：' + CACHE + '（先跑一次被测功能生成缓存，或用 BHANDSMUSIC_BEAT_CACHE_DIR 指定）');
+  process.exit(2);
+}
 const entries = fs.readdirSync(CACHE).filter((f) => f.endsWith('.json')).map((f) => {
   try { const j = JSON.parse(fs.readFileSync(path.join(CACHE, f), 'utf8')); return j && j.key && j.map ? j : null; }
   catch (e) { return null; }

@@ -131,7 +131,15 @@ const QQ_COOKIE_FILE = process.env.QQ_COOKIE_FILE || path.join(PROJECT_ROOT, '.q
 const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
-const BEATMAP_CACHE_DIR = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';  // 节拍映射缓存目录
+// 节拍映射缓存目录：Windows 优先用 D 盘（避开系统盘），其余平台必须落在用户数据目录。
+// ⚠️ 不能无条件写死 'D:\\...'：POSIX 下反斜杠是合法文件名字符，path.resolve 会生成
+//    <cwd>/D:\BhandsMusicCache\beatmaps 这种畸形路径，绕过下面的「禁 C 盘」守卫，
+//    最终 mkdir 失败（或建出怪目录）导致缓存静默失效。
+const BEATMAP_CACHE_DIR = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || (
+  process.platform === 'win32'
+    ? 'D:\\BhandsMusicCache\\beatmaps'
+    : path.join(PROJECT_ROOT, '.beat-cache')
+);
 // cuefield 反馈记录：桌面端 main.js 注入 userData 下的路径；裸跑（如本地调试）时退回仓库根。
 const CUEFIELD_FEEDBACK_FILE = process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE || path.join(PROJECT_ROOT, 'cuefield-feedback.jsonl');
 const MUSIC_SOURCES_CONFIG_FILE = path.join(PROJECT_ROOT, '.music-sources.json');  // 音源配置文件

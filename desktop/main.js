@@ -612,6 +612,18 @@ function getUpdateDownloadDir() {
   return path.join(app.getPath('userData'), 'updates');
 }
 
+/**
+ * 节拍映射缓存的默认目录。
+ * Windows 沿用 D 盘（避开系统盘，且 server.js 有「禁 C 盘」守卫）；
+ * macOS/Linux 没有盘符概念，必须落在 userData 下 —— 否则 'D:\\...' 会被当成
+ * 一个含反斜杠的畸形相对路径，导致缓存静默失效（2026-10-19 修复）。
+ * @returns {string}
+ */
+function getDefaultBeatCacheDir() {
+  if (process.platform === 'win32') return 'D:\\BhandsMusicCache\\beatmaps';
+  return path.join(app.getPath('userData'), 'beatmaps');
+}
+
 /* 桌面快捷方式：原先这里有一对 `shouldEnsureDesktopShortcut()` / `ensureDesktopShortcut()`，
  * 但从未接到任何 IPC 通道（前端也搜不到调用），属于设计后未接入的死代码。
  * 快捷方式实际由 NSIS 安装器创建 —— 见 package.json 的
@@ -1690,7 +1702,7 @@ async function walkDirSize(dirPath, depth = 0) {
 }
 
 ipcMain.handle('bhandsmusic-cache-get-info', async () => {
-  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';
+  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || getDefaultBeatCacheDir();
   const cacheRoot = path.dirname(beatmapsDir);
   const userDataPath = app.getPath('userData');
   const networkCachePath = path.join(userDataPath, 'Cache');
@@ -1709,7 +1721,7 @@ ipcMain.handle('bhandsmusic-cache-get-info', async () => {
 
 ipcMain.handle('bhandsmusic-cache-open-path', async (_event, targetPath) => {
   // 安全校验：只允许打开缓存面板返回过的目录（节拍缓存根 / userData）
-  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || 'D:\\BhandsMusicCache\\beatmaps';
+  const beatmapsDir = process.env.BHANDSMUSIC_BEAT_CACHE_DIR || getDefaultBeatCacheDir();
   const allowed = [path.dirname(beatmapsDir), app.getPath('userData')];
   const p = String(targetPath || '');
   if (!allowed.some((root) => p === root || p.startsWith(root + path.sep))) {
@@ -2320,6 +2332,11 @@ async function createWindow() {
   process.env.COOKIE_FILE = path.join(app.getPath('userData'), '.cookie');
   process.env.QQ_COOKIE_FILE = path.join(app.getPath('userData'), '.qq-cookie');
   process.env.BHANDSMUSIC_UPDATE_DIR = getUpdateDownloadDir();
+  // 节拍缓存目录显式注入：主进程（缓存面板）与 server.js 必须用同一路径；
+  // 外部已设置时保留外部值（测试/自定义盘符场景）。
+  if (!process.env.BHANDSMUSIC_BEAT_CACHE_DIR) {
+    process.env.BHANDSMUSIC_BEAT_CACHE_DIR = getDefaultBeatCacheDir();
+  }
   process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(app.getPath('userData'), 'cuefield-feedback.jsonl');
 
   // 内置换源服务（go-music-api）：随包分发的平台原生二进制，由主进程托管启动。
