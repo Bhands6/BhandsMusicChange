@@ -119,36 +119,28 @@ const LOCAL_FAST_LOGIN_DOMAINS = [
   'localhost.weixin.qq.com',    // 微信快速登录探测
 ];
 
-// ==================== Chromium 性能优化开关 ====================
-// 在应用启动前设置 Chromium 命令行参数，优化音视频播放和渲染性能
+// ==================== Chromium 启动开关 ====================
+// 只保留与音视频/后台保活相关的开关。
+// ⚠️ 2026-10-19 起移除全部「强制 GPU」开关（ignore-gpu-blocklist / enable-gpu-rasterization /
+//    enable-oop-rasterization / enable-zero-copy / enable-accelerated-2d-canvas /
+//    force_high_performance_gpu / use-angle d3d11）：
+//    Chromium 的 GPU 黑名单正是为了规避老显卡（多为老 Intel 核显）的纹理合成错乱，
+//    强行越过黑名单会表现为粒子视觉整体偏转、3D 场景倾斜、文字只显示上半截等
+//    「界面能出来但渲染错乱」的故障 —— 这类症状不会触发 GPU 进程崩溃，
+//    下方崩溃守卫救不了。交还 Chromium 自行决策更稳。
+//    需要强制软件渲染时仍可用 BHANDSMUSIC_NO_GPU=1。
 const CHROMIUM_PERFORMANCE_SWITCHES = [
   ['autoplay-policy', 'no-user-gesture-required'], // 允许自动播放音频，无需用户交互
-  ['ignore-gpu-blocklist'],                         // 忽略 GPU 黑名单，强制使用硬件加速
-  ['enable-gpu-rasterization'],                     // 启用 GPU 光栅化
-  ['enable-oop-rasterization'],                     // 启用进程外光栅化（更稳定）
-  ['enable-zero-copy'],                             // 启用零拷贝纹理共享（减少内存拷贝）
-  ['enable-accelerated-2d-canvas'],                 // 启用 2D Canvas 硬件加速
   ['disable-background-timer-throttling'],          // 禁止后台标签页定时器节流（保持音乐播放）
   ['disable-renderer-backgrounding'],               // 禁止后台渲染器降级
   ['disable-backgrounding-occluded-windows'],       // 禁止被遮挡窗口进入后台模式
 ];
-// Windows 需要显式选择 D3D11；macOS 的 ANGLE 只提供 OpenGL/Metal，
-// 强行传入 d3d11 会让 GPU 进程初始化失败，进而使 WebGL 视觉全部降级。
-if (process.platform === 'win32') {
-  CHROMIUM_PERFORMANCE_SWITCHES.push(
-    ['force_high_performance_gpu'],                 // 强制使用高性能独立显卡
-    ['use-angle', 'd3d11']                          // 使用 ANGLE D3D11 后端（Windows 图形兼容层）
-  );
-}
-// ── GPU 崩溃自动降级（2026-09-22）────────────────────────────
-// 下面这批开关会「强制」启用硬件加速与高性能独显；当机器 GPU 环境异常时
-// （驱动更新/独显被禁/被占用），GPU 进程会反复崩溃并触发
-// `FATAL: GPU process isn't usable. Goodbye.` 直接退出 —— 表现为「没有界面出来」。
+// ── GPU 崩溃自动降级（2026-09-22，2026-10-19 保留）────────────────
+// 强制 GPU 开关已移除，但驱动更新/独显被禁/被占用时 GPU 进程仍可能反复崩溃，
+// 触发 `FATAL: GPU process isn't usable. Goodbye.` 直接退出 —— 表现为「没有界面出来」。
 // 用「崩溃标记」实现自动降级：启动前打标记 → 正常启动后清除；
 // 下次启动若发现标记仍在，说明上次 GPU 崩了，本次自动改用软件渲染。
-// ⚠️ 软件渲染时必须同时跳过下面那批强制 GPU 开关，否则它们会把 GPU 进程
-//    重新拉起来并继续崩溃（Windows 下 disableHardwareAcceleration 不足以覆盖它们，
-//    见下方分平台处理）。
+// ⚠️ 走软件渲染分支时不会再叠加任何强制 GPU 开关（那批开关已于 2026-10-19 删除）。
 // 手动逃生：环境变量 BHANDSMUSIC_NO_GPU=1 可强制软件渲染。
 // 标记文件内容 = **连续触发次数**（不是时间戳）。
 // 旧版本写的是 Date.now()（13 位），读取时按「已触发 1 次」兼容。
