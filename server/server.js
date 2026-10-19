@@ -279,6 +279,10 @@ const PATCH_SUPPORTED = !IS_MAC;
 
 /* ==================== 补丁系统配置 ==================== */
 const PATCH_MAX_BYTES = 12 * 1024 * 1024;  // 补丁文件最大 12MB
+// 完整安装包硬上限：纵使上游谎报/不报大小，也不允许无限写盘（当前安装包约 160MB）。
+const FULL_INSTALLER_MAX_BYTES = 1024 * 1024 * 1024;
+// 已声明大小时允许的额外余量（防止 content-length 与实际字节数存在极小差异被误杀）。
+const UPDATE_SIZE_SLACK_BYTES = 4 * 1024 * 1024;
 const PATCH_ALLOWED_ROOTS = new Set(['public', 'desktop', 'build']);  // 允许补丁的目录
 const PATCH_ALLOWED_FILES = new Set(['server/server.js', 'server/dj-analyzer.js', 'package.json', 'package-lock.json']);  // 允许补丁的根文件
 
@@ -939,6 +943,9 @@ function classifyUpdateError(err) {
   if (/HASH|DIGEST|CHECKSUM/i.test(code + ' ' + message)) {
     return { code: code || 'UPDATE_HASH_MISMATCH', reason: '文件校验失败，可能是线路缓存异常，已拦截该安装包。', detail };
   }
+  if (/SIZE_EXCEEDED|TOO_LARGE/i.test(code + ' ' + message)) {
+    return { code: code || 'UPDATE_SIZE_EXCEEDED', reason: '安装包体积异常（超过声明大小或上限），已中止下载以免写满磁盘。', detail };
+  }
   if (/SIZE_MISMATCH|content length/i.test(code + ' ' + message)) {
     return { code: code || 'UPDATE_SIZE_MISMATCH', reason: '下载文件大小不一致，可能是网络中断或线路缓存不完整。', detail };
   }
@@ -1497,6 +1504,13 @@ async function downloadUpdateAssetWithMirrors(job) {
 
       const totalHeader = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
       job.total = totalHeader || job.expectedSize || job.total || 0;
+      // 中途体积守卫：已声明大小 → 声明值 + 余量；未声明 → 硬上限。
+      // 只在下载完成后校验会被上游谎报大小时先写满磁盘（补丁路径早有 PATCH_MAX_BYTES，这里补齐）。
+      const declaredTotal = Math.max(totalHeader, job.expectedSize || 0);
+      const downloadCap = Math.min(
+        declaredTotal > 0 ? declaredTotal + UPDATE_SIZE_SLACK_BYTES : FULL_INSTALLER_MAX_BYTES,
+        FULL_INSTALLER_MAX_BYTES
+      );
       job.progress = 0;
       job.updatedAt = Date.now();
       let speedWindowAt = Date.now();
@@ -1511,6 +1525,11 @@ async function downloadUpdateAssetWithMirrors(job) {
           const buf = Buffer.from(chunk.value);
           job.received += buf.length;
           speedWindowBytes += buf.length;
+          if (job.received > downloadCap) {
+            try { await reader.cancel(); } catch (_) {}
+            throw updateError('UPDATE_SIZE_EXCEEDED',
+              `安装包体积超过上限（已接收 ${job.received} 字节，上限 ${downloadCap}），已中止下载`);
+          }
           const now = Date.now();
           if (now - speedWindowAt >= 900) {
             job.speedBps = Math.round(speedWindowBytes / Math.max(0.001, (now - speedWindowAt) / 1000));
