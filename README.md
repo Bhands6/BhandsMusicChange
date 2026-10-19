@@ -51,17 +51,20 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 ## 核心特性
 
-- **多音源解析**：支持 GD音乐台、UnblockNeteaseMusic、LX Music 脚本、自定义 API 四种第三方音源
+- **多音源解析**：GD音乐台、GoMusic 换源（内置 go-music-api，用酷狗 / 酷我 / QQ / 咪咕官方源兜底）、酷狗音源、LX Music 脚本、UnblockNeteaseMusic 五种第三方音源
+- **酷狗会员音质**：扫码或手机验证码登录酷狗概念版后，kugou 策略优先命中会员 FLAC / 320k；凭据持久化在本机用户数据目录，重启不掉登录
 - **智能音源选择**：VIP/SVIP 用户优先走官方高质量音源，非 VIP 用户优先走第三方免费音源
 - **音质自动降级**：第三方音源尽量使用最高质量（flac），不可用时自动降级到 320k、128k
 - **LX Music 脚本支持**：通过沙盒执行用户上传的 LX Music 音源脚本
+- **AI 深度估计**：专辑封面深度图由 `Xenova/depth-anything-small` 在本地推理（首次使用下载约 50MB，可随时关闭；加载失败或超时自动回退启发式边缘，不影响播放）
+- **Cuefield AutoMix**：实验性自动过渡（默认关闭），过渡完成后弹出本地反馈卡片，评价只留在本机
 - Open-Meteo 天气电台，根据当前位置、城市和天气 mood 生成更合适的播放队列
 - 首页包含天气电台、每日推荐、私人电台、继续听、听歌画像和我的歌单入口
 - Wallpaper 银河首页背景，未播放状态保持干净的星河氛围
 - 播放后切换到 Emily / 默认播放态视觉，歌词舞台与粒子舞台同步工作
 - 基于节奏的电影镜头视觉系统
 - 面向长播客和 DJ 曲目的专属视觉模式
-- 歌词舞台、自定义歌词、歌词位置与视觉控制
+- 歌词舞台、自定义歌词、歌词位置与视觉控制；**独立桌面歌词窗口**与**壁纸模式窗口**
 - 自定义专辑封面上传与裁剪
 - 右键唤起 3D 歌单架，支持歌单队列浏览
 - 网易云音乐账号、搜索、歌单、播客等体验接入
@@ -74,9 +77,10 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 ## 开发运行
 
-```bash
-npm install              # 安装依赖
+需要 Node.js 20+ 与 npm（Electron 42 自带 Node 运行时，不需要全局装 Electron）。
 
+```bash
+npm ci                   # 按 lockfile 安装依赖（首次推荐）
 npm start                # 本地启动（Electron）
 npm run start:win        # Windows 启动（额外把控制台代码页切到 UTF-8，避免中文日志乱码）
 
@@ -85,6 +89,15 @@ npm run build:mac        # macOS 安装包（Apple 芯片 / arm64）
 npm run build:mac:x64    # macOS 安装包（Intel / x64）
 npm run build:mac:dir    # 只解包不做 dmg，便于本地调试
 ```
+
+仓库自带 `.npmrc`，把 Electron 二进制与 electron-builder 资源指向 npmmirror：
+
+```ini
+electron_mirror=https://npmmirror.com/mirrors/electron/
+electron_builder_binaries_mirror=https://npmmirror.com/mirrors/electron-builder-binaries/
+```
+
+若安装时仍报 `Electron failed to install correctly`，见下方「常见问题」。
 
 桌面版入口由 Electron 主进程加载本地服务，产物统一落在 `dist/`：
 
@@ -106,15 +119,58 @@ npm run build:mac:dir    # 只解包不做 dmg，便于本地调试
 
 > macOS 走手动替换是刻意的：macOS 不允许替换正在运行的 `.app`，未做 Apple 公证的应用也无法静默自更新；而且补丁需要写入已签名的应用包内部，会直接破坏代码签名。因此 macOS 版不提供轻量补丁，发布时也不会上传 `.patch.json`。
 
+## 本机数据存哪里
+
+`userData` 在 Windows 上是 `%APPDATA%\BhandsMusic`，macOS 上是 `~/Library/Application Support/BhandsMusic`。打包后程序目录（`resources/app.asar`）是只读的，所有可写数据都落在 userData：
+
+| 内容 | 位置 |
+|---|---|
+| 网易云 / QQ 登录 Cookie | `userData/.cookie`、`userData/.qq-cookie` |
+| 音源配置（含酷狗会员凭据） | `userData/music-sources.json` |
+| 更新包与补丁备份 | `userData/updates` |
+| Cuefield 反馈记录 | `userData/cuefield-feedback.jsonl` |
+| 浏览器缓存 | `userData/Cache` |
+| 节拍分析缓存 | Windows：`D:\BhandsMusicCache\beatmaps`；macOS / Linux：`userData/beatmaps`（可用 `BHANDSMUSIC_BEAT_CACHE_DIR` 覆盖） |
+
+节拍缓存在 Windows 上默认放 D 盘以避开系统盘；机器没有 D 盘时缓存入口会提示不可用，不影响播放。以上路径都不要提交到仓库。
+
+## 常见问题
+
+**`npm start` 报 `Electron failed to install correctly` / `Downloading Electron binary... fetch failed`**
+
+GitHub 不可达时会出现。仓库 `.npmrc` 已把下载源指向 npmmirror；仍然失败时可离线安装：把 `%LOCALAPPDATA%\electron\Cache\` 下对应版本的 zip 解压到 `node_modules\electron\dist`，并在该目录写 `path.txt`（内容为 `electron.exe`）。`dist/win-unpacked` 里也有一份可直接复用的运行时。
+
+**老显卡上粒子 / 3D 视觉错乱（画面整体偏转、文字只显示上半截）**
+
+这是 Chromium 纹理合成问题，不是播放逻辑。应用已不再强制忽略 GPU 黑名单；如仍异常，设置环境变量 `BHANDSMUSIC_NO_GPU=1` 以软件渲染启动（会自动跳过 GPU 相关初始化）。
+
+**打包版登录成功但状态显示未登录 / 重启掉登录**
+
+登录凭据必须写进 userData。确认 `userData/music-sources.json` 存在且可写；主进程启动时会把项目根的旧配置迁移过去一次。
+
+**换了图标但资源管理器里还是旧的**
+
+Windows 会缓存图标，重启资源管理器或重新登录即可；安装包与 exe 的图标由 `build/icon.ico` 决定，必须重新打包才会更新。
+
 ## 测试与校验
 
 ```bash
-npm test                  # 单元测试（node --test）
+npm test                  # 单元测试（node --test，含更新链路平台感知闸门）
 npm run check:hoisting    # 跨 script 函数提升校验
 npm run check:reorg       # 加载期读写顺序等价校验
 ```
 
-`public/js/app/` 下的 19 个前端文件由原 `main.js` 按职责拆分而来，**加载期读写顺序有基线锁定**（`scripts/reorg/load-order-baseline.json`）。改动其中任何顶层代码后请跑一遍 `npm run check:reorg`，顺序不等价会被直接拦下；新增顶层函数同样会触发该闸门（函数声明哈希只取函数名，改函数体不会误报）。
+离屏 Electron 探针（需要本机 Electron 二进制可运行）：
+
+| 命令 | 覆盖范围 |
+|---|---|
+| `npm run probe:ui` | UI 全量探针（视觉控制台 / 面板 / 取景） |
+| `npm run probe:static` | 服务端静态资源暴露范围 |
+| `npm run probe:nsis` | `build/installer.nsh` 语法与安装器逻辑 |
+| `npm run probe:cuefield-api` / `probe:cuefield-e2e` | Cuefield AutoMix 接口与过渡链路 |
+| `npm run probe:parse` | 多音源解析端到端 |
+
+`public/js/app/` 下的 19 个前端文件由原 `main.js` 按职责拆分而来，**加载期读写顺序有基线锁定**（`scripts/reorg/load-order-baseline.json`）。改动其中任何顶层代码后请跑一遍 `npm run check:reorg`，顺序不等价会被直接拦下；新增顶层函数同样会触发该闸门（函数声明哈希只取函数名，改函数体不会误报）。确认是有意的结构调整后，用 `node scripts/check-app-reorg.js --write-baseline` 刷新基线，并在同一次提交里带上基线文件。
 
 ## 📁 项目结构
 
@@ -208,7 +264,7 @@ BhandsMusic 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官�
 
 ## 用户数据与隐私
 
-登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只应保存在本机用户数据目录或浏览器本地存储中，不应提交到仓库。
+登录 Cookie、搜索历史、自定义封面、自定义歌词、节奏分析缓存等数据只保存在本机用户数据目录或浏览器本地存储中，**不随仓库分发**（`.gitignore` 已排除 `.cookie`、`.qq-cookie`、`.music-sources.json` 等）。具体路径见上方「本机数据存哪里」。
 
 
 ## 版权与授权

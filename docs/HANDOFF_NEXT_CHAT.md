@@ -1,105 +1,97 @@
 # BhandsMusic Next Chat Handoff
 
-更新时间：2026-07-27
+更新时间：2026-10-19 ｜ 当前版本：`2.2.4`
 
 ## 新对话先执行
 
 ```powershell
-cd E:\桌面\播放器软件\BhandsMusic\resources\app
+cd F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange
 git status --short --branch
-git log --oneline -5 --decorate
-Get-Content AGENTS.md
-Get-Content docs\PROJECT_MEMORY.md
-Get-Content docs\HANDOFF_NEXT_CHAT.md
+git log --oneline -8 --decorate
 ```
 
-如涉及音源解析、3D 歌单架、安全重建、发布、安装包或旧备份取用，再读：
+按需再读：
+
+| 文档 | 用途 |
+|---|---|
+| `README.md` | 功能全貌、构建 / 更新机制、数据目录、常见问题 |
+| `docs/PROJECT_MEMORY.md` | 历史决策与不可回退的约定 |
+| `docs/APP_REORG_PLAN.md` | `public/js/app/*.js` 拆分规则与加载顺序闸门 |
+| `docs/INSTALLER_STYLE.md` | 安装包视觉规范（改 `build/installer.nsh` 前必读） |
+| `docs/3D_PLAYLIST_SHELF_MEMORY.md` | 3D 歌单架坐标 / 相机历史 |
+| `docs/MUSIC_PARSER_WEB_VS_CHANGE.md` | 多音源解析改动边界 |
+
+## 仓库与运行环境
+
+- 源码仓库：`F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange`
+- GitHub：`https://github.com/Bhands6/BhandsMusicChange`（推送用 `git@github.com:Bhands6/BhandsMusicChange.git`）
+- 本机安装版：`D:\BhandsMusic\BhandsMusic.exe` —— **跑的是打包产物，不是仓库代码**；改完源码必须重新打包 + 重装才生效
+- 上游参考：`F:\UE\Bhands_Music_Window\MineraMusic\Mineradio`（Mineradio 2.2.0，模块化结构，与本仓库的拆分方案不同）
+- 用户运行环境：Windows 11 + PowerShell；端到端验收由用户本人完成
+
+## 结构要点
+
+- `desktop/main.js`：Electron 主进程（窗口 / IPC / 托盘 / 更新 / 桌面歌词 / 壁纸 / GPU 守卫）
+- `server/server.js`：原生 http 本地服务（端口自动探测 + `/__bhands_identity` 身份校验）
+- `public/js/app/*.js`：19 个前端文件，由原 `main.js` 按职责拆分，**加载期读写顺序有基线锁定**
+- `public/js/fx-console-workspace.js`：视觉控制台面板注册表（必须早于 `app/*.js` 加载）
+- `server/music-sources/`：多音源解析（gdmusic / goMusic / kugou / lxMusic / unblockMusic）
+
+## 提交前必跑的闸门
 
 ```powershell
-Get-Content server\music-sources\musicParser.js
-Get-Content docs\3D_PLAYLIST_SHELF_MEMORY.md
-Get-Content docs\SECURITY_REBUILD_2026-06-24.md
-Get-Content CHANGELOG.md -TotalCount 80
-Get-Content RELEASE.md
+npm test                  # 101 个用例（含更新链路平台感知）
+npm run check:hoisting    # 跨 script 函数提升
+npm run check:reorg       # 加载期读写顺序等价
 ```
 
-## 当前状态
+- 只改函数体 / CSS → `check:reorg` 不会误报
+- 新增顶层 `var` / `const` / `function` → 闸门会拦下；确认改动合法后执行
+  `node scripts/check-app-reorg.js --write-baseline`，**基线文件与代码同一次提交**
+- 视觉 / 交互由用户自己启动软件验收，不要代替用户下"视觉通过"的结论
 
-- 当前真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
-- 当前版本：`v1.5.0`
-- 当前发布策略：纯净安装版，从当前可信源码重新构建；`v1.0.10` 及更早旧安装包需要隔离，不再建议安装或传播。
-- 安装包样式继续沿用 `docs/INSTALLER_STYLE.md` 的中文极简黑白蓝格式。
-- GitHub 仓库已公开：`https://github.com/Bhands6/BhandsMusicChange`
-- `v1.1.0` Release：`https://github.com/Bhands6/BhandsMusicChange/releases/tag/v1.1.0`
-- GitHub `/releases/latest` 仍返回 `v1.0.10`，这是刻意设置，避免旧版软件内更新到 1.1.0。
-- v1.4.0 新增多音源解析系统，详见 `AGENTS.md` 的 Multi-Source Music Parsing 章节。
+## 环境坑（本机实测）
 
-## 本轮重点（2026-07-27）
+- **GitHub 不可达、npmmirror 可达**：仓库 `.npmrc` 已配 `electron_mirror` 与 `electron_builder_binaries_mirror`。`npm start` 报 `Electron failed to install correctly` 时，把 `%LOCALAPPDATA%\electron\Cache\` 里对应版本的 zip 解压到 `node_modules\electron\dist`，并写 `path.txt`（内容 `electron.exe`）
+- **打包后 `PROJECT_ROOT` 是 `resources/app.asar`（只读）**：任何"写项目根"的配置都会静默失败。可写数据一律通过 env 注入到 `userData`（cookie / qq-cookie / updates / cuefield-feedback / beat-cache / music-sources）
+- 提交中文信息：写 UTF-8 文件后 `git commit -F <file>`，here-string 直接传参会变 GBK
+- 关闭本地服务按端口查 PID 杀，Bash 的 SIGTERM 不会带走 node 子进程
 
-- 多音源解析系统集成：新增 `server/music-sources/` 目录（musicParser、gdmusic、unblockMusic、lxMusicRunner、goMusicSwitch、durationProbe、kugou）。原 `customApi` 模块已于 2026-09-23 随「自定义 API」功能一起移除。
-- 服务端 API：`/api/parse/music`、`/api/parse/config`、`/api/parse/lx/*`、`/api/parse/cache/*`。
-- 前端集成：`tryThirdPartyParse()` 调用，VIP 优先官方，非 VIP 优先第三方。
-- 音质降级：LX Music flac → 320k → 128k，GD音乐台 br=999 最高质量。
-- 设置 UI：「第三方音源」面板（音源开关、脚本管理、API 配置、缓存清除）。
-- 移除 SVIP 限制：「超清母带」对所有用户开放。
-- 版本升级至 v1.4.0，所有文档已同步更新。
-- 新增依赖：`axios`、`@unblockneteasemusic/server`。
+## 2026-10-19 已落地
 
-## 上轮重点（2026-07-21）
+1. **应用图标**换成 BM 金色字母设计（`36aa760` 为旧图标回退点）
+2. **首页 hero 兜底图**：`IdleIcon.png` 的品牌字会被 `cover` 裁切 → 改为「清晰 `contain` + 同图模糊铺底 + 上下 16% 渐隐蒙版」；真实每日封面仍走 `cover`
+3. **移除全部强制 GPU 开关**（`ignore-gpu-blocklist` 等 7 个）：老核显纹理合成错乱不会触发进程崩溃，原崩溃守卫覆盖不到；保留崩溃降级守卫与 `BHANDSMUSIC_NO_GPU=1`
+4. **节拍缓存跨平台**：非 Windows 改 `userData/beatmaps`；此前 `D:\` 会被 resolve 成畸形路径导致缓存静默失效
+5. **完整安装包下载加中途体积上限**（已声明大小 + 4MB / 未声明 1GB），超限立即中断
+6. **AI 深度模型加载超时**（45s + 120s 冷却），避免 CDN 挂起导致本会话永久失效
+7. **酷狗登录凭据落到 `userData/music-sources.json`**：此前打包版写进只读 asar，扫码提示成功但状态永远「未登录」；同时修复登录行圆点永远灰色
+8. 版本号 `2.2.3 → 2.2.4`
 
-- 品牌重命名 Mineradio → BhandsMusic，全项目 25+ 文件已替换。
-- GitHub 仓库改为 `Bhands6/BhandsMusicChange`，`package.json` 和所有文档已同步。
-- 修复 SSL 握手错误：重命名时 GitHub repo 名被误改，更新检查请求了不存在的仓库。
-- 3D 歌单架正对镜头：普通预设 `sideRotY`/`sideRotX` 归零，星河渲染覆盖归零，详情页 `ry` 归零。
-- 新增记忆条目：`docs/PROJECT_MEMORY.md` 已记录品牌重命名和歌单架正对。
-
-## 上轮重点（2026-06-24）
-
-- 已将 `E:\Download\默认测试.json` 设为首次启动默认用户存档和软件内默认视觉参数。
-- 新增 `public/default-user-fx-archive.json`，代码中 `PACKAGED_DEFAULT_FX_SNAPSHOT` 与该 JSON 已脚本比对一致。
-- 没有本地 `bhandsmusic-lyric-layout-v1` 时，`readSavedLyricLayout()` 使用 packaged 默认快照；没有本地用户存档 key 时自动创建「默认测试」槽位。
-- 已恢复详细日志和发布说明：`CHANGELOG.md`、`README.md`、`SECURITY.md`、`RELEASE.md`、`docs/SECURITY_REBUILD_2026-06-24.md`、`docs/RELEASE_NOTES_v1.1.0.md`。
-- 已生成安装包：`dist/BhandsMusic-1.1.0-Setup.exe`。
-- 已生成校验文件：`dist/BhandsMusic-1.1.0-SHA256SUMS.txt`。
-- 已发布资产：安装包、blockmap、SHA256SUMS；未上传 `latest.yml`。
-- 已批量给旧 Release（`v1.0.10` 到 `v0.9.9`）正文顶部追加旧安装包隔离警示。
-
-## 已知验证
-
-- `git diff --check`：通过。
-- `node --check server.js`：通过。
-- 前端 `public/index.html` 5 个内联脚本解析：通过。
-- `public/default-user-fx-archive.json` JSON 解析：通过。
-- 代码内置默认快照与 `public/default-user-fx-archive.json` 字段比对：一致。
-- Git 跟踪高风险残留检查：没有匹配 `.exe/.dll/.scr/.bat/.cmd/.ps1/.vbs/.jse/.wsf/.hta/.xlsm/.msi`。
-- `npm run build:win`：第一次被旧代理 `127.0.0.1:26001` 拦截；切到 `127.0.0.1:10808` 后构建成功。
-- Defender 状态：实时防护开启，签名版本 `1.453.247.0`。
-- Defender 已扫描新安装包和 `dist\win-unpacked`；`Get-MpThreatDetection` 查询为空。
-- 安装包 SHA256：`bd53aae4e551f5b0b5a398a51e6ec1de5a9a57cb42e5eecedb0a1647fdcee6e6`。
-
-## 发布注意
-
-- GitHub CLI 命令需要在命令内覆盖代理：
+## 发布流程
 
 ```powershell
-$env:HTTP_PROXY='http://127.0.0.1:10808'
-$env:HTTPS_PROXY='http://127.0.0.1:10808'
-$env:ALL_PROXY='socks5://127.0.0.1:10808'
+# 1. 改版本（package.json / package-lock.json / README 当前版本行）
+npm version 2.2.4 --no-git-tag-version
+
+# 2. 跑闸门
+npm test; npm run check:hoisting; npm run check:reorg
+
+# 3. 打包
+npm run build:win        # 产物在 dist/，含 latest.yml
+
+# 4. 用户重装验证；真正发布 / 上传资产等用户明确指令
 ```
 
-- 发布 `v1.1.0` 时不要上传 `dist/latest.yml`。
-- Release 建议上传：
-  - `dist/BhandsMusic-1.1.0-Setup.exe`
-  - `dist/BhandsMusic-1.1.0-Setup.exe.blockmap`
-  - `dist/BhandsMusic-1.1.0-SHA256SUMS.txt`
-- Release 正文使用 `docs/RELEASE_NOTES_v1.1.0.md`。
-- Release 需要 `--latest=false` 或等价 API，避免旧版客户端通过 `/releases/latest` 自动发现。
-- 旧 release 尤其 `v1.0.10` 需要追加隔离警示，不要删除旧资产。
+## 已知遗留
+
+- 首页 hero 兜底图目前是「模糊铺底 + 缩小的清晰图」，视觉比原满铺弱一档；彻底解法是重画一张不含文字的兜底图
+- 酷狗登录态没有并入顶部账号按钮（`14-account.js` 只聚合网易云 / QQ）
+- `docs/PROJECT_MEMORY.md` 中 2026-06 前后的历史条目仍引用 `E:\桌面\播放器软件\...` 旧路径，仅作历史参考
 
 ## 不要做
 
-- 不要修改旧外层源码目录，只有 `resources\app` 会影响运行版。
-- 不要从 `工作区备份\2026-06-18-workspace-cleanup`、旧 `dist`、旧 `node_modules` 或旧 packaged build 中恢复可执行产物。
-- 不要使用 `git reset --hard` 或 `git checkout --` 回滚用户改动。
-- 不要把 `v1.1.0` 当作 `v1.0.10` 的软件内更新发布。
-- 不要上传 `latest.yml` 或 `v1.0.10 -> v1.1.0` 快速补丁。
+- 不要从旧 `dist/`、旧 `node_modules`、旧 packaged build 或历史备份里恢复可执行产物
+- 不要用 `git reset --hard` / `git checkout --` 回滚用户改动
+- 不要为了跑通测试而删除或放宽闸门（`check:reorg` / `check:hoisting` / `npm test`）
+- 不要代替用户执行发布（上传 Release 资产、改 `latest.yml` 等等明确指令）

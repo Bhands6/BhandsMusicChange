@@ -12,13 +12,12 @@
 
 ## Stable Project Facts
 
-- 可运行程序：`E:\桌面\播放器软件\BhandsMusic\BhandsMusic.exe`
-- 运行版主目录：`E:\桌面\播放器软件\BhandsMusic`
-- 真实代码/Git 仓库：`E:\桌面\播放器软件\BhandsMusic\resources\app`
+- 源码仓库（当前）：`F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange`
+- 本机安装版：`D:\BhandsMusic\BhandsMusic.exe` —— 跑的是打包产物，改完源码必须重新打包 + 重装
 - GitHub 仓库：`https://github.com/Bhands6/BhandsMusicChange.git`
-- 统一备份目录：`E:\桌面\播放器软件\工作区备份`
-- 当前源码检查点：`v1.4.0`
-- 最近正式安装包 Release 基线：`v1.1.0` 纯净安装版；`v1.0.10` 及更早安装包需隔离，不再建议安装或传播。
+- 当前版本：`2.2.4`
+- 可写数据目录：`userData`（Windows `%APPDATA%\BhandsMusic`），清单见 `README.md`「本机数据存哪里」
+- 历史路径（已失效，仅作考古）：`E:\桌面\播放器软件\BhandsMusic\resources\app`、`v1.4.0`、`v1.1.0` 发布基线
 - 发布入口：GitHub Releases，更新检查依赖 `latest.yml` 和可选轻量补丁 JSON。
 - 更新包命名规则：从 `v1.0.10` 起，快速补丁本地文件名和 GitHub Release label 使用 `BhandsMusic-旧版本→新版本.patch.json` 这种右箭头格式；GitHub 资产底层 `name` 可能会把 `→` 净化成点号，但更新解析仍可识别 from/to 版本。
 - 快速补丁范围规则：从 `v1.0.10` 起，每次发布只为低于新版的最近 4 个版本生成补丁；更早版本不再从 `1.0.0` 开始补丁，提示用户下载完整安装包更新。
@@ -175,6 +174,25 @@
 ```
 
 ## Memory Entries
+
+### 2026-10-19 - 打包版只读路径 / 移除强制 GPU 开关 / 跨平台缓存 / 图标与 hero
+
+- 用户认可/要求保留：打包版出现的"登录成功却不保存""图标白边"这类问题必须先查 `app.asar` 只读与资源生成链路，不要先怀疑网络或刷新。
+- 涉及文件：`desktop/main.js`、`server/server.js`、`public/js/app/00-prelude.js`、`public/js/app/18-session-boot.js`、`public/js/app/06-cover.js`、`public/js/app/09-api-search.js`、`public/styles/main.css`、`build/icon.*`、`.npmrc`
+- 关键参数/实现：
+  - **打包后 `PROJECT_ROOT` = `resources/app.asar`（只读文件）**。所有可写路径必须由 `createWindow` 注入 env 到 `userData`：`COOKIE_FILE` / `QQ_COOKIE_FILE` / `BHANDSMUSIC_UPDATE_DIR` / `BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE` / `BHANDSMUSIC_BEAT_CACHE_DIR` / `BHANDSMUSIC_MUSIC_SOURCES_CONFIG`。酷狗登录凭据曾因漏掉最后一个而"提示成功、状态永远未登录"。
+  - 音源配置落点：`userData/music-sources.json`；`saveMusicSourcesConfig` 返回布尔，扫码/验证码登录接口回传 `persisted`，前端在 `persisted=false` 时明确警告。
+  - **已删除全部强制 GPU 开关**（`ignore-gpu-blocklist` / `enable-gpu-rasterization` / `enable-oop-rasterization` / `enable-zero-copy` / `enable-accelerated-2d-canvas` / `force_high_performance_gpu` / `use-angle d3d11`）；只保留 autoplay、三个后台保活开关、GPU 崩溃降级守卫与 `BHANDSMUSIC_NO_GPU=1`。
+  - 节拍缓存默认：Windows `D:\BhandsMusicCache\beatmaps`，其他平台 `userData/beatmaps`；POSIX 下写死 `D:\` 会被 resolve 成畸形相对路径并绕过"禁 C 盘"守卫。
+  - 完整安装包下载中途上限：已声明大小 + 4MB，未声明 1GB；超限 `reader.cancel()` 并抛 `UPDATE_SIZE_EXCEEDED`。AI 深度模型加载 45s 超时 + 120s 冷却。
+  - 图标：白底 JPEG 不能直接用 232 阈值抠图（噪点 229–235 会产生白色碎块）；用中阈值取形 + 最大连通域 + 填洞 + 预乘 alpha 缩放 + 边缘色彩渗透。
+  - 首页 hero 兜底图（`IdleIcon.png` 含品牌字）：容器竖长时 `cover` 会裁掉文字 → 改为 `.art-contain`（清晰 contain）+ `.home-hero-cover-blur`（同图模糊铺底）+ 同比例 SVG 蒙版上下 16% 渐隐；真实每日封面仍走 `cover`。
+  - 版本 `2.2.3 → 2.2.4`。
+- 禁止回退或改坏的点：
+  - 不要新增"写项目根"的运行时文件；新增落盘路径必须同步在 `createWindow` 注入 env。
+  - 不要把强制 GPU 开关加回来；老核显的纹理合成错乱不会触发 GPU 进程崩溃，崩溃守卫覆盖不到。
+  - 不要给 `kugou-qr-login-row` 之外的普通按钮误加 `.fx-toggle`（`.on` 会点亮圆点）；该行的 `.on` 语义是"已登录"。
+  - 改完 `public/js/app` 顶层条目后按既定流程跑 `check:reorg`，必要时刷新 `load-order-baseline.json`（本次因新增 2 个 var + 1 个 function 刷新，闸门计数 656 条 / 1265 个 function）。
 
 ### 2026-09-24 - public/js/app 按职责重排（17 → 19 个文件）
 
