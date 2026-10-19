@@ -141,19 +141,42 @@ function buildEdgeAndDepth(srcCanvas) {
 }
 
 // AI 深度估计 (Xenova/depth-anything-small) - 异步加载, 失败回退
+// 加载超时兜底（2026-10-19）：动态 import 与 pipeline() 都没有超时。CDN 连接建立后
+// 挂起不回包时 await 永不 settle —— finally 不执行，aiDepthBusy 永久为 true，
+// 之后的调用全部直接返回 null，本会话 AI 深度彻底失效。所以给整段加载加超时。
+var AI_DEPTH_LOAD_TIMEOUT_MS = 45000;
+var AI_DEPTH_FAIL_COOLDOWN_MS = 120000;
+function withAIDepthTimeout(promise, ms, label) {
+  return new Promise(function (resolve, reject) {
+    var timer = setTimeout(function () {
+      reject(new Error(label + ' timed out after ' + ms + 'ms'));
+    }, ms);
+    Promise.resolve(promise).then(
+      function (value) { clearTimeout(timer); resolve(value); },
+      function (err) { clearTimeout(timer); reject(err); }
+    );
+  });
+}
 async function ensureAIDepthPipeline() {
   if (aiDepthReady && aiDepthPipeline) return aiDepthPipeline;
   if (aiDepthBusy) return null;
+  if (performance.now() < aiDepthFailUntil) return null;
   aiDepthBusy = true;
   try {
     showAIDepthChip('加载 AI 深度模型 (首次需下载 50MB)…');
-    var mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-    mod.env.allowLocalModels = false;
-    if (mod.env.backends && mod.env.backends.onnx && mod.env.backends.onnx.wasm) mod.env.backends.onnx.wasm.numThreads = 1;
-    aiDepthPipeline = await mod.pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
-    aiDepthReady = true;
+    aiDepthPipeline = await withAIDepthTimeout((async function () {
+      var mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      mod.env.allowLocalModels = false;
+      if (mod.env.backends && mod.env.backends.onnx && mod.env.backends.onnx.wasm) mod.env.backends.onnx.wasm.numThreads = 1;
+      var pipe = await mod.pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
+      // 即使外层已判定超时，任务真正完成时也把结果留下，后续调用可直接复用。
+      aiDepthPipeline = pipe;
+      aiDepthReady = true;
+      return pipe;
+    })(), AI_DEPTH_LOAD_TIMEOUT_MS, 'AI depth pipeline load');
     return aiDepthPipeline;
   } catch (e) {
+    aiDepthFailUntil = performance.now() + AI_DEPTH_FAIL_COOLDOWN_MS;
     console.warn('AI depth pipeline failed:', e);
     return null;
   } finally {
