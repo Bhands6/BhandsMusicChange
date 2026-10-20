@@ -2670,6 +2670,53 @@ async function createWindow() {
 
   // 加载本地服务器页面
   await mainWindow.loadURL(`http://127.0.0.1:${port}`);
+
+  startUpdateVolumeWatcher();
+}
+
+/**
+ * macOS：监听新挂载的 BhandsMusic 安装包（dmg），自动退出应用以便替换。
+ *
+ * 为什么需要：macOS 不允许替换 / 删除正在运行的应用。走应用内「打开安装包」时
+ * 由 bhandsmusic-open-update-installer 主动退出；但用户直接从 Finder 双击 dmg
+ * 再拖进「应用程序」时不会经过那条路径，会撞上
+ * 「无法完成此操作，因为项目正在使用中」或「正在等待其他程序退出 / 结束再运行」。
+ * 这里轮询 /Volumes，发现新挂载的卷里带 BhandsMusic.app 就退出（1.5s 缓冲）。
+ *
+ * 判定条件故意不看版本号：开发/重装场景经常是同一个版本号反复打包，看版本会漏掉。
+ * 启动时已挂载的卷会进 knownVolumes，不会误触发。
+ */
+function startUpdateVolumeWatcher() {
+  if (process.platform !== 'darwin') return;
+  let knownVolumes;
+  try {
+    knownVolumes = new Set(fs.readdirSync('/Volumes'));
+  } catch (e) {
+    return;
+  }
+  let quitting = false;
+  const timer = setInterval(() => {
+    if (quitting) return;
+    let volumes;
+    try {
+      volumes = fs.readdirSync('/Volumes');
+    } catch (e) {
+      return;
+    }
+    for (const name of volumes) {
+      if (knownVolumes.has(name)) continue;
+      knownVolumes.add(name);
+      if (!fs.existsSync(path.join('/Volumes', name, 'BhandsMusic.app'))) continue;
+      quitting = true;
+      console.log('[update] 检测到安装包已挂载：' + name + '，应用将退出以便替换');
+      setTimeout(() => {
+        if (app.isReady()) app.quit();
+      }, 1500);
+      return;
+    }
+  }, 2000);
+  if (timer.unref) timer.unref();
+  app.once('before-quit', () => clearInterval(timer));
 }
 
 // ==================== 应用生命周期 ====================
