@@ -15,7 +15,7 @@
 - 源码仓库（当前）：`F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange`
 - 本机安装版：`D:\BhandsMusic\BhandsMusic.exe` —— 跑的是打包产物，改完源码必须重新打包 + 重装
 - GitHub 仓库：`https://github.com/Bhands6/BhandsMusicChange.git`
-- 当前版本：`2.2.4`
+- 当前版本：`2.2.5`
 - 可写数据目录：`userData`（Windows `%APPDATA%\BhandsMusic`），清单见 `README.md`「本机数据存哪里」
 - 历史路径（已失效，仅作考古）：`E:\桌面\播放器软件\BhandsMusic\resources\app`、`v1.4.0`、`v1.1.0` 发布基线
 - 发布入口：GitHub Releases，更新检查依赖 `latest.yml` 和可选轻量补丁 JSON。
@@ -174,6 +174,21 @@
 ```
 
 ## Memory Entries
+
+### 2026-10-20 - 酷狗扫码登录闭环 / 退出登录 / 升级内容截断
+
+- 用户认可/要求保留：酷狗扫码登录最终闭环（用户实测 OK）；**扫码必须用酷狗概念版 App**，酷狗音乐标准版扫会平台不匹配（预期行为）。
+- 涉及文件：`server/server.js`、`public/js/app/18-session-boot.js`、`public/js/app/15-update.js`、`public/js/app/00-prelude.js`、`public/styles/main.css`、`scripts/probe-kugou-*.js`、`scripts/probe-update-notes.js`。
+- 关键参数/实现：
+  - **扫码两处根因缺一不可**：① 二维码用上游 `/login/qr/key` 自带的 `qrcode_img`（编码 `appid=3116`，内置 API 重编码的图丢 appid → H5 按 1001 手机版授权 → 20018）；② 内置 kugou-api 对 200 响应做 2 分钟 apicache，qr/key、qr/create、qr/check 必须追加 `timestamp=` 绕过——否则首次轮询的「等待扫码」被缓存，扫码成功后轮询仍返回旧 status=1。诊断方法：zxing 解码二维码内容对比 + 用已登录 token 调 `/login/qr/authorize` 模拟手机确认做 A/B。
+  - 官方登录页的码是 `appid=1014`（网页端），web token 与 lite 解析链路平台不通用，**不能照抄**；key 末尾 4 位就是 appid。
+  - 退出登录：弹窗底部按钮（两次点击确认，`btn.dataset.armed`），成功后 `disableKugouSourceOnLogout()` 同步关掉「酷狗音源」开关（与登录自动开启互为反向）；`/api/kugou/login/clear` 返回真实落盘结果。
+  - 登录弹窗按登录态分流：已登录显示「已登录酷狗概念版」提示块，不生成二维码。
+  - 升级弹窗：`extractReleaseNotes` 不再丢弃 >72 字符的行（改 >160 截断加省略号），条数上限 4 → 6（前后端对齐），`.update-list` 加滚动上限。
+- 禁止回退或改坏的点：
+  - 扫码链路调用内置 API 必须带 `timestamp=`（kugouNoCache），去掉就会复发「扫了没反应」。
+  - 不要把二维码 appid 换成 1014/1001；不要在扫码文案里去掉「酷狗概念版」提示。
+  - `extractReleaseNotes` 不要恢复 >72 整行丢弃 / slice(0,4)。
 
 ### 2026-10-19 - 打包版只读路径 / 移除强制 GPU 开关 / 跨平台缓存 / 图标与 hero
 
