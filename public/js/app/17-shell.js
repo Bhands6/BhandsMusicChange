@@ -1893,6 +1893,14 @@ function toggleFullscreen() {
   desktopFullscreenActive = false;
   syncCursorAutoHideMode();
 
+  // 引导入口（?）：Windows / Linux 保持在窗口按钮组（右侧原位，index.html 的默认位置）；
+  // 只有 macOS 才移到标题栏左上、紧贴原生交通灯（那里没有自绘窗口按钮，右侧留给交通灯区）。
+  var isMacShell = api.platform === 'darwin' || document.documentElement.classList.contains('platform-darwin');
+  if (isMacShell) {
+    var guideBtn = document.getElementById('visual-guide-btn');
+    var leftSlot = document.querySelector('.desktop-titlebar-left');
+    if (guideBtn && leftSlot && guideBtn.parentElement !== leftSlot) leftSlot.appendChild(guideBtn);
+  }
   var maxBtn = document.querySelector('[data-window-action="maximize"]');
   var maxIcon = maxBtn && maxBtn.querySelector('.icon-maximize');
   var restoreIcon = maxBtn && maxBtn.querySelector('.icon-restore');
