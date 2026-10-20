@@ -636,6 +636,31 @@ function publicDownloadUrls(candidates) {
     .map(item => item && item.url)
     .filter(Boolean);
 }
+// CNB 国内镜像（与 GitHub 同版本、同名、同字节的 Release 资产）。
+// 置空字符串可关闭（探针/离线环境用）：env 显式给空值时不再追加，而不是回落默认值。
+const CNB_RELEASE_BASE = process.env.BHANDSMUSIC_UPDATE_CNB_BASE !== undefined
+  ? process.env.BHANDSMUSIC_UPDATE_CNB_BASE
+  : 'https://cnb.cool/BhandsCnb/BhandsMusic/-/releases/download';
+const CNB_CANDIDATE_LABEL = 'CNB 国内直连';
+/**
+ * 构造 CNB 镜像的安装包直链（tag 形如 BhandsMusic-V2.2.5）。
+ * 只处理安装包（exe/dmg）；CNB release 不发布补丁 JSON，所以补丁链路不接入。
+ * @param {string} version 最新版本号（2.2.5 这种）
+ * @param {string} fileName 安装包文件名（与 GitHub 资产同名）
+ * @returns {{url:string,label:string,mirrored:boolean}|null}
+ */
+function cnbMirrorCandidate(version, fileName) {
+  const base = String(CNB_RELEASE_BASE || '').trim().replace(/\/+$/, '');
+  const v = normalizeVersion(version);
+  const name = String(fileName || '').trim();
+  if (!base || !/^https?:\/\//i.test(base)) return null;
+  if (!v || !name || !/\.(exe|dmg)$/i.test(name)) return null;
+  return {
+    url: base + '/BhandsMusic-V' + v + '/' + encodeURIComponent(name),
+    label: CNB_CANDIDATE_LABEL,
+    mirrored: false,
+  };
+}
 function normalizeVersion(value) {
   var raw = String(value || '').trim();
   // 优先提取 x.y.z[.w] 格式的版本号（兼容 BhandsMusic-V1.2.0 等带前缀的 tag；
@@ -1501,7 +1526,10 @@ async function downloadUpdateAssetWithMirrors(job) {
     job.message = '正在测速选择最快线路…';
     job.updatedAt = Date.now();
     try {
-      candidates = await rankDownloadCandidatesByProbe(candidates0);
+      const ranked = await rankDownloadCandidatesByProbe(candidates0);
+      // CNB 镜像固定排第一（用户指定为首选线路），其余线路仍按实测速度排序
+      const pinned = ranked.find(item => item.label === CNB_CANDIDATE_LABEL);
+      candidates = pinned ? [pinned].concat(ranked.filter(item => item !== pinned)) : ranked;
     } catch (probeErr) {
       console.warn('[UpdateProbe] 测速失败，回退默认线路顺序:', probeErr && probeErr.message);
       candidates = candidates0;
@@ -1653,7 +1681,13 @@ function startUpdateDownloadJob(info) {
 
   const fileName = safeUpdateFileName(asset.name || '', version);
   const filePath = path.join(UPDATE_DOWNLOAD_DIR, fileName);
-  const downloadCandidates = uniqueDownloadCandidates([downloadUrl].concat(Array.isArray(asset.downloadUrls) ? asset.downloadUrls : []));
+  // 2026-10-20：CNB 国内镜像作为第一条下载线路（与 GitHub 同版本同字节资产，
+  // 支持 Range 续传）。若该版本在 CNB 没建 release，会 404 并自动切到后面的线路。
+  const baseCandidates = uniqueDownloadCandidates([downloadUrl].concat(Array.isArray(asset.downloadUrls) ? asset.downloadUrls : []));
+  const cnbCandidate = cnbMirrorCandidate(version, fileName);
+  const downloadCandidates = cnbCandidate
+    ? [cnbCandidate].concat(baseCandidates.filter(item => item.url !== cnbCandidate.url))
+    : baseCandidates;
   const expectedSize = asset.size || 0;
   const sha256 = normalizeDigest(asset.sha256 || '', 'sha256').toLowerCase();
   const sha512 = normalizeDigest(asset.sha512 || '', 'sha512');

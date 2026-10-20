@@ -134,6 +134,9 @@ async function pollUntil(id, pred, timeoutMs, label) {
       HOST: '127.0.0.1',
       BHANDSMUSIC_UPDATE_MANIFEST: MANIFEST,
       BHANDSMUSIC_UPDATE_DIR: UPDATES_DIR,
+      // 把 CNB 镜像基址指向本地限速假源：既能验证「CNB 排第一」，又不需要真连外网。
+      // 假源不校验路径，任何 /cnb/... 都返回同一份字节。
+      BHANDSMUSIC_UPDATE_CNB_BASE: 'http://127.0.0.1:' + SRC_PORT + '/cnb',
     }),
     stdio: ['ignore', fs.openSync(path.join(TMP_DIR, 'server.log'), 'w'), fs.openSync(path.join(TMP_DIR, 'server.err.log'), 'w')],
   });
@@ -163,8 +166,9 @@ async function pollUntil(id, pred, timeoutMs, label) {
   let r = await post('http://127.0.0.1:' + APP_PORT + '/api/update/download');
   assert(r.ok && !!r.id, '启动下载任务');
   var jobId = r.id;
-  let job = await pollUntil(jobId, (j) => (j.progress || 0) >= 30, 40000, '下载到 30%');
+  let   job = await pollUntil(jobId, (j) => (j.progress || 0) >= 30, 40000, '下载到 30%');
   assert(job && (job.progress || 0) >= 30, '进度到达 30%');
+  assert(job && String(job.sourceLabel || '').indexOf('CNB') >= 0, '首选线路 = ' + (job && job.sourceLabel));
 
   r = await post('http://127.0.0.1:' + APP_PORT + '/api/update/download/pause?id=' + jobId);
   assert(r.ok, 'pause 接口受理');
