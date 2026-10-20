@@ -5151,8 +5151,9 @@ const server = http.createServer(async (req, res) => {
     delete config.kugouCookie;
     delete config.kugouVipToken;
     delete config.kugouVipMid;
-    saveMusicSourcesConfig(config);
-    sendJSON(res, { success: true });
+    const persisted = saveMusicSourcesConfig(config);
+    console.log('[KugouLogin] 退出登录，凭据' + (persisted ? '已清除' : '清除失败'));
+    sendJSON(res, { success: persisted, error: persisted ? '' : '登录凭据写入失败，退出未生效' });
     return;
   }
 

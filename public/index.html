@@ -634,7 +634,7 @@ try {
 
   <!-- 第三方音源设置 -->
   <div class="fx-toggle" id="t-diyMode" onclick="toggleDiyMode()" title="DIY 玩家模式：展开完整控制台、上传/封面、自定义歌词与高级调参"><span>DIY 玩家模式</span><span class="dot"></span></div>
-  <div class="fx-toggle fx-toggle-stacked" id="kugou-qr-login-row" onclick="openKugouQrLogin()" title="扫码登录酷狗概念版，解锁会员音质（FLAC/320k）"><span>酷狗扫码登录</span><span class="dot"></span><small id="kugou-login-status" style="font-size:10px;color:rgba(255,255,255,.45)">未登录</small></div>
+  <div class="fx-toggle fx-toggle-stacked" id="kugou-qr-login-row" onclick="openKugouQrLogin()" title="扫码登录酷狗概念版，解锁会员音质（FLAC/320k）"><span>酷狗扫码登录</span><span class="dot"></span><span class="kugou-login-line"><small id="kugou-login-status" style="font-size:10px;color:rgba(255,255,255,.45)">未登录</small><button type="button" id="kugou-logout-btn" class="kugou-logout-btn" hidden onclick="event.stopPropagation();logoutKugou()" title="清除本机保存的酷狗登录凭据">退出登录</button></span></div>
   <div class="fx-advanced" id="fx-music-sources">
     <div class="fx-advanced-head" onclick="document.getElementById('fx-music-sources').classList.toggle('open')">
       <span>第三方音源</span><span class="arrow">▶</span>

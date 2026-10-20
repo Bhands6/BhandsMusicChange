@@ -1324,6 +1324,13 @@ body.sonic-workshop-active #album-bg,body.sonic-workshop-active #album-bg-next,b
 .fx-toggle.fx-toggle-stacked>span:first-child{flex:1 1 auto}
 .fx-toggle.fx-toggle-stacked>.dot{flex:0 0 auto}
 .fx-toggle.fx-toggle-stacked>small{flex:0 0 100%;min-width:0;line-height:1.4;white-space:normal}
+/* 酷狗登录状态行：小字 + 右侧「退出登录」（仅已登录时显示，见 updateKugouLoginStatusText） */
+.kugou-login-line{flex:0 0 100%;min-width:0;display:flex;align-items:center;gap:8px}
+.kugou-login-line>small{flex:1 1 auto;min-width:0;line-height:1.4;white-space:normal}
+.kugou-logout-btn{flex:0 0 auto;height:20px;padding:0 8px;border-radius:6px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:rgba(255,255,255,.62);font-size:10px;line-height:1;cursor:pointer;font-family:inherit;letter-spacing:.2px;transition:background .18s,border-color .18s,color .18s}
+.kugou-logout-btn:hover{background:rgba(255,92,92,.16);border-color:rgba(255,92,92,.42);color:#ffb3b3}
+.kugou-logout-btn.danger{background:rgba(255,92,92,.22);border-color:rgba(255,92,92,.55);color:#ffc2c2}
+.kugou-logout-btn[hidden]{display:none!important}
 .fx-dev-badge{display:inline-flex;align-items:center;margin-left:5px;padding:1px 5px;border-radius:999px;border:1px solid rgba(244,210,138,.28);background:rgba(244,210,138,.08);color:rgba(244,210,138,.76);font-style:normal;font-size:9px;font-weight:800;line-height:1.35;vertical-align:1px;letter-spacing:.05em}
 .fx-slider.dev-locked{opacity:.48;filter:saturate(.72)}
 .fx-slider.dev-locked input{cursor:not-allowed}

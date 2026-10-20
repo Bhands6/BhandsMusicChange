@@ -348,6 +348,43 @@ function enableKugouSourceOnLogin(retried) {
   syncMusicSourcesUI();
   saveMusicSourcesConfigToServer();
 }
+/**
+ * 退出酷狗登录：两次点击确认（4 秒内再点一次才真正清除），避免误触把会员凭据删掉。
+ * 凭据由服务端删除并落盘；成功后刷新状态文案与圆点。
+ */
+function logoutKugou() {
+  var btn = document.getElementById('kugou-logout-btn');
+  if (!btn || btn.disabled) return;
+  if (btn.dataset.armed !== '1') {
+    btn.dataset.armed = '1';
+    btn.textContent = '确认退出？';
+    btn.classList.add('danger');
+    clearTimeout(btn.__armTimer);
+    btn.__armTimer = setTimeout(function () {
+      btn.dataset.armed = '';
+      btn.textContent = '退出登录';
+      btn.classList.remove('danger');
+    }, 4000);
+    return;
+  }
+  clearTimeout(btn.__armTimer);
+  btn.dataset.armed = '';
+  btn.classList.remove('danger');
+  btn.textContent = '退出中…';
+  btn.disabled = true;
+  fetch('/api/kugou/login/clear', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      if (j && j.success) showToast('已退出酷狗登录');
+      else showToast('退出失败：' + ((j && j.error) || '未知错误'));
+    })
+    .catch(function (e) { showToast('退出失败：' + e.message); })
+    .then(function () {
+      btn.textContent = '退出登录';
+      btn.disabled = false;
+      updateKugouLoginStatusText();
+    });
+}
 function closeKugouQrLogin() {
   if (kugouQrPollTimer) { clearTimeout(kugouQrPollTimer); kugouQrPollTimer = null; }
   var ov = document.getElementById('kugou-qr-overlay');

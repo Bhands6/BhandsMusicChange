@@ -644,10 +644,22 @@ function updateKugouLoginStatusText() {
           ? '已登录酷狗概念版，会员音质已参与解析（点击可重新登录）'
           : '已登录，但「酷狗音源」开关没打开，会员音质不会生效 —— 点下方开关开启');
     }
+    var logoutBtn = document.getElementById('kugou-logout-btn');
+    if (logoutBtn) {
+      logoutBtn.hidden = !loggedIn;
+      if (!loggedIn) {
+        logoutBtn.textContent = '退出登录';
+        logoutBtn.classList.remove('danger');
+        logoutBtn.disabled = false;
+        logoutBtn.dataset.armed = '';
+      }
+    }
   }).catch(function () {
     // 接口失败不能把文案清空：那会让用户完全失去判断依据
     el.textContent = '状态未知';
     el.style.color = 'rgba(255,255,255,.45)';
+    var unknownLogout = document.getElementById('kugou-logout-btn');
+    if (unknownLogout) unknownLogout.hidden = true;
   });
 }
 
