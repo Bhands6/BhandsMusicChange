@@ -453,15 +453,34 @@ function openKugouQrLogin() {
     tabSms.style.background = which === 'sms' ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.04)';
     tabSms.style.color = which === 'sms' ? '#fff' : 'rgba(255,255,255,.55)';
   }
-  tabQr.addEventListener('click', function () { setActiveTab('qr'); renderQrTab(body); });
-  tabSms.addEventListener('click', function () { setActiveTab('sms'); renderSmsTab(body); });
+  tabQr.addEventListener('click', function () { setActiveTab('qr'); renderTab('qr'); });
+  tabSms.addEventListener('click', function () { setActiveTab('sms'); renderTab('sms'); });
   setActiveTab('qr');
-  renderQrTab(body);
-  // 已登录时才在弹窗底部显示「退出登录」（弹窗是动态创建的，每次打开都要重新判断）
+  body.innerHTML = '<div style="padding:26px 4px;color:rgba(255,255,255,.45);font-size:11px">检查登录状态…</div>';
+  // 弹窗每次新建，登录态必须现查：决定「退出登录」按钮可见性，以及显示
+  // 「已登录」状态还是扫码 / 验证码表单（已登录时不该再提示等待扫码）。
+  function renderTab(which) {
+    if (body.dataset.loggedIn === '1') {
+      body.innerHTML =
+        '<div style="padding:18px 6px 12px;text-align:center">' +
+        '<div style="font-size:13px;font-weight:700;color:var(--c-accent,#7cf);margin-bottom:10px">已登录酷狗概念版</div>' +
+        '<div style="font-size:11px;line-height:1.8;color:rgba(255,255,255,.62)">会员音质已生效，无需重复登录。<br>如需切换账号，请点下方「退出登录」。</div>' +
+        '</div>';
+      return;
+    }
+    if (which === 'sms') renderSmsTab(body);
+    else renderQrTab(body);
+  }
   fetch('/api/kugou/login/status').then(function (r) { return r.json(); }).then(function (j) {
+    var logged = !!(j && j.loggedIn);
+    body.dataset.loggedIn = logged ? '1' : '';
     var b = document.getElementById('kugou-logout-btn');
-    if (b) b.style.display = (j && j.loggedIn) ? '' : 'none';
-  }).catch(function () {});
+    if (b) b.style.display = logged ? '' : 'none';
+    renderTab('qr');
+  }).catch(function () {
+    body.dataset.loggedIn = '';
+    renderTab('qr');
+  });
 }
 function renderQrTab(body) {
   body.innerHTML =

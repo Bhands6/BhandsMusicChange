@@ -52,12 +52,15 @@ app.whenReady().then(async () => {
     const r = await win.webContents.executeJavaScript(`(function(){
       var s = document.getElementById('kugou-login-status');
       var b = document.getElementById('kugou-logout-btn');
+      var body = document.getElementById('kugou-qr-body');
       return JSON.stringify({
         status: s ? s.textContent : null,
         overlay: !!document.getElementById('kugou-qr-overlay'),
         btnExists: !!b,
         btnVisible: b ? (b.style.display !== 'none' && b.offsetParent !== null) : null,
         btnText: b ? b.textContent : null,
+        bodyText: body ? (body.textContent || '').slice(0, 60) : null,
+        hasQrImg: !!(body && body.querySelector('img')),
         rowOn: (document.getElementById('kugou-qr-login-row') || {}).className || null
       });
     })()`);
