@@ -15,7 +15,7 @@
 - 源码仓库（当前）：`F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange`
 - 本机安装版：`D:\BhandsMusic\BhandsMusic.exe` —— 跑的是打包产物，改完源码必须重新打包 + 重装
 - GitHub 仓库：`https://github.com/Bhands6/BhandsMusicChange.git`
-- 当前版本：`2.2.5`
+- 当前版本：`2.2.6`
 - 可写数据目录：`userData`（Windows `%APPDATA%\BhandsMusic`），清单见 `README.md`「本机数据存哪里」
 - 历史路径（已失效，仅作考古）：`E:\桌面\播放器软件\BhandsMusic\resources\app`、`v1.4.0`、`v1.1.0` 发布基线
 - 发布入口：GitHub Releases，更新检查依赖 `latest.yml` 和可选轻量补丁 JSON。
@@ -185,10 +185,14 @@
   - 退出登录：弹窗底部按钮（两次点击确认，`btn.dataset.armed`），成功后 `disableKugouSourceOnLogout()` 同步关掉「酷狗音源」开关（与登录自动开启互为反向）；`/api/kugou/login/clear` 返回真实落盘结果。
   - 登录弹窗按登录态分流：已登录显示「已登录酷狗概念版」提示块，不生成二维码。
   - 升级弹窗：`extractReleaseNotes` 不再丢弃 >72 字符的行（改 >160 截断加省略号），条数上限 4 → 6（前后端对齐），`.update-list` 加滚动上限。
+  - **下载暂停 / 继续 / 取消**：循环每分片检查 `pauseRequested`/`cancelRequested`；暂停保留 `.download` 与 `resumeFrom`，继续时重新 `rankDownloadCandidatesByProbe` 选线并用 `Range: bytes=N-` 追加写（服务器不支持 Range 自动整段重下）；取消删临时文件并置 `canceled`。端点 `/api/update/download/{pause,resume,cancel}`；`activeUpdateJobFor` 纳入 `paused` 防重复任务。快速补丁（内存缓冲）不支持暂停。
+  - **CNB 国内镜像首选线路**：候选第 0 位插 `https://cnb.cool/BhandsCnb/BhandsMusic/-/releases/download/BhandsMusic-V<版本>/<同名安装包>`，测速排序后仍固定第一，失败回落 GitHub；`BHANDSMUSIC_UPDATE_CNB_BASE` 可覆盖/置空。**每个新版本都要在 CNB 建同名 tag 并上传同名资产**，否则该线路 404 自动回落。
 - 禁止回退或改坏的点：
   - 扫码链路调用内置 API 必须带 `timestamp=`（kugouNoCache），去掉就会复发「扫了没反应」。
   - 不要把二维码 appid 换成 1014/1001；不要在扫码文案里去掉「酷狗概念版」提示。
   - `extractReleaseNotes` 不要恢复 >72 整行丢弃 / slice(0,4)。
+  - 下载链路不要去掉暂停/取消标记检查，也不要在 resume 时跳过重新测速（用户明确要求「重新下载时重新找线路」）。
+  - CNB 候选不要被测速排序挤下去（`downloadUpdateAssetWithMirrors` 里固定置顶），否则国内用户又会先走慢线路。
 
 ### 2026-10-19 - 打包版只读路径 / 移除强制 GPU 开关 / 跨平台缓存 / 图标与 hero
 

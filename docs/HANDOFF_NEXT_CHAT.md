@@ -1,6 +1,6 @@
 # BhandsMusic Next Chat Handoff
 
-更新时间：2026-10-20 ｜ 当前版本：`2.2.5`
+更新时间：2026-10-20 ｜ 当前版本：`2.2.6`
 
 ## 新对话先执行
 
@@ -74,16 +74,18 @@ npm run check:reorg       # 加载期读写顺序等价
 2. **绿灯点了没反应的真正根因（已实证）**：主窗口原来写死 `fullscreen:false`，官方文档明确「显式 false 时 macOS 上全屏按钮会被隐藏或禁用」——与 frameless / 透明背景无关。现 darwin 不传该键（`...(darwin ? {} : {fullscreen:false})`）。Electron 42 实测：`transparent:true + frame:true + hiddenInset` 下 `setFullScreen(true)` 正常，`isFullScreen=true`、bounds 撑满 2560×1440、`enter-full-screen` 事件触发
 3. **mac 升级时自动退出应用**：打开 dmg 后 2.5 秒 `app.quit()`（`bhandsmusic-open-update-installer` 返回 `autoQuitInMs`）。此前应用在运行，Finder 拖拽替换会卡在「正在等待其他程序退出 / 结束再运行」，需要用户手动结束进程；面板文案「替换前请先退出当前应用」同步去掉
 4. **mac 双架构安装清单合并**：`scripts/merge-latest-mac-yml.js` 按磁盘 dmg 重算 sha512/size，把 arm64 + x64 写进同一份 `dist/latest-mac.yml`（此前每次构建整份覆盖，只剩最后构建的架构，备用更新线路会给错架构）。新增 `npm run build:mac:all` 一键双架构 + 合并
-4. **酷狗扫码登录闭环（两处根因，缺一不可）**：① 二维码改用上游 `/login/qr/key` 自带的 `qrcode_img`（编码 `appid=3116`，此前内置 API 重编码的图丢 appid）；② 扫码三条链路（qr/key、qr/create、qr/check）补 `timestamp=` 绕过内置 API 的 2 分钟 apicache——否则首次轮询的「等待扫码」被缓存 2 分钟，扫码成功后轮询仍返回旧 status=1。**扫码必须用酷狗概念版 App**（酷狗音乐标准版平台不匹配，预期失败）；官方登录页用的是 `appid=1014`（网页端），其 web token 与 lite 解析链路平台不通用，不能照抄
-5. **退出登录**：登录弹窗底部新增「退出登录」（两次点击确认），已登录时弹窗显示「已登录酷狗概念版」提示块而非二维码；退出后自动关掉「酷狗音源」开关（`disableKugouSourceOnLogout`，与登录自动开启互为反向）
-6. **升级弹窗更新内容不再被静默截断**：`extractReleaseNotes` 此前丢弃 >72 字符的行 + 只留 4 条；现改为 >160 字符截断加省略号、条数上限 4 → 6（前后端对齐），列表加滚动上限防撑爆
-7. 版本号 `2.2.4 → 2.2.5`
+5. **酷狗扫码登录闭环（两处根因，缺一不可）**：① 二维码改用上游 `/login/qr/key` 自带的 `qrcode_img`（编码 `appid=3116`，此前内置 API 重编码的图丢 appid）；② 扫码三条链路（qr/key、qr/create、qr/check）补 `timestamp=` 绕过内置 API 的 2 分钟 apicache——否则首次轮询的「等待扫码」被缓存 2 分钟，扫码成功后轮询仍返回旧 status=1。**扫码必须用酷狗概念版 App**（酷狗音乐标准版平台不匹配，预期失败）；官方登录页用的是 `appid=1014`（网页端），其 web token 与 lite 解析链路平台不通用，不能照抄
+6. **退出登录**：登录弹窗底部新增「退出登录」（两次点击确认），已登录时弹窗显示「已登录酷狗概念版」提示块而非二维码；退出后自动关掉「酷狗音源」开关（`disableKugouSourceOnLogout`，与登录自动开启互为反向）
+7. **升级弹窗更新内容不再被静默截断**：`extractReleaseNotes` 此前丢弃 >72 字符的行 + 只留 4 条；现改为 >160 字符截断加省略号、条数上限 4 → 6（前后端对齐），列表加滚动上限防撑爆
+8. **下载可暂停 / 继续 / 取消**：主按钮下载中点击 = 暂停（保留 `.download` 与进度），暂停中 = 继续（重新测速选线 + `Range` 断点续传），「取消」删除临时文件与进度（`/api/update/download/{pause,resume,cancel}`）。快速补丁是内存缓冲下载，不支持暂停
+9. **CNB 国内镜像作为首选下载线路**：候选列表第 0 位插入 `https://cnb.cool/BhandsCnb/BhandsMusic/-/releases/download/BhandsMusic-V<版本>/<同名安装包>`，测速后仍固定第一，失败自动回落 GitHub；`BHANDSMUSIC_UPDATE_CNB_BASE` 可覆盖/置空。**发新版必须在 CNB 建同名 tag 并上传同名资产**
+10. 版本号 `2.2.5 → 2.2.6`
 
 ## 发布流程
 
 ```powershell
 # 1. 改版本（package.json / package-lock.json / README 当前版本行）
-npm version 2.2.5 --no-git-tag-version
+npm version 2.2.6 --no-git-tag-version
 
 # 2. 跑闸门
 npm test; npm run check:hoisting; npm run check:reorg
