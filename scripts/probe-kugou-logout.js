@@ -61,6 +61,7 @@ app.whenReady().then(async () => {
         btnText: b ? b.textContent : null,
         bodyText: body ? (body.textContent || '').slice(0, 60) : null,
         hasQrImg: !!(body && body.querySelector('img')),
+        kugouSrcOn: (document.getElementById('t-src-kugou') || {}).className || null,
         rowOn: (document.getElementById('kugou-qr-login-row') || {}).className || null
       });
     })()`);

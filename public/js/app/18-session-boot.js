@@ -349,6 +349,25 @@ function enableKugouSourceOnLogin(retried) {
   saveMusicSourcesConfigToServer();
 }
 /**
+ * 退出登录时关掉「酷狗音源」开关（登录时的反向操作，见 enableKugouSourceOnLogin）：
+ * 凭据没了会员 FLAC 就没了，留着开关只会让人以为音质还在。
+ * @param {boolean} [retried] - 配置尚未拉取时的单次重试标记（防无限递归）
+ */
+function disableKugouSourceOnLogout(retried) {
+  if (!_musicSourcesConfig) {
+    if (retried) return;
+    loadMusicSourcesConfig().then(function () { disableKugouSourceOnLogout(true); });
+    return;
+  }
+  var enabled = _musicSourcesConfig.enabledSources || [];
+  var idx = enabled.indexOf('kugou');
+  if (idx < 0) return;
+  enabled.splice(idx, 1);
+  _musicSourcesConfig.enabledSources = enabled;
+  syncMusicSourcesUI();
+  saveMusicSourcesConfigToServer();
+}
+/**
  * 退出酷狗登录：两次点击确认（4 秒内再点一次才真正清除），避免误触把会员凭据删掉。
  * 凭据由服务端删除并落盘；成功后刷新状态文案与圆点。
  */
@@ -377,6 +396,8 @@ function logoutKugou() {
     .then(function (j) {
       if (j && j.success) {
         showToast('已退出酷狗登录');
+        // 同步关掉「酷狗音源」开关：登录时自动开启，退出也该自动关上
+        disableKugouSourceOnLogout();
         // 退出后再留着登录弹窗没有意义：留 700ms 让用户看到按钮复位再关闭
         setTimeout(closeKugouQrLogin, 700);
       } else {
