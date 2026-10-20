@@ -70,6 +70,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 - 网易云音乐账号、搜索、歌单、播客等体验接入
 - QQ 音乐搜索、登录态与音源补充接入
 - GitHub Releases 更新检测与下载入口（Windows 支持轻量补丁增量更新与完整安装包、多线路自动切换；macOS 走完整 dmg）
+- **更新下载可暂停 / 续传 / 取消**：暂停保留断点，继续时重新测速选线并断点续传，取消清掉临时文件与进度；国内默认优先走 CNB 镜像
 - 跨平台桌面应用：Windows 10 / 11（x64）与 macOS（Apple 芯片 / Intel）双平台安装包
 - 首次启动内置「默认测试」视觉用户存档，软件内默认视觉参数与该存档一致
 
@@ -118,6 +119,24 @@ electron_builder_binaries_mirror=https://npmmirror.com/mirrors/electron-builder-
 | **macOS** | 仅支持完整 dmg：应用下载 dmg 后自动打开它、同时打开「应用程序」文件夹，把 BhandsMusic 拖进去覆盖即可 |
 
 > macOS 走手动替换是刻意的：macOS 不允许替换正在运行的 `.app`，未做 Apple 公证的应用也无法静默自更新；而且补丁需要写入已签名的应用包内部，会直接破坏代码签名。因此 macOS 版不提供轻量补丁，发布时也不会上传 `.patch.json`。
+
+### 下载线路与断点续传
+
+完整安装包的下载候选按下面的顺序准备，并在开始前对每条线路做 1MB 探测测速：
+
+| 顺序 | 线路 | 说明 |
+|---|---|---|
+| 1 | **CNB 国内直连** | `cnb.cool/BhandsCnb/BhandsMusic` 同版本 Release 资产，国内速度最好；即使测速也固定排第一 |
+| 2 | 国内加速镜像 | ghfast 等前缀镜像，按实测速度排序 |
+| 3 | GitHub 直连 | 兜底 |
+
+下载过程中可以随时控制：
+
+- **暂停**：保留 `.download` 临时文件与已下载字节数，按钮变成「继续下载」
+- **继续**：重新测速选线，用 `Range: bytes=N-` 从断点续传；线路不支持 Range 时自动整段重下
+- **取消**：终止任务并删除临时文件与进度，之后重新下载是新任务（重新测速选线）
+
+> **发布约定**：每个版本都要在 CNB 建同名 tag `BhandsMusic-V<版本>` 并上传同名资产（`Setup.exe` / 两个 dmg / `latest.yml`）。缺了不会出错——该线路 404 后会自动回落到 GitHub，只是失去国内加速。
 
 ## 本机数据存哪里
 
@@ -169,6 +188,14 @@ npm run check:reorg       # 加载期读写顺序等价校验
 | `npm run probe:nsis` | `build/installer.nsh` 语法与安装器逻辑 |
 | `npm run probe:cuefield-api` / `probe:cuefield-e2e` | Cuefield AutoMix 接口与过渡链路 |
 | `npm run probe:parse` | 多音源解析端到端 |
+
+还有几个独立诊断脚本（纯 node，直接运行，结果写到 `scripts/out/*.json`）：
+
+| 脚本 | 覆盖范围 |
+|---|---|
+| `node scripts/probe-update-pause.js` | 升级下载的暂停 / 取消 / 断点续传（本地清单 + 限速假源，不依赖 GitHub） |
+| `node scripts/probe-update-notes.js` | 升级弹窗的更新内容条数与长行折行 |
+| `node scripts/probe-kugou-qr.js` / `probe-kugou-logout.js` / `probe-kugou-status.js` | 酷狗扫码弹窗 / 退出登录 / 登录态同步 |
 
 `public/js/app/` 下的 19 个前端文件由原 `main.js` 按职责拆分而来，**加载期读写顺序有基线锁定**（`scripts/reorg/load-order-baseline.json`）。改动其中任何顶层代码后请跑一遍 `npm run check:reorg`，顺序不等价会被直接拦下；新增顶层函数同样会触发该闸门（函数声明哈希只取函数名，改函数体不会误报）。确认是有意的结构调整后，用 `node scripts/check-app-reorg.js --write-baseline` 刷新基线，并在同一次提交里带上基线文件。
 
