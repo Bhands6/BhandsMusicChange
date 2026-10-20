@@ -29,6 +29,7 @@
     "build:mac": "electron-builder --mac dmg",
     "prebuild:mac:x64": "node build/fetch-go-music-api.js --platform darwin --arch x64 --force && node build/fetch-kugou-api.js && node build/fetch-splash-video.js",
     "build:mac:x64": "electron-builder --mac dmg --x64",
+    "build:mac:all": "npm run build:mac && npm run build:mac:x64 && node scripts/merge-latest-mac-yml.js",
     "prebuild:mac:dir": "node build/fetch-go-music-api.js --platform darwin --arch arm64 --force && node build/fetch-kugou-api.js && node build/fetch-splash-video.js",
     "build:mac:dir": "electron-builder --mac dir"
   },

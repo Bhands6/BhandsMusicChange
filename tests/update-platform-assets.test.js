@@ -136,9 +136,19 @@ test('解析真实产物 dist/latest-mac.yml：选中条目、取该条目自己
   // ⚠️ 版本号从清单里现取，不硬编码 —— 否则每次发版重新打包后这个测试都会误报失败
   const manifestVersion = (yml.match(/^version:\s*(.+?)\s*$/m) || [])[1];
   assert.ok(manifestVersion, 'latest-mac.yml 里没解析到 version');
-  const expectedName = 'BhandsMusic-' + manifestVersion + '-mac-arm64.dmg';
-  assert.equal(macArm.parseYmlFileEntries(yml).length, 1);
-  assert.equal(macArm.pickYmlInstallerEntry(yml).url, expectedName);
+  // 条目数由构建方式决定：单架构构建 1 条；跑过 scripts/merge-latest-mac-yml.js 后 2 条。
+  // 这里只断言「至少 1 条 + 本机架构能选对」，不把构建方式写死进测试。
+  const entries = macArm.parseYmlFileEntries(yml);
+  assert.ok(entries.length >= 1, 'latest-mac.yml 里没解析到 files 条目');
+  const armName = 'BhandsMusic-' + manifestVersion + '-mac-arm64.dmg';
+  const x64Name = 'BhandsMusic-' + manifestVersion + '-mac-x64.dmg';
+  const hasArm = entries.some(entry => entry.url === armName);
+  const hasX64 = entries.some(entry => entry.url === x64Name);
+  if (hasArm) assert.equal(macArm.pickYmlInstallerEntry(yml).url, armName, 'arm64 机器应选中 arm64 包');
+  if (hasX64) assert.equal(macX64.pickYmlInstallerEntry(yml).url, x64Name, 'x64 机器应选中 x64 包');
+  // 双架构清单是发布目标形态：合并脚本跑过后两个架构都应存在，且不应混入多余条目
+  if (hasArm && hasX64) assert.equal(entries.length, 2, '双架构清单不应包含多余条目');
+  const expectedName = hasArm ? armName : x64Name;
   const info = macArm.parseLatestYmlUpdateInfo(yml, '');
   assert.equal(info.release.asset.name, expectedName);
   // dmg 体积断言用范围而不是精确值：精确值会随每次重新构建而变

@@ -72,7 +72,8 @@ npm run check:reorg       # 加载期读写顺序等价
 
 1. **macOS 标题栏平台化（用户视觉反馈驱动）**：主窗口 mac 改为 `frame:true + titleBarStyle:'hiddenInset'`，窗口控制全部交给原生交通灯（红=关闭/黄=最小化/绿=全屏），自绘 min/max/close 在 mac 全部隐藏；「?」引导按钮移到标题栏左上角（交通灯右侧）；mac 原生全屏时悬浮自绘按钮整体隐藏。preload 新增 `platform-<platform>` 根类名作为 CSS 平台适配入口
 2. **绿灯点了没反应的真正根因（已实证）**：主窗口原来写死 `fullscreen:false`，官方文档明确「显式 false 时 macOS 上全屏按钮会被隐藏或禁用」——与 frameless / 透明背景无关。现 darwin 不传该键（`...(darwin ? {} : {fullscreen:false})`）。Electron 42 实测：`transparent:true + frame:true + hiddenInset` 下 `setFullScreen(true)` 正常，`isFullScreen=true`、bounds 撑满 2560×1440、`enter-full-screen` 事件触发
-3. **未提交**：iOS 移植方案（`docs/IOS_PORT_PLAN.md` + `docs/ios-port-plan.html`，未跟踪），待用户确认后随标题栏改动一起提交
+3. **mac 升级时自动退出应用**：打开 dmg 后 2.5 秒 `app.quit()`（`bhandsmusic-open-update-installer` 返回 `autoQuitInMs`）。此前应用在运行，Finder 拖拽替换会卡在「正在等待其他程序退出 / 结束再运行」，需要用户手动结束进程；面板文案「替换前请先退出当前应用」同步去掉
+4. **mac 双架构安装清单合并**：`scripts/merge-latest-mac-yml.js` 按磁盘 dmg 重算 sha512/size，把 arm64 + x64 写进同一份 `dist/latest-mac.yml`（此前每次构建整份覆盖，只剩最后构建的架构，备用更新线路会给错架构）。新增 `npm run build:mac:all` 一键双架构 + 合并
 4. **酷狗扫码登录闭环（两处根因，缺一不可）**：① 二维码改用上游 `/login/qr/key` 自带的 `qrcode_img`（编码 `appid=3116`，此前内置 API 重编码的图丢 appid）；② 扫码三条链路（qr/key、qr/create、qr/check）补 `timestamp=` 绕过内置 API 的 2 分钟 apicache——否则首次轮询的「等待扫码」被缓存 2 分钟，扫码成功后轮询仍返回旧 status=1。**扫码必须用酷狗概念版 App**（酷狗音乐标准版平台不匹配，预期失败）；官方登录页用的是 `appid=1014`（网页端），其 web token 与 lite 解析链路平台不通用，不能照抄
 5. **退出登录**：登录弹窗底部新增「退出登录」（两次点击确认），已登录时弹窗显示「已登录酷狗概念版」提示块而非二维码；退出后自动关掉「酷狗音源」开关（`disableKugouSourceOnLogout`，与登录自动开启互为反向）
 6. **升级弹窗更新内容不再被静默截断**：`extractReleaseNotes` 此前丢弃 >72 字符的行 + 只留 4 条；现改为 >160 字符截断加省略号、条数上限 4 → 6（前后端对齐），列表加滚动上限防撑爆
@@ -89,6 +90,7 @@ npm test; npm run check:hoisting; npm run check:reorg
 
 # 3. 打包
 npm run build:win        # 产物在 dist/，含 latest.yml
+npm run build:mac:all    # mac：arm64 + x64 依次构建并合并 latest-mac.yml（双架构清单）
 
 # 4. 用户重装验证；真正发布 / 上传资产等用户明确指令
 ```
