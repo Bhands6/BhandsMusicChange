@@ -1,5 +1,5 @@
 /**
- * 诊断探针：酷狗「退出登录」按钮的显示与两次点击确认流程。
+ * 诊断探针：酷狗登录弹窗里的「退出登录」按钮。
  * 运行前把配置指向临时副本，避免真的删掉本机凭据：
  *   cp .music-sources.json %TEMP%\bm-logout-test.json
  *   BHANDSMUSIC_MUSIC_SOURCES_CONFIG=%TEMP%\bm-logout-test.json \
@@ -54,10 +54,10 @@ app.whenReady().then(async () => {
       var b = document.getElementById('kugou-logout-btn');
       return JSON.stringify({
         status: s ? s.textContent : null,
+        overlay: !!document.getElementById('kugou-qr-overlay'),
         btnExists: !!b,
-        btnHidden: b ? b.hidden : null,
+        btnVisible: b ? (b.style.display !== 'none' && b.offsetParent !== null) : null,
         btnText: b ? b.textContent : null,
-        btnDisabled: b ? b.disabled : null,
         rowOn: (document.getElementById('kugou-qr-login-row') || {}).className || null
       });
     })()`);
@@ -68,15 +68,19 @@ app.whenReady().then(async () => {
   try {
     await win.loadURL('http://127.0.0.1:' + PORT + '/');
     await new Promise((r) => setTimeout(r, 5000));
-    await snap('1. 已登录');
+    await snap('0. 页面加载后（弹窗关闭）');
+
+    await win.webContents.executeJavaScript('openKugouQrLogin(); "ok"');
+    await new Promise((r) => setTimeout(r, 1200));
+    await snap('1. 打开登录弹窗');
 
     await win.webContents.executeJavaScript('logoutKugou(); "ok"');
     await new Promise((r) => setTimeout(r, 400));
     await snap('2. 第一次点击（应进入确认态）');
 
     await win.webContents.executeJavaScript('logoutKugou(); "ok"');
-    await new Promise((r) => setTimeout(r, 2000));
-    await snap('3. 第二次点击后（应已退出）');
+    await new Promise((r) => setTimeout(r, 2200));
+    await snap('3. 第二次点击后（应已退出并关闭弹窗）');
 
     const api = await win.webContents.executeJavaScript('fetch("/api/kugou/login/status").then(r=>r.text())');
     log('api after logout: ' + api);

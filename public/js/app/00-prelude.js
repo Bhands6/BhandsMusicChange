@@ -646,7 +646,8 @@ function updateKugouLoginStatusText() {
     }
     var logoutBtn = document.getElementById('kugou-logout-btn');
     if (logoutBtn) {
-      logoutBtn.hidden = !loggedIn;
+      // 退出按钮现在在登录弹窗里（弹窗每次新建）；若弹窗开着，顺手同步一次可见性。
+      logoutBtn.style.display = loggedIn ? '' : 'none';
       if (!loggedIn) {
         logoutBtn.textContent = '退出登录';
         logoutBtn.classList.remove('danger');
@@ -658,8 +659,6 @@ function updateKugouLoginStatusText() {
     // 接口失败不能把文案清空：那会让用户完全失去判断依据
     el.textContent = '状态未知';
     el.style.color = 'rgba(255,255,255,.45)';
-    var unknownLogout = document.getElementById('kugou-logout-btn');
-    if (unknownLogout) unknownLogout.hidden = true;
   });
 }
 

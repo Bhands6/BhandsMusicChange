@@ -375,8 +375,13 @@ function logoutKugou() {
   fetch('/api/kugou/login/clear', { method: 'POST' })
     .then(function (r) { return r.json(); })
     .then(function (j) {
-      if (j && j.success) showToast('已退出酷狗登录');
-      else showToast('退出失败：' + ((j && j.error) || '未知错误'));
+      if (j && j.success) {
+        showToast('已退出酷狗登录');
+        // 退出后再留着登录弹窗没有意义：留 700ms 让用户看到按钮复位再关闭
+        setTimeout(closeKugouQrLogin, 700);
+      } else {
+        showToast('退出失败：' + ((j && j.error) || '未知错误'));
+      }
     })
     .catch(function (e) { showToast('退出失败：' + e.message); })
     .then(function () {
@@ -432,7 +437,10 @@ function openKugouQrLogin() {
     '<button id="kugou-tab-sms" type="button" style="flex:1;min-height:28px;border-radius:8px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.04);color:rgba(255,255,255,.55);font-size:11px;cursor:pointer">验证码登录</button>' +
     '</div>' +
     '<div id="kugou-qr-body"></div>' +
-    '<div style="margin-top:12px"><button class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 14px" onclick="closeKugouQrLogin()">关闭</button></div>' +
+    '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center">' +
+    '<button id="kugou-logout-btn" class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 14px;flex:0 0 auto;display:none;border-color:rgba(255,120,120,.32);color:#ffb3b3" onclick="event.stopPropagation();logoutKugou()" title="清除本机保存的酷狗登录凭据">退出登录</button>' +
+    '<button class="fx-mini-btn ghost" type="button" style="min-height:27px;padding:0 14px;flex:0 0 auto" onclick="closeKugouQrLogin()">关闭</button>' +
+    '</div>' +
     '</div>';
   document.body.appendChild(ov);
   ov.addEventListener('click', function (e) { if (e.target === ov) closeKugouQrLogin(); });
@@ -449,6 +457,11 @@ function openKugouQrLogin() {
   tabSms.addEventListener('click', function () { setActiveTab('sms'); renderSmsTab(body); });
   setActiveTab('qr');
   renderQrTab(body);
+  // 已登录时才在弹窗底部显示「退出登录」（弹窗是动态创建的，每次打开都要重新判断）
+  fetch('/api/kugou/login/status').then(function (r) { return r.json(); }).then(function (j) {
+    var b = document.getElementById('kugou-logout-btn');
+    if (b) b.style.display = (j && j.loggedIn) ? '' : 'none';
+  }).catch(function () {});
 }
 function renderQrTab(body) {
   body.innerHTML =
