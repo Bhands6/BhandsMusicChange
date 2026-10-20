@@ -131,7 +131,8 @@ function applyLatestUpdateInfo(data) {
   if (summaryText && firstNote && summaryText === firstNote) summaryText = '';
   updatePreviewState.hero = summaryText || (updatePreviewState.updateAvailable ? '发现新版本，建议更新。' : '当前版本，更新检测已就绪。');
   if (Array.isArray(release.notes) && release.notes.length) {
-    updatePreviewState.notes = release.notes.slice(0, 4);
+    // 2026-10-20：4 → 6，与服务端 extractReleaseNotes 的上限对齐（此前长更新内容会被截掉）
+    updatePreviewState.notes = release.notes.slice(0, 6);
   }
   maybeAutoOpenUpdateModal();  // 启动自动弹：检测完成即评估（含 splash 等待）
   renderUpdatePreviewPanel();

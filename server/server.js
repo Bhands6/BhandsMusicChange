@@ -668,16 +668,18 @@ function cleanReleaseLine(line) {
 function extractReleaseNotes(body) {
   const notes = [];
   String(body || '').split(/\r?\n/).forEach(line => {
-    const text = cleanReleaseLine(line);
+    let text = cleanReleaseLine(line);
     if (!text) return;
     if (/^(what'?s changed|changes|changelog|full changelog|更新日志)$/i.test(text)) return;
     if (/^https?:\/\//i.test(text)) return;
     // 2026-10-09：跳过纯版本号行（tag 标题在弹窗大标题里已显示，避免 "01 v2.1.0" 冗余行）
     if (/^v?\d+(?:\.\d+){1,3}$/i.test(text)) return;
-    if (text.length > 72) return;
+    // 2026-10-20：超长行不再整行丢弃（之前 >72 字符直接 return，会静默丢更新内容），
+    // 改为截到 160 字符加省略号；条数上限 4 → 6，弹窗列表加了滚动上限兜底
+    if (text.length > 160) text = text.slice(0, 160).replace(/\s+\S*$/, '') + '…';
     notes.push(text);
   });
-  return notes.slice(0, 4);
+  return notes.slice(0, 6);
 }
 /** 当前平台的安装包扩展名（Windows = exe/msi，macOS = dmg） */
 function installerAssetPatterns() {
