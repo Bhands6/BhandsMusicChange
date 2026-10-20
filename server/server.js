@@ -204,6 +204,16 @@ function saveMusicSourcesConfig(config) {
 }
 
 /**
+ * 给内置 kugou-api 的请求路径追加时间戳，绕过它自带的 2 分钟 apicache。
+ * ⚠️ 扫码登录三条链路（qr/key、qr/create、qr/check）务必带时间戳：
+ *    否则第一次轮询的「等待扫码」会被缓存 2 分钟，用户扫码成功后轮询仍拿到旧状态，
+ *    表现为「扫码没反应」（2026-10-20 实测；vendor docs 也写明必须带 timestamp）。
+ */
+function kugouNoCache(pathAndQuery) {
+  return pathAndQuery + (pathAndQuery.indexOf('?') >= 0 ? '&' : '?') + 'timestamp=' + Date.now();
+}
+
+/**
  * 歌手缺失时按网易云 ID 回查歌曲详情补齐元数据。
  *
  * 为什么需要：第三方音源全部是「按歌名+歌手」匹配的，歌手一旦为空，
@@ -5067,13 +5077,13 @@ const server = http.createServer(async (req, res) => {
     try {
       const ready = await ensureKugouApi();
       if (!ready.ok) { sendJSON(res, { error: ready.reason || '酷狗服务未就绪' }, 503); return; }
-      const keyMeta = await kugouService.apiGetWithMeta('/login/qr/key');
+      const keyMeta = await kugouService.apiGetWithMeta(kugouNoCache('/login/qr/key'));
       const keyResp = keyMeta.json;
       if (!keyResp || !keyResp.data || !keyResp.data.qrcode) { sendJSON(res, { error: '二维码 key 生成失败' }, 502); return; }
       const key = String(keyResp.data.qrcode);
       // 上游自带的图（带 appid）优先；没有时才退回内置 API 重新编码的图（会缺 appid，仅作兜底）
       const upstreamImg = keyResp.data.qrcode_img || '';
-      const createMeta = await kugouService.apiGetWithMeta('/login/qr/create?key=' + encodeURIComponent(key) + '&qrimg=1');
+      const createMeta = await kugouService.apiGetWithMeta(kugouNoCache('/login/qr/create?key=' + encodeURIComponent(key) + '&qrimg=1'));
       const createResp = createMeta.json;
       // 保存本次二维码的设备指纹 cookie（10 分钟过期清理）
       console.log('[KugouQR] create set-cookie 字段: ' + (keyMeta.setCookies.map((c) => c.split('=')[0]).join(', ') || '(空)') +
@@ -5103,7 +5113,7 @@ const server = http.createServer(async (req, res) => {
       if (!key) { sendJSON(res, { error: '缺少 qrcode key' }, 400); return; }
       const session = kugouQrSessions.get(key);
       const cookieHeader = session ? session.cookies.map((c) => c.split(';')[0]).join('; ') : '';
-      const meta = await kugouService.apiGetWithMeta('/login/qr/check?key=' + encodeURIComponent(key), 10000, cookieHeader ? { Cookie: cookieHeader } : {});
+      const meta = await kugouService.apiGetWithMeta(kugouNoCache('/login/qr/check?key=' + encodeURIComponent(key)), 10000, cookieHeader ? { Cookie: cookieHeader } : {});
       const j = meta.json;
       if (!j) { sendJSON(res, { error: '轮询失败' }, 502); return; }
       const status = j && j.data ? Number(j.data.status) : -1;
@@ -5165,7 +5175,7 @@ const server = http.createServer(async (req, res) => {
     if (kugouCellCookies) return kugouCellCookies;
     const ready = await ensureKugouApi();
     if (!ready.ok) throw new Error(ready.reason || '酷狗服务未就绪');
-    const meta = await kugouService.apiGetWithMeta('/login/qr/key');
+    const meta = await kugouService.apiGetWithMeta(kugouNoCache('/login/qr/key'));
     if (!meta.json || !meta.json.data) throw new Error('设备标识生成失败');
     kugouCellCookies = meta.setCookies || [];
     return kugouCellCookies;
@@ -5178,7 +5188,7 @@ const server = http.createServer(async (req, res) => {
       if (!/^1\d{10}$/.test(mobile)) { sendJSON(res, { error: '手机号格式不正确' }, 400); return; }
       const cookies = await ensureKugouCellCookies();
       const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ');
-      const j = await kugouService.apiGet('/captcha/sent?mobile=' + encodeURIComponent(mobile), 12000, { Cookie: cookieHeader });
+      const j = await kugouService.apiGet(kugouNoCache('/captcha/sent?mobile=' + encodeURIComponent(mobile)), 12000, { Cookie: cookieHeader });
       // 接口成功时 status=1；data 里可能有验证码回显（测试模式）
       const ok = j && (Number(j.status) === 1 || (j.data && j.data.code));
       console.log('[KugouLogin] 验证码发送完整响应: ' + JSON.stringify(j));
@@ -5199,7 +5209,7 @@ const server = http.createServer(async (req, res) => {
       const cookies = await ensureKugouCellCookies();
       const cookieHeader = cookies.map((c) => c.split(';')[0]).join('; ');
       const j = await kugouService.apiGet(
-        '/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code),
+        kugouNoCache('/login/cellphone?mobile=' + encodeURIComponent(mobile) + '&code=' + encodeURIComponent(code)),
         12000,
         { Cookie: cookieHeader }
       );
