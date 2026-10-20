@@ -175,5 +175,7 @@ contextBridge.exposeInMainWorld('desktopWindow', {
 // 页面加载完成后为根元素添加桌面环境标识类名，供 CSS 适配
 window.addEventListener('DOMContentLoaded', () => {
   document.documentElement.classList.add('desktop-shell-root');
+  // 平台标识类名（platform-darwin / platform-win32 / platform-linux），供 CSS 做平台适配
+  document.documentElement.classList.add('platform-' + process.platform);
   document.body.classList.add('desktop-shell');
 });

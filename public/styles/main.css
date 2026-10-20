@@ -62,6 +62,14 @@ body.desktop-shell #desktop-titlebar::after{content:none}
 .desktop-drag-region{height:100%;flex:1;display:flex;align-items:center;gap:9px;min-width:0;color:rgba(224,250,255,.74);font-size:12px;font-weight:600;letter-spacing:0;text-transform:uppercase;-webkit-app-region:drag;pointer-events:auto}
 .desktop-app-mark{display:none}
 .desktop-app-title{display:none}
+/* 标题栏左侧引导入口（?）：置于左上角（macOS 上位于原生交通灯右侧） */
+.desktop-titlebar-left{display:flex;align-items:center;-webkit-app-region:no-drag;pointer-events:auto}
+/* macOS：窗口控制全部交给原生交通灯（红=关闭、黄=最小化、绿=全屏），隐藏自绘三个按钮 */
+html.platform-darwin .desktop-window-btn{display:none}
+/* macOS：为左上角原生交通灯留出空间（? 按钮紧随其后） */
+html.platform-darwin body.desktop-shell #desktop-titlebar{padding-left:78px}
+/* macOS：原生全屏时系统自动浮现交通灯，悬浮自绘按钮整体隐藏，避免双按钮 */
+html.platform-darwin #fullscreen-window-controls{display:none!important}
 /* 窗口控制按钮组（最小化、最大化、关闭） */
 .desktop-window-controls{display:flex;align-items:center;gap:6px;padding:0;border-radius:0;background:transparent;box-shadow:none;-webkit-app-region:no-drag;pointer-events:auto}
 .desktop-window-btn{width:38px;height:30px;border:0;border-radius:10px;background:rgba(4,8,10,.42);color:rgba(224,250,255,.72);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .18s,color .18s,transform .18s}

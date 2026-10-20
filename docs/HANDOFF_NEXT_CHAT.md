@@ -1,6 +1,6 @@
 # BhandsMusic Next Chat Handoff
 
-更新时间：2026-10-19 ｜ 当前版本：`2.2.4`
+更新时间：2026-10-20 ｜ 当前版本：`2.2.4`
 
 ## 新对话先执行
 
@@ -68,6 +68,12 @@ npm run check:reorg       # 加载期读写顺序等价
 7. **酷狗登录凭据落到 `userData/music-sources.json`**：此前打包版写进只读 asar，扫码提示成功但状态永远「未登录」；同时修复登录行圆点永远灰色
 8. 版本号 `2.2.3 → 2.2.4`
 
+## 2026-10-20 已落地
+
+1. **macOS 标题栏平台化（用户视觉反馈驱动）**：主窗口 mac 改为 `frame:true + titleBarStyle:'hiddenInset'`，窗口控制全部交给原生交通灯（红=关闭/黄=最小化/绿=全屏），自绘 min/max/close 在 mac 全部隐藏；「?」引导按钮移到标题栏左上角（交通灯右侧）；mac 原生全屏时悬浮自绘按钮整体隐藏。preload 新增 `platform-<platform>` 根类名作为 CSS 平台适配入口
+2. **绿灯点了没反应的真正根因（已实证）**：主窗口原来写死 `fullscreen:false`，官方文档明确「显式 false 时 macOS 上全屏按钮会被隐藏或禁用」——与 frameless / 透明背景无关。现 darwin 不传该键（`...(darwin ? {} : {fullscreen:false})`）。Electron 42 实测：`transparent:true + frame:true + hiddenInset` 下 `setFullScreen(true)` 正常，`isFullScreen=true`、bounds 撑满 2560×1440、`enter-full-screen` 事件触发
+3. **未提交**：iOS 移植方案（`docs/IOS_PORT_PLAN.md` + `docs/ios-port-plan.html`，未跟踪），待用户确认后随标题栏改动一起提交
+
 ## 发布流程
 
 ```powershell
@@ -85,9 +91,11 @@ npm run build:win        # 产物在 dist/，含 latest.yml
 
 ## 已知遗留
 
+- **在 mac 上打 win 包必须先手动拉 win 版 go-music-api 二进制**：`node build/fetch-go-music-api.js --platform win32 --arch x64 --force`。`prebuild:win` 未传 `--platform`，该脚本默认跟随主机平台且"存在即跳过"（不校验平台），在 mac 上直接 `npm run build:win` 会把 Mach-O 二进制打进 win 安装包，Windows 上内置换源服务不可用。根治办法是给 `prebuild:win` 补 `--platform win32 --arch x64`（未改，待确认）
 - 首页 hero 兜底图目前是「模糊铺底 + 缩小的清晰图」，视觉比原满铺弱一档；彻底解法是重画一张不含文字的兜底图
 - 酷狗登录态没有并入顶部账号按钮（`14-account.js` 只聚合网易云 / QQ）
 - `docs/PROJECT_MEMORY.md` 中 2026-06 前后的历史条目仍引用 `E:\桌面\播放器软件\...` 旧路径，仅作历史参考
+- **macOS 主窗口不要加回 `fullscreen:false`**：会让绿灯全屏失效（官方文档行为），Windows/Linux 保留该键无副作用
 
 ## 不要做
 

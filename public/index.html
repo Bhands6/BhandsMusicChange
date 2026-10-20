@@ -42,12 +42,15 @@ try {
 
 <!-- 自定义标题栏（仅桌面模式显示，提供拖拽区域和窗口控制按钮） -->
 <div id="desktop-titlebar" aria-label="window controls">
+  <!-- 引导入口（?）：按平台惯例置于左上角（macOS 上位于原生交通灯右侧） -->
+  <div class="desktop-titlebar-left">
+    <button id="visual-guide-btn" class="icon-btn" type="button" onclick="startVisualGuide({ manual: true })" title="查看使用引导" aria-label="查看使用引导">?</button>
+  </div>
   <div class="desktop-drag-region">
     <div class="desktop-app-mark" aria-hidden="true"></div>
     <div class="desktop-app-title" aria-hidden="true"></div>
   </div>
   <div class="desktop-window-controls">
-    <button id="visual-guide-btn" class="icon-btn" type="button" onclick="startVisualGuide({ manual: true })" title="查看使用引导" aria-label="查看使用引导">?</button>
     <button id="update-entry" class="update-entry" type="button" onclick="openUpdatePanel()" title="发现新版本" aria-label="发现新版本">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle class="update-ring" cx="12" cy="12" r="8.8"></circle>

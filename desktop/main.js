@@ -2417,8 +2417,15 @@ async function createWindow() {
     minWidth: 960,
     minHeight: 540,
     show: false,               // 初始隐藏，等 ready 后显示
-    frame: false,              // 无边框（自定义标题栏）
-    fullscreen: false,
+    // macOS：titled + hiddenInset —— 标题栏隐藏、内容区全尺寸，交通灯（红黄绿）接管窗口控制。
+    // 注意 1：**不能传 fullscreen:false** —— 官方文档明确「显式设为 false 时 macOS 上全屏按钮会被隐藏或禁用」，
+    //         这正是此前绿灯点击无反应的根因（Electron 42 实测：不传该键即可正常全屏）。
+    // 注意 2：frameless（frame:false）窗口无 NSWindowStyleMaskTitled，绿灯只会 zoom，
+    //         因此 darwin 保持 titled；透明背景与 34px 圆角仍由页内 CSS 绘制，视觉与 frameless 一致（实测全屏可用）。
+    // 关闭请求仍统一走下方 mainWindow.on('close') 的自定义逻辑（询问 / 最小化）。
+    frame: process.platform !== 'darwin',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : undefined,
+    ...(process.platform === 'darwin' ? {} : { fullscreen: false }),
     transparent: true,         // 透明背景（支持圆角等自定义外观）
     backgroundColor: '#00000000',
     hasShadow: true,
