@@ -223,7 +223,7 @@ function syncUpdatePreviewStateClass() {
     else if (isError) foot.textContent = '下载失败：' + (updatePreviewState.errorReason || updatePreviewState.errorDetail || updatePreviewState.message || '请稍后重试') + (updatePreviewState.failedAttempts && updatePreviewState.failedAttempts.length ? ' · 已尝试 ' + updatePreviewState.failedAttempts.length + ' 条线路' : '');
     else if (isReady && isPatch) foot.textContent = updatePreviewState.restartRequired ? '快速补丁已应用，重启 BhandsMusic 后生效。' : '快速补丁已应用。';
     else if (isReady) foot.textContent = isMac
-      ? 'DMG 已就绪。点击打开后把 BhandsMusic 拖进「应用程序」完成替换（替换前请先退出当前应用）。'
+      ? 'DMG 已就绪。点击打开后会同时打开「应用程序」文件夹并自动退出本应用，把 BhandsMusic 拖进去即可完成替换。'
       : (updatePreviewState.cached ? '已复用上次校验通过的安装包，不会重复下载。' : '安装包已准备好，点击按钮后再打开安装。');
     else if (patchAvailable) foot.textContent = '优先使用轻量补丁，只更新缺失或变更的资源文件；不适用时可下载完整安装包。';
     else foot.textContent = updatePreviewState.updateAvailable
@@ -504,7 +504,7 @@ async function openDownloadedUpdateInstaller(filePath) {
       updatePreviewState.status = 'ready';
       syncUpdatePreviewStateClass();
       if (result.needsManualReplace) {
-        showToast('DMG 已打开，请把 BhandsMusic 拖进「应用程序」完成替换');
+        showToast('DMG 已打开，应用将自动退出；把 BhandsMusic 拖进「应用程序」即可完成替换');
       } else {
         showToast('安装包已打开');
       }

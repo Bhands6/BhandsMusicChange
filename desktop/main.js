@@ -1854,15 +1854,25 @@ ipcMain.handle('bhandsmusic-open-update-installer', async (_event, filePath) => 
     if (error) return { ok: false, error };
     // macOS：打开 dmg 只是把它挂载出来，应用并不会被替换（macOS 也不允许替换正在运行的 app）。
     // 顺手把「应用程序」文件夹也打开，用户直接把 BhandsMusic 拖进去即可完成替换。
+    // 关键：打开后主动退出本应用 —— 否则 Finder 替换运行中的 app 时会弹
+    // 「正在等待其他程序退出 / 结束再运行」，需要用户手动结束进程（2026-10-20 用户反馈）。
+    // 退出走 app.quit()，before-quit 会把 forceQuit 置真，因此不会触发自定义关闭确认弹窗。
     let revealedApplications = false;
+    let autoQuitInMs = 0;
     if (process.platform === 'darwin' && /\.dmg$/i.test(target)) {
       revealedApplications = !(await shell.openPath('/Applications'));
+      autoQuitInMs = 2500;
+      setTimeout(() => {
+        if (!app.isReady()) return;
+        app.quit();
+      }, autoQuitInMs);
     }
     return {
       ok: true,
       platform: process.platform,
       needsManualReplace: process.platform === 'darwin',
       revealedApplications,
+      autoQuitInMs,
     };
   } catch (e) {
     return { ok: false, error: e.message || 'OPEN_UPDATE_FAILED' };
