@@ -808,7 +808,7 @@ function normalizeManifestUpdateInfo(data) {
     sha512: normalizeDigest(patch.sha512 || '', 'sha512'),
   } : null;
   const notes = Array.isArray(release.notes) && release.notes.length
-    ? release.notes.slice(0, 4).map(cleanReleaseLine).filter(Boolean)
+    ? release.notes.slice(0, 6).map(cleanReleaseLine).filter(Boolean)
     : (extractReleaseNotes(release.body || data.body).length ? extractReleaseNotes(release.body || data.body) : UPDATE_FALLBACK_NOTES);
   const assetInfo = downloadUrl ? {
     name: asset.name || updateAssetNameFromUrl(downloadUrl) || defaultInstallerName(latestVersion),
@@ -1370,7 +1370,8 @@ function publicUpdateJob(job) {
 }
 function activeUpdateJobFor(version) {
   const jobs = Array.from(updateDownloadJobs.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-  return jobs.find(job => job.version === version && (job.status === 'queued' || job.status === 'downloading' || job.status === 'ready'));
+  // paused 也算活跃：避免暂停期间再次点下载又起一个并行任务覆盖同一个临时文件
+  return jobs.find(job => job.version === version && (job.status === 'queued' || job.status === 'downloading' || job.status === 'paused' || job.status === 'ready'));
 }
 function trimUpdateJobs() {
   const jobs = Array.from(updateDownloadJobs.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -1510,18 +1511,34 @@ async function downloadUpdateAssetWithMirrors(job) {
   for (let i = 0; i < candidates.length; i++) {
     const candidate = candidates[i];
     try {
-      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+      // 断点续传：磁盘上有与 job.resumeFrom 等大的 .download 临时文件时从该偏移续传；
+      // 服务器不支持 Range（返回 200 而非 206）时自动回退整段重下。
+      // resume 每次都会重新走上面的测速选线（rankDownloadCandidatesByProbe），满足「重新下载时重新找线路」。
+      let resumeFrom = 0;
+      if (job.resumeFrom > 0 && fs.existsSync(tmpPath)) {
+        const onDisk = fs.statSync(tmpPath).size;
+        resumeFrom = onDisk === job.resumeFrom ? onDisk : 0;
+      }
+      if (!resumeFrom) { try { fs.unlinkSync(tmpPath); } catch (_) {} }
       ensureMirrorCanBeVerified(job, candidate);
       prepareUpdateJobAttempt(job, candidate, i, candidates.length);
-      job.message = job.total ? '正在下载完整安装包' : '正在下载完整安装包，等待服务器返回大小';
+      const requestHeaders = { 'User-Agent': `BhandsMusic/${APP_VERSION}` };
+      if (resumeFrom > 0) requestHeaders.Range = 'bytes=' + resumeFrom + '-';
+      job.message = resumeFrom > 0
+        ? '正在续传完整安装包（已下载 ' + Math.round(resumeFrom / 1024 / 1024) + ' MB）'
+        : (job.total ? '正在下载完整安装包' : '正在下载完整安装包，等待服务器返回大小');
 
-      const resp = await fetchWithTimeout(candidate.url, {
-        headers: { 'User-Agent': `BhandsMusic/${APP_VERSION}` },
-      }, 14000);
+      const resp = await fetchWithTimeout(candidate.url, { headers: requestHeaders }, 14000);
       if (!resp.ok) throw updateError('HTTP_' + resp.status, 'HTTP ' + resp.status);
 
       const totalHeader = parseInt(resp.headers.get('content-length') || '0', 10) || 0;
-      job.total = totalHeader || job.expectedSize || job.total || 0;
+      const ranged = resumeFrom > 0 && resp.status === 206;
+      if (resumeFrom > 0 && !ranged) {
+        // 服务器忽略 Range：删掉半截文件，按完整下载处理
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        resumeFrom = 0;
+      }
+      job.total = ranged ? resumeFrom + totalHeader : (totalHeader || job.expectedSize || job.total || 0);
       // 中途体积守卫：已声明大小 → 声明值 + 余量；未声明 → 硬上限。
       // 只在下载完成后校验会被上游谎报大小时先写满磁盘（补丁路径早有 PATCH_MAX_BYTES，这里补齐）。
       const declaredTotal = Math.max(totalHeader, job.expectedSize || 0);
@@ -1534,10 +1551,17 @@ async function downloadUpdateAssetWithMirrors(job) {
       let speedWindowAt = Date.now();
       let speedWindowBytes = 0;
 
-      const writer = fs.createWriteStream(tmpPath);
+      const writer = fs.createWriteStream(tmpPath, ranged ? { flags: 'a' } : undefined);
+      job.received = ranged ? resumeFrom : 0;
       const reader = resp.body.getReader();
       try {
         while (true) {
+          // 暂停 / 取消：用户通过接口置位，这里在下一个分片前响应（约 1 秒内生效）
+          if (job.pauseRequested || job.cancelRequested) {
+            try { await reader.cancel(); } catch (_) {}
+            throw updateError(job.pauseRequested ? 'UPDATE_PAUSED' : 'UPDATE_CANCELED',
+              job.pauseRequested ? '下载已暂停' : '下载已取消');
+          }
           const chunk = await reader.read();
           if (chunk.done) break;
           const buf = Buffer.from(chunk.value);
@@ -1576,10 +1600,35 @@ async function downloadUpdateAssetWithMirrors(job) {
       job.status = 'ready';
       job.progress = 100;
       job.etaSeconds = 0;
+      job.resumeFrom = 0;
       job.message = '安装包已下载';
       job.updatedAt = Date.now();
       return;
     } catch (err) {
+      // 暂停：保留 .download 临时文件与进度，等待 resume 接口续传
+      if (err && err.code === 'UPDATE_PAUSED') {
+        job.status = 'paused';
+        job.resumeFrom = job.received;
+        job.speedBps = 0;
+        job.etaSeconds = 0;
+        job.message = '已暂停（已下载 ' + (job.received / 1024 / 1024).toFixed(1) + ' MB）';
+        job.updatedAt = Date.now();
+        console.log('[UpdateDownload] 已暂停：' + job.id + ' @ ' + job.received + ' bytes');
+        return;
+      }
+      // 取消：删除临时文件与进度，任务作废；再次下载会新建任务并重新测速选线
+      if (err && err.code === 'UPDATE_CANCELED') {
+        try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+        job.status = 'canceled';
+        job.resumeFrom = 0;
+        job.received = 0;
+        job.speedBps = 0;
+        job.etaSeconds = 0;
+        job.message = '下载已取消，已下载的临时文件已删除';
+        job.updatedAt = Date.now();
+        console.log('[UpdateDownload] 已取消：' + job.id + '，临时文件已删除');
+        return;
+      }
       try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
       const info = classifyUpdateError(err);
       failures.push({ source: candidate.label || '下载线路', reason: info.reason, detail: info.detail });
@@ -3939,6 +3988,56 @@ const server = http.createServer(async (req, res) => {
       ? updateDownloadJobs.get(id)
       : Array.from(updateDownloadJobs.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
     sendJSON(res, publicUpdateJob(job), job ? 200 : 404);
+    return;
+  }
+
+  // POST /api/update/download/pause?id= - 暂停下载（保留临时文件与进度，可用 resume 续传）
+  if (pn === '/api/update/download/pause' && req.method === 'POST') {
+    const job = updateDownloadJobs.get(url.searchParams.get('id') || '');
+    if (!job || (job.status !== 'downloading' && job.status !== 'queued')) {
+      sendJSON(res, { ok: false, error: 'UPDATE_JOB_NOT_PAUSABLE' }, 400);
+      return;
+    }
+    job.pauseRequested = true;
+    sendJSON(res, { ok: true, job: publicUpdateJob(job) });
+    return;
+  }
+
+  // POST /api/update/download/resume?id= - 继续下载：重新测速选线 + Range 断点续传
+  if (pn === '/api/update/download/resume' && req.method === 'POST') {
+    const job = updateDownloadJobs.get(url.searchParams.get('id') || '');
+    if (!job || job.status !== 'paused') {
+      sendJSON(res, { ok: false, error: 'UPDATE_JOB_NOT_PAUSED' }, 400);
+      return;
+    }
+    job.pauseRequested = false;
+    job.cancelRequested = false;
+    job.status = 'queued';
+    job.message = '正在测速选择最快线路…';
+    downloadUpdateAssetWithMirrors(job);
+    sendJSON(res, { ok: true, job: publicUpdateJob(job) });
+    return;
+  }
+
+  // POST /api/update/download/cancel?id= - 取消下载：终止并删除已下载的临时文件与进度
+  if (pn === '/api/update/download/cancel' && req.method === 'POST') {
+    const job = updateDownloadJobs.get(url.searchParams.get('id') || '');
+    if (!job) { sendJSON(res, { ok: true }); return; }
+    if (job.status === 'paused') {
+      // 暂停态没有活动下载循环，直接清理
+      const tmpPath = job.filePath + '.download';
+      try { if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath); } catch (_) {}
+      job.status = 'canceled';
+      job.resumeFrom = 0;
+      job.received = 0;
+      job.message = '下载已取消，已下载的临时文件已删除';
+      job.updatedAt = Date.now();
+    } else if (job.status === 'downloading' || job.status === 'queued') {
+      job.cancelRequested = true;   // 下载循环检测到后自行清理并置 canceled
+      job.message = '正在取消下载…';
+      job.updatedAt = Date.now();
+    }
+    sendJSON(res, { ok: true, job: publicUpdateJob(job) });
     return;
   }
 

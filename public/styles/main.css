@@ -580,6 +580,8 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 .update-vpn-hint{margin-top:5px;min-height:0;font-size:11px;line-height:1.4;color:rgba(255,244,214,.36)}
 .modal.update-modal.error .update-vpn-hint{color:rgba(255,244,214,.36)}
 .modal.update-modal.ready .update-primary-btn{border-color:rgba(244,210,138,.46);background:rgba(244,210,138,.13);color:#fff0bf}
+/* 暂停态：主按钮变「继续下载」，与下载中的金色进度条区分开 */
+.modal.update-modal.paused .update-primary-btn{border-color:rgba(255,255,255,.26);background:rgba(255,255,255,.10);color:#fff}
 .modal.update-modal.error .update-primary-btn{border-color:rgba(255,190,126,.46);background:rgba(255,158,86,.12);color:#ffe3c2}
 .modal.update-modal.error .update-footnote{color:rgba(255,212,170,.82)}
 

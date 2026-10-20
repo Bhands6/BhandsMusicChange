@@ -186,6 +186,7 @@ function syncUpdatePreviewStateClass() {
   var entry = document.getElementById('update-entry');
   var modal = document.querySelector('#update-modal .update-modal');
   var isDownloading = updatePreviewState.status === 'downloading';
+  var isPaused = updatePreviewState.status === 'paused';
   var isReady = updatePreviewState.status === 'ready';
   var isError = updatePreviewState.status === 'error';
   var isOpening = updatePreviewState.status === 'opening';
@@ -199,6 +200,7 @@ function syncUpdatePreviewStateClass() {
   if (modal) {
     modal.classList.toggle('ready', isReady);
     modal.classList.toggle('error', isError);
+    modal.classList.toggle('paused', isPaused);
   }
   var label = document.getElementById('update-btn-label');
   var btn = document.getElementById('update-primary-btn');
@@ -206,6 +208,7 @@ function syncUpdatePreviewStateClass() {
   var canOpenRelease = updatePreviewState.configured && updatePreviewState.updateAvailable && !updatePreviewState.downloadUrl && updatePreviewState.releaseUrl;
   if (label) {
     if (isDownloading) label.textContent = (isPatch ? '快速补丁 ' : '正在下载 ') + Math.round(updatePreviewState.progress) + '%';
+    else if (isPaused) label.textContent = '继续下载';
     else if (isOpening) label.textContent = isMac ? '正在打开 DMG' : '正在打开安装包';
     else if (isError && updatePreviewState.mode === 'patch' && updatePreviewState.downloadUrl) label.textContent = isMac ? '下载 DMG 安装包' : '下载完整安装包';
     else if (isError) label.textContent = updatePreviewState.mode === 'installer' ? '重试下载' : '重试更新';
@@ -220,6 +223,7 @@ function syncUpdatePreviewStateClass() {
   var foot = document.getElementById('update-footnote');
   if (foot) {
     if (isDownloading) foot.textContent = (updatePreviewState.message || (isPatch ? '正在下载快速补丁' : (isMac ? '正在下载 DMG 安装包' : '正在下载完整安装包'))) + (updateProgressDetailText() ? ' · ' + updateProgressDetailText() : '');
+    else if (isPaused) foot.textContent = '已暂停 · 已下载 ' + formatUpdateBytes(updatePreviewState.received) + (updatePreviewState.total ? ' / ' + formatUpdateBytes(updatePreviewState.total) : '') + '。点「继续下载」会重新测速选线并从断点续传；点「取消」删除已下载内容。';
     else if (isError) foot.textContent = '下载失败：' + (updatePreviewState.errorReason || updatePreviewState.errorDetail || updatePreviewState.message || '请稍后重试') + (updatePreviewState.failedAttempts && updatePreviewState.failedAttempts.length ? ' · 已尝试 ' + updatePreviewState.failedAttempts.length + ' 条线路' : '');
     else if (isReady && isPatch) foot.textContent = updatePreviewState.restartRequired ? '快速补丁已应用，重启 BhandsMusic 后生效。' : '快速补丁已应用。';
     else if (isReady) foot.textContent = isMac
@@ -330,6 +334,71 @@ async function startRealUpdateDownload() {
     updateUpdatePreviewProgress(0);
     showToast('更新下载启动失败：' + updatePreviewState.errorReason);
   }
+}
+
+/** 暂停下载：保留临时文件与进度，按钮变「继续下载」 */
+async function pauseUpdateDownload() {
+  var id = updatePreviewState.downloadJobId;
+  if (!id) return;
+  try {
+    var r = await apiJson('/api/update/download/pause?id=' + encodeURIComponent(id), { method: 'POST' });
+    if (!r || r.ok === false) throw new Error((r && r.error) || '暂停失败');
+    updatePreviewState.status = 'paused';
+    updatePreviewState.message = '已暂停';
+    updatePreviewState.speedBps = 0;
+    updatePreviewState.etaSeconds = 0;
+    if (updatePreviewState.pollTimer) { clearInterval(updatePreviewState.pollTimer); updatePreviewState.pollTimer = null; }
+    syncUpdatePreviewStateClass();
+  } catch (e) {
+    showToast('暂停失败：' + e.message);
+  }
+}
+
+/** 继续下载：服务端重新测速选线，并从已下载字节数 Range 续传 */
+async function resumeUpdateDownload() {
+  var id = updatePreviewState.downloadJobId;
+  if (!id) return;
+  try {
+    var r = await apiJson('/api/update/download/resume?id=' + encodeURIComponent(id), { method: 'POST' });
+    if (!r || r.ok === false) throw new Error((r && r.error) || '继续下载失败');
+    updatePreviewState.status = 'downloading';
+    updatePreviewState.message = '正在续传完整安装包';
+    syncUpdatePreviewStateClass();
+    if (updatePreviewState.pollTimer) clearInterval(updatePreviewState.pollTimer);
+    updatePreviewState.pollTimer = setInterval(function () { pollUpdateDownloadJob(id); }, 360);
+  } catch (e) {
+    showToast('继续下载失败：' + e.message);
+  }
+}
+
+/**
+ * 取消下载：终止任务并由服务端删除已下载的临时文件与进度，UI 回到初始状态。
+ * 非下载态时等价于「关闭弹窗」；快速补丁是内存缓冲下载，走原关闭逻辑。
+ */
+function cancelUpdateDownload() {
+  var st = updatePreviewState.status;
+  if (st !== 'downloading' && st !== 'paused' && st !== 'queued') { closeUpdatePanel(); return; }
+  if (updatePreviewState.mode !== 'installer') { closeUpdatePanel(); return; }
+  var id = updatePreviewState.downloadJobId;
+  if (updatePreviewState.pollTimer) { clearInterval(updatePreviewState.pollTimer); updatePreviewState.pollTimer = null; }
+  var finish = function () {
+    updatePreviewState.status = '';
+    updatePreviewState.progress = 0;
+    updatePreviewState.received = 0;
+    updatePreviewState.total = 0;
+    updatePreviewState.speedBps = 0;
+    updatePreviewState.etaSeconds = 0;
+    updatePreviewState.downloadJobId = '';
+    updatePreviewState.message = '';
+    updateUpdatePreviewProgress(0);
+    syncUpdatePreviewStateClass();
+    closeUpdatePanel();
+    showToast('已取消下载，已下载的内容已删除');
+  };
+  if (!id) { finish(); return; }
+  apiJson('/api/update/download/cancel?id=' + encodeURIComponent(id), { method: 'POST' })
+    .then(function () { finish(); })
+    .catch(function () { finish(); });
 }
 async function startRealUpdatePatch() {
   if (updatePreviewState.status === 'downloading' || updatePreviewState.status === 'opening') return;
@@ -466,6 +535,28 @@ function applyUpdateDownloadJob(job) {
     updateUpdatePreviewProgress(job.progress || 0);
     return;
   }
+  if (job.status === 'paused') {
+    // 轮询里确认服务端已暂停：停轮询，等用户点「继续下载」
+    if (updatePreviewState.pollTimer) { clearInterval(updatePreviewState.pollTimer); updatePreviewState.pollTimer = null; }
+    updatePreviewState.status = 'paused';
+    updatePreviewState.speedBps = 0;
+    updatePreviewState.etaSeconds = 0;
+    updateUpdatePreviewProgress(job.progress || updatePreviewState.progress || 0);
+    syncUpdatePreviewStateClass();
+    return;
+  }
+  if (job.status === 'canceled') {
+    // 服务端已取消并删除临时文件：UI 回到初始态
+    if (updatePreviewState.pollTimer) { clearInterval(updatePreviewState.pollTimer); updatePreviewState.pollTimer = null; }
+    updatePreviewState.status = '';
+    updatePreviewState.progress = 0;
+    updatePreviewState.received = 0;
+    updatePreviewState.total = 0;
+    updatePreviewState.downloadJobId = '';
+    updateUpdatePreviewProgress(0);
+    syncUpdatePreviewStateClass();
+    return;
+  }
   if (job.status === 'ready') {
     if (updatePreviewState.pollTimer) clearInterval(updatePreviewState.pollTimer);
     updatePreviewState.pollTimer = null;
@@ -525,6 +616,10 @@ function startUpdatePreviewDownload() {
     restartForAppliedPatch();
     return;
   }
+  // 2026-10-20：下载中点主按钮 = 暂停（保留进度与临时文件）；暂停中点主按钮 = 继续下载（重新测速选线 + 断点续传）。
+  // 仅完整安装包支持；快速补丁是内存缓冲下载，不支持暂停。
+  if (updatePreviewState.status === 'downloading' && updatePreviewState.mode === 'installer') { pauseUpdateDownload(); return; }
+  if (updatePreviewState.status === 'paused' && updatePreviewState.mode === 'installer') { resumeUpdateDownload(); return; }
   if (updatePreviewState.status === 'downloading' || updatePreviewState.status === 'opening') return;
   if (updatePreviewState.configured && updatePreviewState.updateAvailable) {
     // macOS 不走补丁（会破坏 app 代码签名），直接下载 dmg
