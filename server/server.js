@@ -25,6 +25,7 @@ const {
   login_status,
   logout,
   user_account,
+  vip_info,
   user_playlist,
   comment_music,
   artist_detail,
@@ -2120,7 +2121,9 @@ function neteaseQualityLabel(level) {
   return hit ? hit.label : '';
 }
 function hasNeteaseSvip(loginInfo) {
-  return !!(loginInfo && loginInfo.loggedIn && (loginInfo.vipLevel === 'svip' || loginInfo.isSvip || Number(loginInfo.vipType || 0) >= 10));
+  // ⚠️ 不能用 vipType 判等级：vipType 是「开通类型位」（0/10/11/110），不是会员等级，
+  //    旧代码 `vipType >= 10` 会把普通黑胶 VIP 误判成 SVIP（2026-10-23 修）。
+  return !!(loginInfo && loginInfo.loggedIn && (loginInfo.vipLevel === 'svip' || loginInfo.isSvip === true));
 }
 function mapArtists(raw) {
   return (raw || [])
@@ -3880,7 +3883,9 @@ function normalizeNeteaseVip(profile, account, extra) {
     obj.isVip === true || obj.is_vip === true || obj.vip === true ||
     Number(obj.isVip || obj.is_vip || obj.vip || obj.vipFlag || obj.vipflag || 0) > 0
   )) || /vip|黑胶|会员/.test(text);
-  const isSvip = svipFlag || vipType >= 10;
+  // ⚠️ vipType 只表示「开通类型位」（0 未开通 / 10 音乐包 / 11 黑胶 / 110 黑胶），
+  //    不能当等级用。SVIP 只认显式标记或文本线索，权威判定看 resolveNeteaseVip() 的 vip_info。
+  const isSvip = svipFlag;
   const isVip = isSvip || vipFlag || vipType > 0;
   const vipLevel = isSvip ? 'svip' : (isVip ? 'vip' : 'none');
   return {
@@ -3911,6 +3916,63 @@ function isNeteaseAuthInvalidPayload(payload) {
   const msg = normalizeApiMessage(payload);
   return /未登录|需要登录|请先登录|login/i.test(msg) && code >= 300;
 }
+/* 网易云会员等级权威判定（2026-10-23 新增）
+ * vip_info 返回三个会员包：
+ *   redplus       = 黑胶SVIP
+ *   associator    = 黑胶VIP
+ *   musicPackage  = 音乐包
+ * 每个包有 vipCode（>0 表示开通）与 expireTime（0 表示长期/未开通）。
+ * profile/account 的 vipType 只是「开通类型位」，不能拿来判等级，
+ * 所以最终等级必须由这里覆盖一次。
+ */
+let neteaseVipCache = { at: 0, cookie: '', data: null };
+function isVipPackageActive(pkg) {
+  if (!pkg || typeof pkg !== 'object') return false;
+  const code = Number(pkg.vipCode || 0) || 0;
+  if (code <= 0) return false;
+  const expire = Number(pkg.expireTime || 0) || 0;
+  return expire <= 0 || expire > Date.now();
+}
+function vipLevelFromVipInfo(data) {
+  data = data || {};
+  if (isVipPackageActive(data.redplus)) return 'svip';
+  if (isVipPackageActive(data.associator) || isVipPackageActive(data.musicPackage)) return 'vip';
+  return 'none';
+}
+async function resolveNeteaseVip(info) {
+  if (!info || !info.loggedIn || !userCookie) return info;
+  let data = null;
+  const now = Date.now();
+  // getLoginInfo 会被 /api/song/url 等高频接口调用，会员信息 60s 内复用，避免每条歌都查一次
+  if (neteaseVipCache.data && neteaseVipCache.cookie === userCookie && now - neteaseVipCache.at < 60000) {
+    data = neteaseVipCache.data;
+  } else {
+    try {
+      const res = await vip_info({ cookie: userCookie, timestamp: now });
+      const body = (res && res.body) || {};
+      data = body.data || body;
+      if (data && (data.redplus || data.associator || data.musicPackage)) {
+        neteaseVipCache = { at: now, cookie: userCookie, data };
+      }
+    } catch (e) {
+      console.warn('[Login] vip_info failed:', e.message);
+    }
+  }
+  const hasPackageField = !!(data && (data.redplus || data.associator || data.musicPackage));
+  let level;
+  if (hasPackageField) {
+    level = vipLevelFromVipInfo(data);
+  } else {
+    // 拉不到权威数据时，宁可降级也不能把普通黑胶标成 SVIP
+    level = info.vipLevel === 'svip' ? 'vip' : (info.vipLevel || 'none');
+  }
+  return Object.assign({}, info, {
+    vipLevel: level,
+    isVip: level !== 'none',
+    isSvip: level === 'svip',
+    vipLabel: level === 'svip' ? 'SVIP' : (level === 'vip' ? 'VIP' : '无VIP'),
+  });
+}
 async function getLoginInfo() {
   if (!userCookie) return { loggedIn: false, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP' };
 
@@ -3920,7 +3982,7 @@ async function getLoginInfo() {
     const body = st.body || {};
     const data = body.data || body;
     const info = normalizeLoginInfo(data.profile || body.profile, data.account || body.account, data);
-    if (info.loggedIn) return info;
+    if (info.loggedIn) return await resolveNeteaseVip(info);
   } catch (e) {
     console.warn('[Login] login_status failed:', e.message);
   }
@@ -3929,7 +3991,7 @@ async function getLoginInfo() {
     const acc = await user_account({ cookie: userCookie, timestamp: Date.now() });
     const body = acc.body || {};
     const info = normalizeLoginInfo(body.profile, body.account, body);
-    if (info.loggedIn) return info;
+    if (info.loggedIn) return await resolveNeteaseVip(info);
     if (isNeteaseAuthInvalidPayload(acc)) saveCookie('');
     return { loggedIn: false, hasCookie: !!userCookie, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP' };
   } catch (e) {

@@ -515,8 +515,10 @@ function providerVipLevel(provider, status) {
   if (raw === 'svip' || raw === 'vip' || raw === 'none') return raw;
   var vip = providerVipType(provider, status);
   if (provider === 'netease') {
-    if (status.isSvip || status.is_svip || vip >= 10) return 'svip';
-    if (status.isVip || status.is_vip || vip > 0) return 'vip';
+    // ⚠️ vipType 是「开通类型位」（0 未开通 / 10 音乐包 / 11 黑胶 / 110 黑胶），不是会员等级，
+    //    不能用 vipType >= 10 判 SVIP —— 会把普通黑胶 VIP 误标成 SVIP（2026-10-23 修）。
+    if (status.isSvip === true || status.is_svip === true) return 'svip';
+    if (status.isVip === true || status.is_vip === true || vip > 0) return 'vip';
     return 'none';
   }
   return vip > 0 ? 'vip' : 'none';

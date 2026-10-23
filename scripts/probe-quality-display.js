@@ -59,14 +59,14 @@ app.whenReady().then(async function () {
       noteResolvedPlaybackQuality({ url: 'x', level: 'exhigh', br: 320000, thirdPartySource: 'gdmusic' });
       out.free320 = snap('非会员320k');
 
-      // VIP（非 SVIP）
-      loginStatus = { loggedIn: true, vipType: 1, isVip: true, isSvip: false };
+      // VIP（非 SVIP）：vipType 是开通类型位，110 = 黑胶VIP
+      loginStatus = { loggedIn: true, vipType: 110, vipLevel: 'vip', isVip: true, isSvip: false };
       playbackQuality = 'jymaster';
       updatePlaybackQualityUi();
       out.vip = snap('VIP');
 
-      // SVIP
-      loginStatus = { loggedIn: true, vipType: 10, isVip: true, isSvip: true };
+      // SVIP：必须有 isSvip 显式标记，vipType 本身判不出等级
+      loginStatus = { loggedIn: true, vipType: 110, vipLevel: 'svip', isVip: true, isSvip: true };
       updatePlaybackQualityUi();
       out.svip = snap('SVIP');
 
