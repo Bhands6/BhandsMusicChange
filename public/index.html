@@ -250,6 +250,8 @@ try {
 
   <div class="fx-section-label">视觉预设</div>
   <div class="preset-grid" id="preset-grid"></div>
+  <!-- 启动页视频（可下载切换）：由 fx-console-workspace 搬到「动效」页的「启动页视频」分组 -->
+  <div class="splash-video-grid" id="splash-video-grid"></div>
   <div class="fx-section-label">自定义颜色</div>
   <div class="lyric-color-row">
     <input id="ui-accent-picker" class="lyric-color-picker" type="color" value="#00f5d4" title="界面高亮色">
@@ -1170,5 +1172,6 @@ try {
 <script src="js/app/16-idle-toast-libs.js"></script>                          <!-- 空场待机引导 / 视觉引导 / 手势 / toast / 动态库加载 -->
 <script src="js/app/17-shell.js"></script>                                    <!-- 外壳：Resize / 快捷键 / UI 半隐藏 / splash / 加载过渡 / 沉浸模式 / 桌面 overlay -->
 <script src="js/app/18-session-boot.js"></script>                             <!-- 会话持久化 / 启动自动播放 / 酷狗扫码 / 恢复态预解析 / 启动序列 / 主循环 -->
+<script src="js/app/19-splash-video.js"></script>                             <!-- 启动页视频：清单 / 下载 / 切换（资源在 CNB 仓库，按需下载到 userData） -->
 </body>
 </html>

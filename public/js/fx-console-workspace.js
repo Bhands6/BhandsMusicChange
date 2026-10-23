@@ -104,6 +104,9 @@ var FX_CONSOLE_LAYOUT = [
   {
     key: 'motion',
     groups: [
+      { key: 'splashvideo', title: '启动页视频', hint: '内置默认一条，其余下载后可随时切换', open: true, items: [
+        fxConsoleItem('splash-video-grid', '启动页视频', '启动页 背景视频 下载 切换 splash 滑雪 雪地 草地 地球 光纤 花朵 森林 花海', false, '', true)
+      ] },
       { key: 'base', title: '基础画面', hint: '整体律动、景深、封面和电影镜头', open: true, items: [
         fxConsoleItem('fx-intensity', '律动强度', '音乐响应 节奏'),
         fxConsoleItem('fx-depth', '画面景深', '立体感 深度'),
