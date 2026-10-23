@@ -2494,3 +2494,6 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 /* 关掉启动页水波动效时：连四周暗角遮罩一起去掉，视频完整显示（2026-10-23） */
 #splash.splash-fx-off{box-shadow:none}
 #splash.splash-fx-off::after{opacity:0;transition:opacity .8s ease}
+/* 关掉水波后视频恢复原色：那层 opacity:.68 + brightness(.72) 本来是给水波让位的，
+ * 留着的话视频只有 68% 不透明，底下的 #010304 纯黑背景就透上来 —— 看起来像蒙了一层黑纱 */
+#splash.splash-fx-off .splash-bg-video{opacity:1;filter:none;transform:scale(1.02)}
