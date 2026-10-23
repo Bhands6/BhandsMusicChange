@@ -50,19 +50,9 @@ function splashVideoThumbHtml(item) {
 function splashVideoActionHtml(item) {
   var p = splashVideoPanel;
   var busy = p.busy[item.id];
-  var downloaded = item.id === 'builtin' || p.downloaded.indexOf(item.id) >= 0 || item.downloaded;
+  var isBuiltin = item.id === 'builtin';
+  var downloaded = isBuiltin || p.downloaded.indexOf(item.id) >= 0 || item.downloaded;
   var current = p.selected === item.id;
-
-  // 自己上传那条：左边「删除」，右边「使用 / 使用中」
-  if (item.custom) {
-    var useBtn = current
-      ? '<button class="sv-btn current" type="button" disabled>使用中</button>'
-      : '<button class="sv-btn primary" type="button" onclick="selectSplashVideo(\'' + item.id + '\')">使用</button>';
-    return '<div class="sv-actions">' +
-      '<button class="sv-btn danger" type="button" onclick="deleteSplashVideo(\'' + item.id + '\')">删除</button>' +
-      useBtn +
-    '</div>';
-  }
 
   if (busy && busy.status === 'downloading') {
     var pct = busy.total ? Math.max(1, Math.round((busy.received / busy.total) * 100)) : 0;
@@ -73,9 +63,24 @@ function splashVideoActionHtml(item) {
     return '<button class="sv-btn danger" type="button" onclick="startSplashVideoDownload(\'' + item.id + '\')" title="' +
            escHtml(busy.error || '下载失败') + '">重试</button>';
   }
-  if (current) return '<button class="sv-btn current" type="button" disabled>使用中</button>';
-  if (downloaded) return '<button class="sv-btn primary" type="button" onclick="selectSplashVideo(\'' + item.id + '\')">使用</button>';
-  return '<button class="sv-btn primary" type="button" onclick="startSplashVideoDownload(\'' + item.id + '\')">下载</button>';
+
+  var useBtn = current
+    ? '<button class="sv-btn current" type="button" disabled>使用中</button>'
+    : '<button class="sv-btn primary" type="button" onclick="selectSplashVideo(\'' + item.id + '\')">使用</button>';
+
+  // 内置那条在安装包里，删不掉，只给一个按钮
+  if (isBuiltin) return useBtn;
+
+  // 还没下载：只给「下载」
+  if (!downloaded) {
+    return '<button class="sv-btn primary" type="button" onclick="startSplashVideoDownload(\'' + item.id + '\')">下载</button>';
+  }
+
+  // 已下载（含自己上传的）：左「删除」右「使用 / 使用中」
+  return '<div class="sv-actions">' +
+    '<button class="sv-btn danger" type="button" onclick="deleteSplashVideo(\'' + item.id + '\')">删除</button>' +
+    useBtn +
+  '</div>';
 }
 
 function renderSplashVideoPanel() {
@@ -351,10 +356,14 @@ function uploadSplashVideo(file) {
   });
 }
 
-/* 删除自己上传的那条（只删 custom，不影响远端清单里的视频） */
+/* 删除一条已下载的视频（删掉后卡片会回到「下载」状态） */
 function deleteSplashVideo(id) {
-  var label = id === 'custom' ? '「我的视频」' : '这个视频';
-  if (!window.confirm('确定删除' + label + '吗？\n删除后启动页会回到内置默认视频。')) return;
+  var hit = null;
+  for (var i = 0; i < splashVideoPanel.items.length; i++) {
+    if (splashVideoPanel.items[i].id === id) { hit = splashVideoPanel.items[i]; break; }
+  }
+  var label = id === 'custom' ? '「我的视频」' : '「' + ((hit && hit.name) || id) + '」';
+  if (!window.confirm('确定删除' + label + '吗？\n删除后需要重新下载才能再用（启动页会回到内置默认）。')) return;
   fetch('/api/splash/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -364,7 +373,7 @@ function deleteSplashVideo(id) {
     .then(function (d) {
       if (!d || !d.ok) throw new Error((d && d.error) || '删除失败');
       showToast('已删除' + label);
-      fetchSplashVideoList(true);
+      fetchSplashVideoList();      // 不带 force：只需要刷新下载状态，不用重拉远端清单
     })
     .catch(function (e) {
       showToast('删除失败：' + ((e && e.message) || '未知错误'));
