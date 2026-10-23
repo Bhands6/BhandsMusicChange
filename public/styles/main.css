@@ -2464,6 +2464,13 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
  * 370px 宽 / 18px 圆角 / rgba(18,19,24,.92) + backdrop-filter:blur(40px) / 36px 高胶囊按钮。
  * ⚠️ 别再自作聪明去掉 backdrop-filter 或改动画：那套参数是实测能正常出圆角的组合。 */
 .sv-confirm-mask{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+/* 遮罩是全屏直角矩形时，会把主窗口最外缘那 34px 圆角「填直」（close-dialog.html 里同一处坑）。
+ * 只在 Electron 壳层里跟随窗口圆角；最大化 / 全屏时窗口本身是直角，遮罩也置 0。
+ * 浏览器预览没有 body.desktop-shell，保持满屏直角不受影响。 */
+body.desktop-shell .sv-confirm-mask{border-radius:34px;clip-path:inset(0 round 34px)}
+body.desktop-shell.desktop-maximized .sv-confirm-mask,
+body.desktop-shell.desktop-fullscreen .sv-confirm-mask,
+html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:none}
 .sv-confirm-card{position:relative;width:370px;max-width:86vw;background:rgba(18,19,24,.92);border:1px solid rgba(255,255,255,.08);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.55),0 0 40px rgba(244,210,138,.04);padding:28px 26px 22px;backdrop-filter:blur(40px) saturate(1.4);-webkit-backdrop-filter:blur(40px) saturate(1.4)}
 .sv-confirm-title{font-size:17px;font-weight:700;color:rgba(255,255,255,.94);margin-bottom:8px;letter-spacing:.2px}
 .sv-confirm-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:rgba(255,255,255,.4);font-size:16px;line-height:1;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .18s}
