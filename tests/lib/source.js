@@ -53,6 +53,7 @@ const APP_JS_FILES = [
   '16-idle-toast-libs.js',
   '17-shell.js',
   '18-session-boot.js',
+  '19-splash-video.js',
 ].map((name) => 'public/js/app/' + name);
 
 /** 读仓库内文件（相对仓库根的路径，正斜杠） */

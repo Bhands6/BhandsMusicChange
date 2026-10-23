@@ -4,14 +4,14 @@
  *
  * `public/js/main.js`（28117 行单文件）已按自带的 48 个分区拆成 `public/js/app/01…16`，
  * 随后（2026-09-24 第二步）按**职责**重排成 `01-state.js` … `18-session-boot.js`，
- * 外加最先加载的 `public/js/app/00-prelude.js`，共 **19** 个。
+ * 外加最先加载的 `public/js/app/00-prelude.js`，共 **20** 个。
  * 拆分本身是纯机械的，但它引入了四条新不变量：
  *
- *   1. `index.html` 必须**恰好**按顺序列出这 19 个文件 —— 一个不多、一个不少、顺序不变。
+ *   1. `index.html` 必须**恰好**按顺序列出这 20 个文件 —— 一个不多、一个不少、顺序不变。
  *   2. `00-prelude.js` 必须排第一，且它承载的顶层 function 声明**不许**被挪回后面的文件。
  *   3. 每个文件必须**自带** `'use strict';`（漏一个，那个文件会静默退回非严格模式：
  *      给未声明变量赋值不再抛错，而是悄悄创建全局变量）。
- *   4. 这 19 行 `<script>` 不能带 `defer` / `async` / `type="module"`。
+ *   4. 这 20 行 `<script>` 不能带 `defer` / `async` / `type="module"`。
  *
  * 为什么顺序是硬约束：它们是 **parser-blocking** 顺序执行的 —— 顶层 `var`/`function`
  * 依次挂到 `window`，顶层 `let`/`const` 依次进全局词法环境。顺序错了就是
@@ -38,8 +38,8 @@ const html = readSource('public/index.html');
 const LISTED = [...html.matchAll(/<script\s+src="(js\/app\/[^"]+)"><\/script>/g)]
   .map((m) => 'public/' + m[1]);
 
-test('index.html 恰好按顺序列出 19 个应用主体脚本', () => {
-  assert.equal(APP_JS_FILES.length, 19, 'APP_JS_FILES 应该是 19 个（00-prelude + 01…18）');
+test('index.html 恰好按顺序列出 20 个应用主体脚本', () => {
+  assert.equal(APP_JS_FILES.length, 20, 'APP_JS_FILES 应该是 20 个（00-prelude + 01…19）');
   assert.deepEqual(LISTED, APP_JS_FILES,
     'index.html 的 js/app/*.js 列表与 tests/lib/source.js 的 APP_JS_FILES 不一致（顺序即执行顺序）');
 });
@@ -70,9 +70,9 @@ test('每个应用主体脚本都存在、非空、首行是 use strict', () => 
   }
 });
 
-test('index.html 里 19 个 script 标签都不带 defer / async / type=module', () => {
+test('index.html 里 20 个 script 标签都不带 defer / async / type=module', () => {
   const tags = [...html.matchAll(/<script[^>]*src="js\/app\/[^"]+"[^>]*>/g)].map((m) => m[0]);
-  assert.equal(tags.length, 19, '匹配到 ' + tags.length + ' 个 js/app 的 script 标签');
+  assert.equal(tags.length, 20, '匹配到 ' + tags.length + ' 个 js/app 的 script 标签');
   for (const tag of tags) {
     assert.doesNotMatch(tag, /\bdefer\b/, '不能加 defer：' + tag);
     assert.doesNotMatch(tag, /\basync\b/, '不能加 async：' + tag);

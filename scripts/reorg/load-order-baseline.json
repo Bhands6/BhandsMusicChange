@@ -19,7 +19,8 @@
     "15-update.js",
     "16-idle-toast-libs.js",
     "17-shell.js",
-    "18-session-boot.js"
+    "18-session-boot.js",
+    "19-splash-video.js"
   ],
   "itemHashes": {
     "01a6dbedb98557b5": 1,
@@ -677,7 +678,9 @@
     "bf0e12eddab43b15": 1,
     "bb76dd1443737a3d": 1,
     "d927732495248a48": 1,
-    "48d43e1c74a26e76": 1
+    "48d43e1c74a26e76": 1,
+    "b877a6be0c6d7f89": 1,
+    "80ef5964c190e02d": 1
   },
   "fnHashes": {
     "df3bba245031d0b3": 1,
@@ -1949,7 +1952,16 @@
     "a8edaf40129f5496": 1,
     "938cd73bcf065007": 1,
     "d8396012a57cf3fd": 1,
-    "b0584ed7d4c5dfa6": 1
+    "b0584ed7d4c5dfa6": 1,
+    "f4d301994a2127a4": 1,
+    "63dd7a29211aaadd": 1,
+    "5faf215a6223f4ae": 1,
+    "7a8ba549d85fe472": 1,
+    "d65b22010fe79332": 1,
+    "b0f3628accbfde9c": 1,
+    "ed87a3f79247f73f": 1,
+    "2cd7fca496acca94": 1,
+    "555f071cab8717f4": 1
   },
   "obs": {
     "FFT_SIZE": {
@@ -2310,7 +2322,8 @@
       "fda7e807ca701bea": false,
       "40aae9d97b64df31": false,
       "62202473c2633a8c": false,
-      "48d43e1c74a26e76": false
+      "48d43e1c74a26e76": false,
+      "80ef5964c190e02d": false
     },
     "window": {
       "2f6537512ca49fef": false,
