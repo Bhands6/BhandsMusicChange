@@ -236,6 +236,51 @@ function selectSplashVideo(id) {
     });
 }
 
+/* 主题内确认框：window.confirm 弹的是系统原生白框，跟深色玻璃界面完全不搭 */
+function splashConfirm(opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    var mask = document.createElement('div');
+    mask.className = 'sv-confirm-mask';
+    var title = opts.title || '请确认';
+    var message = String(opts.message || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+    mask.innerHTML =
+      '<div class="sv-confirm-card" role="dialog" aria-modal="true">' +
+        '<div class="sv-confirm-title">' + title + '</div>' +
+        '<div class="sv-confirm-body">' + message + '</div>' +
+        '<div class="sv-confirm-actions">' +
+          '<button class="sv-confirm-btn" type="button" data-act="cancel">' + (opts.cancelText || '取消') + '</button>' +
+          '<button class="sv-confirm-btn danger" type="button" data-act="ok">' + (opts.okText || '确定') + '</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(mask);
+    var closed = false;
+    var done = function (val) {
+      if (closed) return;
+      closed = true;
+      try { document.body.removeChild(mask); } catch (e) {}
+      document.removeEventListener('keydown', onKey, true);
+      resolve(val);
+    };
+    var onKey = function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.stopPropagation(); done(true); }
+    };
+    mask.addEventListener('click', function (e) {
+      var act = e.target && e.target.getAttribute && e.target.getAttribute('data-act');
+      if (act === 'ok') done(true);
+      else if (act === 'cancel') done(false);
+      else if (e.target === mask) done(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+    requestAnimationFrame(function () { mask.classList.add('in'); });
+    var okBtn = mask.querySelector('[data-act="ok"]');
+    if (okBtn) setTimeout(function () { try { okBtn.focus(); } catch (e) {} }, 40);
+  });
+}
+
 /* 清理：删掉所有已下载的视频（含自定义），回到内置默认 */
 function clearSplashVideos() {
   var p = splashVideoPanel;
@@ -243,19 +288,24 @@ function clearSplashVideos() {
     showToast('没有已下载的视频');
     return;
   }
-  var ok = window.confirm('确定删除全部 ' + p.downloaded.length + ' 个已下载视频吗？\n' +
-    '（包括自己上传的那条，删除后启动页回到内置默认视频）');
-  if (!ok) return;
-  fetch('/api/splash/clear', { method: 'POST' })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      if (!d || !d.ok) throw new Error((d && d.error) || '清理失败');
-      showToast('已清理 ' + d.removed + ' 个文件，释放 ' + (d.freed / 1048576).toFixed(1) + 'MB');
-      fetchSplashVideoList(true);
-    })
-    .catch(function (e) {
-      showToast('清理失败：' + ((e && e.message) || '未知错误'));
-    });
+  splashConfirm({
+    title: '清理已下载的视频',
+    message: '将删除全部 ' + p.downloaded.length + ' 个已下载视频（包括自己上传的那条）。\n' +
+      '清理后启动页会回到内置默认视频。',
+    okText: '清理'
+  }).then(function (ok) {
+    if (!ok) return;
+    fetch('/api/splash/clear', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) throw new Error((d && d.error) || '清理失败');
+        showToast('已清理 ' + d.removed + ' 个文件，释放 ' + (d.freed / 1048576).toFixed(1) + 'MB');
+        fetchSplashVideoList(true);
+      })
+      .catch(function (e) {
+        showToast('清理失败：' + ((e && e.message) || '未知错误'));
+      });
+  });
 }
 
 function pickSplashVideoFile() {
@@ -368,21 +418,27 @@ function deleteSplashVideo(id) {
   // 删的正好是正在用的那条，启动页才会回退内置；删别的，当前启动页不受影响
   var how = isCustom ? '删除后需要重新上传才能再用' : '删除后需要重新下载才能再用';
   var impact = isCurrent ? '，启动页会回到内置默认。' : '，当前启动页不受影响。';
-  if (!window.confirm('确定删除' + label + '吗？\n' + how + impact)) return;
-  fetch('/api/splash/delete', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ id: id })
-  })
-    .then(function (r) { return r.json(); })
-    .then(function (d) {
-      if (!d || !d.ok) throw new Error((d && d.error) || '删除失败');
-      showToast('已删除' + label);
-      fetchSplashVideoList();      // 不带 force：只需要刷新下载状态，不用重拉远端清单
+  splashConfirm({
+    title: '删除视频',
+    message: '确定删除' + label + '吗？\n' + how + impact,
+    okText: '删除'
+  }).then(function (ok) {
+    if (!ok) return;
+    fetch('/api/splash/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: id })
     })
-    .catch(function (e) {
-      showToast('删除失败：' + ((e && e.message) || '未知错误'));
-    });
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) throw new Error((d && d.error) || '删除失败');
+        showToast('已删除' + label);
+        fetchSplashVideoList();      // 不带 force：只需要刷新下载状态，不用重拉远端清单
+      })
+      .catch(function (e) {
+        showToast('删除失败：' + ((e && e.message) || '未知错误'));
+      });
+  });
 }
 
 function initSplashVideoPanel() {
