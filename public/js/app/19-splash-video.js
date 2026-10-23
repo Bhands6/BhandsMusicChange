@@ -292,7 +292,7 @@ function clearSplashVideos() {
     title: '清理已下载的视频',
     message: '将删除全部 ' + p.downloaded.length + ' 个已下载视频（包括自己上传的那条）。\n' +
       '清理后启动页会回到内置默认视频。',
-    okText: '清理'
+    okText: '确定'
   }).then(function (ok) {
     if (!ok) return;
     fetch('/api/splash/clear', { method: 'POST' })
@@ -421,7 +421,7 @@ function deleteSplashVideo(id) {
   splashConfirm({
     title: '删除视频',
     message: '确定删除' + label + '吗？\n' + how + impact,
-    okText: '删除'
+    okText: '确定'
   }).then(function (ok) {
     if (!ok) return;
     fetch('/api/splash/delete', {
