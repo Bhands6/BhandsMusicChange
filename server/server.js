@@ -531,17 +531,61 @@ function writeSplashVideoState(patch) {
   }
 }
 /* 手动跟随 3xx：CNB 的 raw 链接会跳到 CDN，跳转后的地址没有凭证要求，匿名可取 */
-function httpGetStream(url, redirects, timeoutMs) {
+/* 系统代理探测（2026-10-23）：Node 的 https 不读 http_proxy 环境变量，
+ * 但「开 VPN 走 GitHub」依赖它 —— 所以这里自己找一遍系统代理：
+ * 环境变量 → Windows 注册表 Internet Settings（Clash 等改的就是这一项）。
+ * 只给 GitHub 源用；CNB 是国内直连，绝不能绕代理。 */
+let cachedSystemProxy = null;
+function getSystemProxyUrl() {
+  if (cachedSystemProxy !== null) return cachedSystemProxy;
+  let proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || '';
+  if (!proxy && process.platform === 'win32') {
+    try {
+      const { execFileSync } = require('child_process');
+      const KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings';
+      const enabled = execFileSync('reg', ['query', KEY, '/v', 'ProxyEnable'], { encoding: 'utf8', timeout: 2000 });
+      if (/REG_DWORD\s+0x1/i.test(enabled)) {
+        const server = execFileSync('reg', ['query', KEY, '/v', 'ProxyServer'], { encoding: 'utf8', timeout: 2000 });
+        const hit = /ProxyServer\s+REG_SZ\s+(\S+)/i.exec(server);
+        if (hit) {
+          const raw = hit[1];
+          // 形如 127.0.0.1:7890 或 http=127.0.0.1:7890;https=127.0.0.1:7890，取 http(s) 那一段
+          const httpPart = /https?=([^;]+)/i.exec(raw);
+          const plain = httpPart ? httpPart[1] : raw;
+          if (/^[a-z]+:\/\//i.test(plain)) proxy = plain;
+          else if (/^\d+\.\d+\.\d+\.\d+:\d+$/.test(plain) || /^[\w.-]+:\d+$/.test(plain)) proxy = 'http://' + plain;
+        }
+      }
+    } catch (e) { /* 读不到就当没代理 */ }
+  }
+  cachedSystemProxy = proxy || '';
+  if (cachedSystemProxy) console.log('[SplashVideo] 系统代理:', cachedSystemProxy);
+  return cachedSystemProxy;
+}
+function httpGetStream(url, redirects, timeoutMs, opts) {
   redirects = redirects || 0;
+  opts = opts || {};
   return new Promise((resolve, reject) => {
     let parsed;
     try { parsed = new URL(url); } catch (e) { reject(new Error('URL 无效')); return; }
     const mod = parsed.protocol === 'http:' ? http : https;
-    const req = mod.get(url, { headers: { 'User-Agent': UA, Accept: '*/*' } }, (res) => {
+    const reqOpts = { headers: { 'User-Agent': UA, Accept: '*/*' } };
+    if (opts.proxy) {
+      const proxyUrl = getSystemProxyUrl();
+      if (proxyUrl) {
+        try {
+          const { HttpsProxyAgent } = require('https-proxy-agent');
+          reqOpts.agent = new HttpsProxyAgent(proxyUrl);
+        } catch (e) {
+          console.warn('[SplashVideo] 代理 agent 不可用，改为直连:', e.message);
+        }
+      }
+    }
+    const req = mod.get(url, reqOpts, (res) => {
       const code = res.statusCode || 0;
       if (code >= 300 && code < 400 && res.headers.location && redirects < 5) {
         res.resume();
-        resolve(httpGetStream(new URL(res.headers.location, url).toString(), redirects + 1, timeoutMs));
+        resolve(httpGetStream(new URL(res.headers.location, url).toString(), redirects + 1, timeoutMs, opts));
         return;
       }
       resolve(res);
@@ -580,7 +624,7 @@ async function fetchSplashThumbFile(id, force) {
   const { source, data } = await loadSplashManifest();
   const item = (data.videos || []).find(v => v && v.id === id);
   if (!item || !item.thumb) throw new Error('清单里没有这个缩略图');
-  const res = await httpGetStream(source.base + item.thumb, 0, 20000);
+  const res = await httpGetStream(source.base + item.thumb, 0, 20000, splashSourceFetchOpts(source));
   if (res.statusCode !== 200) throw new Error('缩略图拉取失败 HTTP ' + res.statusCode);
   const buf = await readStreamBuffer(res);
   if (!buf.length) throw new Error('缩略图内容为空');
@@ -594,8 +638,12 @@ async function fetchSplashThumbFile(id, force) {
 function splashSourceById(id) {
   return SPLASH_VIDEO_SOURCES.find(s => s.id === id) || null;
 }
+/* GitHub 那条线走系统代理（国内直连 raw.githubusercontent.com 不通），CNB 绝不走 */
+function splashSourceFetchOpts(source) {
+  return { proxy: !!(source && source.id === 'github') };
+}
 async function probeSplashSource(src, timeoutMs) {
-  const res = await httpGetStream(src.base + SPLASH_VIDEO_MANIFEST_NAME, 0, timeoutMs);
+  const res = await httpGetStream(src.base + SPLASH_VIDEO_MANIFEST_NAME, 0, timeoutMs, splashSourceFetchOpts(src));
   if (res.statusCode !== 200) { res.resume(); throw new Error(src.label + ' HTTP ' + res.statusCode); }
   const text = await readStreamText(res);
   let data;
@@ -624,7 +672,8 @@ async function loadSplashManifest(force) {
   }
   splashSourceCache = { at: now, id: picked.src.id };
   splashManifestCache = { at: now, data: picked.data, sourceId: picked.src.id };
-  return picked;
+  // 注意：probeSplashSource 返回的是 { src, data }，调用方要的是 { source, data }
+  return { source: picked.src, data: picked.data };
 }
 async function fetchSplashManifest(force) {
   const { data } = await loadSplashManifest(force);
@@ -645,7 +694,7 @@ async function downloadSplashVideo(id) {
   splashDownloadState.set(id, { status: 'downloading', received: 0, total: Number(item.bytes) || 0, error: '' });
 
   try {
-    const res = await httpGetStream(source.base + item.file);
+    const res = await httpGetStream(source.base + item.file, 0, 60000, splashSourceFetchOpts(source));
     if (res.statusCode !== 200) throw new Error('下载失败 HTTP ' + res.statusCode);
     const declaredTotal = Number(res.headers['content-length'] || item.bytes || 0) || 0;
     let received = 0;
