@@ -529,7 +529,8 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 /* 头像外圈光环：与主页按钮同款（金色边框 42% + 18px 外发光），颜色跟随「主页图标」配色变量 */
 #user-btn.logged-in:not(.multi-account){border-color:rgba(var(--home-icon-rgb),.42)!important;box-shadow:var(--saved-button-glass-shadow),0 0 18px rgba(var(--home-icon-rgb),.10)!important}
 #user-btn.logged-in:not(.multi-account):hover{border-color:rgba(var(--home-icon-rgb),.68)!important;box-shadow:var(--saved-button-glass-shadow),0 0 22px rgba(var(--home-icon-rgb),.18)!important}
-#user-vip-tag{position:absolute;top:calc(100% + 3px);left:50%;transform:translateX(-50%);font-size:8px;padding:1px 5px;border-radius:3px;white-space:nowrap;pointer-events:none;z-index:2}
+/* VIP/SVIP 徽章：压在头像底部居中（半叠在头像上），深色描边把徽章从头像背景里分离出来 */
+#user-vip-tag{position:absolute;top:auto;bottom:-5px;left:50%;transform:translateX(-50%);font-size:8px;line-height:1;padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:none;z-index:2;border:1px solid rgba(16,11,3,.92);letter-spacing:.3px}
 .account-source-dot{width:7px;height:7px;border-radius:50%;background:var(--source-local);box-shadow:0 0 12px currentColor;flex-shrink:0}
 .account-source-dot.netease{background:var(--source-netease);color:var(--source-netease)}
 .account-source-dot.qq{background:var(--source-qq);color:var(--source-qq)}

@@ -24,8 +24,9 @@ function hasProviderSvip(provider, status) {
 function providerVipBadge(provider, status, idAttr) {
   if (!hasProviderVip(provider, status)) return '';
   var id = idAttr ? ' id="' + idAttr + '"' : '';
-  var cls = 'top-account-vip' + (provider === 'qq' ? ' qq' : '');
   var level = providerVipLevel(provider, status);
+  // level 类名让 CSS 区分 VIP / SVIP 两档（.vip / .svip），文字标签同样分开
+  var cls = 'top-account-vip' + (provider === 'qq' ? ' qq' : '') + ' ' + (level === 'svip' ? 'svip' : 'vip');
   var label = provider === 'qq' ? 'QQ VIP' : (level === 'svip' ? 'SVIP' : 'VIP');
   return '<span' + id + ' class="' + cls + '">' + label + '</span>';
 }
