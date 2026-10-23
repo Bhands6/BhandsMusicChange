@@ -18,9 +18,9 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 | | | |
 |:---:|:---:|:---:|
-| ![](docs/screenshots/splash-01-snowboard.jpg)<br>**滑雪**（内置默认） | ![](docs/screenshots/splash-02-meadow.jpg)<br>**风起草浪** | ![](docs/screenshots/splash-03-vaultra.jpg)<br>**点阵地球** |
-| ![](docs/screenshots/splash-04-neural.jpg)<br>**光纤热核** | ![](docs/screenshots/splash-05-lumen.jpg)<br>**暗夜花光** | ![](docs/screenshots/splash-06-nexum.jpg)<br>**巨木森林** |
-| ![](docs/screenshots/splash-07-vortx.jpg)<br>**夕阳花海** | | |
+| ![](docs/screenshots/splash-02-meadow.jpg)<br>**风起草浪** | ![](docs/screenshots/splash-03-vaultra.jpg)<br>**点阵地球** | ![](docs/screenshots/splash-04-neural.jpg)<br>**光纤热核** |
+| ![](docs/screenshots/splash-05-lumen.jpg)<br>**暗夜花光**  | ![](docs/screenshots/splash-06-nexum.jpg)<br>**巨木森林**   | ![](docs/screenshots/splash-07-vortx.jpg)<br>**夕阳花海**  |
+
 
 ## ✨ 界面预览
 
