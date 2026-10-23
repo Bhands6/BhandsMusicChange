@@ -955,27 +955,49 @@ var splashTimer = null;
 var reduceSplashMotion = false;
 var splashReadyToEnter = false;
 
-// 启动视频本地优先，下载包内的 media/splash-bg.mp4；文件损坏或首次开发态未拉取时回退 CDN。
+// 启动视频本地优先：先问本地服务「用户有没有换过启动页视频」，
+// 有就播下载到 userData 的那条；没有/拿不到就用安装包内置的 media/splash-bg.mp4；
+// 内置文件损坏才回退 CDN（2026-10-23 加入可切换视频）。
 function initSplashBgVideoFallback() {
   var video = document.getElementById('splash-bg-video');
   if (!video) return;
   var fallbackUrl = 'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260418_063509_7d167302-4fd4-480b-8260-18ab572333d4.mp4';
-  var fallbackUsed = false;
+  var attempts = 0;
+  var started = false;
   var play = function () {
     var result = video.play();
     if (result && result.catch) result.catch(function () {});
   };
+  // 出错链：自定义视频 → 内置 → CDN，最多走两级
   video.addEventListener('error', function () {
-    if (fallbackUsed) return;
-    fallbackUsed = true;
-    video.src = fallbackUrl;
+    if (attempts >= 2) return;
+    attempts += 1;
+    var current = String(video.currentSrc || video.src || '');
+    var next = current.indexOf('/splash-video/') >= 0 ? 'media/splash-bg.mp4' : fallbackUrl;
+    video.src = next;
     video.load();
     play();
   });
   video.addEventListener('loadeddata', play, { once: true });
-  video.src = 'media/splash-bg.mp4';
-  video.load();
-  play();
+
+  var start = function (src) {
+    if (started) return;
+    started = true;
+    video.src = src || 'media/splash-bg.mp4';
+    video.load();
+    play();
+  };
+  // 本地接口 127.0.0.1，正常 1~3ms 就回；600ms 拿不到就不等了，先用内置出画
+  var timer = setTimeout(function () { start('media/splash-bg.mp4'); }, 600);
+  if (window.fetch) {
+    fetch('/api/splash/current', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { clearTimeout(timer); start((d && d.url) || 'media/splash-bg.mp4'); })
+      .catch(function () { clearTimeout(timer); start('media/splash-bg.mp4'); });
+  } else {
+    clearTimeout(timer);
+    start('media/splash-bg.mp4');
+  }
 }
 
 function splashClamp01(v) { return Math.max(0, Math.min(1, v)); }
