@@ -2447,3 +2447,11 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 .sv-src{flex:0 0 auto;max-width:calc(100% - 76px);height:26px;padding:0 9px;border-radius:8px;border:1px solid rgba(244,210,138,.26);background:rgba(244,210,138,.07);color:rgba(255,238,192,.86);font-family:inherit;font-size:10.5px;font-weight:600;letter-spacing:.2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .18s,border-color .18s}
 .sv-src:hover{background:rgba(244,210,138,.16);border-color:rgba(244,210,138,.5);color:#fff2bd}
 .splash-video-note{display:block;margin-top:2px}
+/* 面板工具条：清理 / 上传 / 刷新 挤在同一行，源胶囊按剩余宽度截断 */
+.splash-video-head{gap:6px}
+.sv-src{max-width:124px;min-width:0;flex:0 1 auto}
+.sv-tools{display:flex;align-items:center;gap:5px;flex:0 0 auto}
+.sv-tool{flex:0 0 auto;height:26px;padding:0 8px;border-radius:7px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);color:rgba(255,255,255,.82);font-family:inherit;font-size:10.5px;font-weight:600;letter-spacing:.2px;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s,color .18s}
+.sv-tool:hover:not(:disabled){background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff}
+.sv-tool:disabled{opacity:.55;cursor:default}
+.sv-tip{font-size:9.5px;line-height:1.5;color:rgba(255,255,255,.38);margin-top:6px}

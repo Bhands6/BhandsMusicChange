@@ -141,6 +141,11 @@ const SPLASH_VIDEO_SOURCES = [
   { id: 'github', label: 'GitHub', base: 'https://raw.githubusercontent.com/Bhands6/BhandsMusicChange/main/splash/' },
 ];
 const SPLASH_VIDEO_MANIFEST_NAME = 'manifest.json';
+/* 用户自己上传的那条固定叫 custom（同一时间只保留一条，重新上传会覆盖） */
+const SPLASH_VIDEO_CUSTOM_ID = 'custom';
+const SPLASH_VIDEO_UPLOAD_MAX_BYTES = 40 * 1024 * 1024;
+const SPLASH_VIDEO_MIN_WIDTH = 1280;
+const SPLASH_VIDEO_MIN_HEIGHT = 720;
 const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
@@ -678,6 +683,85 @@ async function loadSplashManifest(force) {
 async function fetchSplashManifest(force) {
   const { data } = await loadSplashManifest(force);
   return data;
+}
+/* ---------- 用户上传：MP4 元数据 / 落盘 / 清理 ---------- */
+/* 极简 MP4 box 扫描：只取 mvhd（时长）与首个视频轨的 tkhd（宽高）。
+ * 不引第三方依赖，够用来卡「尺寸太小 / 不是 mp4 / 时长离谱」这三类坏文件。 */
+function readMp4Meta(buf) {
+  const out = { width: 0, height: 0, duration: 0 };
+  if (!Buffer.isBuffer(buf) || buf.length < 32) return out;
+  // ftyp 必须在文件开头附近
+  if (buf.toString('latin1', 4, 8) !== 'ftyp') return out;
+  const tkhdSizes = [];
+  function walk(start, end, depth) {
+    let offset = start;
+    while (offset + 8 <= end && depth < 6) {
+      let size = buf.readUInt32BE(offset);
+      const type = buf.toString('latin1', offset + 4, offset + 8);
+      if (size === 1 && offset + 16 <= end) {
+        // 64 位长度：本文件用不上，直接跳过
+        size = Number(buf.readBigUInt64BE(offset + 8));
+      }
+      if (size < 8 || offset + size > end) break;
+      if (type === 'moov' || type === 'trak' || type === 'mdia' || type === 'minf' || type === 'stbl') {
+        walk(offset + 8, offset + size, depth + 1);
+      } else if (type === 'mvhd') {
+        const ver = buf[offset + 8];
+        try {
+          if (ver === 0) {
+            const ts = buf.readUInt32BE(offset + 20);
+            const dur = buf.readUInt32BE(offset + 24);
+            if (ts > 0) out.duration = dur / ts;
+          } else if (offset + 40 <= end) {
+            const ts = buf.readUInt32BE(offset + 28);
+            const dur = Number(buf.readBigUInt64BE(offset + 32));
+            if (ts > 0) out.duration = dur / ts;
+          }
+        } catch (e) {}
+      } else if (type === 'tkhd') {
+        try {
+          const w = buf.readUInt32BE(offset + size - 8) / 65536;
+          const h = buf.readUInt32BE(offset + size - 4) / 65536;
+          if (w > 0 && h > 0) tkhdSizes.push({ w, h });
+        } catch (e) {}
+      }
+      offset += size;
+    }
+  }
+  try { walk(0, buf.length, 0); } catch (e) {}
+  // 音轨 tkhd 宽高是 0，取第一个非零的（即视频轨）
+  if (tkhdSizes.length) {
+    out.width = Math.round(tkhdSizes[0].w);
+    out.height = Math.round(tkhdSizes[0].h);
+  }
+  out.duration = Math.round(out.duration * 100) / 100;
+  return out;
+}
+/* 请求体按原始字节写文件（上传视频走这里，readRequestBody 是给 JSON 用的） */
+function saveRawBodyToFile(req, dest, maxBytes) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    let failed = false;
+    const ws = fs.createWriteStream(dest);
+    const fail = (err) => {
+      if (failed) return;
+      failed = true;
+      try { ws.destroy(); } catch (e) {}
+      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+      reject(err);
+    };
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        fail(new Error('文件超过 ' + Math.round(maxBytes / 1048576) + 'MB 上限'));
+        try { req.destroy(); } catch (e) {}
+      }
+    });
+    req.on('error', fail);
+    ws.on('error', fail);
+    ws.on('finish', () => { if (!failed) resolve(size); });
+    req.pipe(ws);
+  });
 }
 async function downloadSplashVideo(id) {
   if (!isValidSplashVideoId(id)) throw new Error('非法的视频 id');
@@ -5906,6 +5990,8 @@ const server = http.createServer(async (req, res) => {
       const forceRefresh = url.searchParams.has('refresh');
       const { source, data } = await loadSplashManifest(forceRefresh);
       const ids = new Set((data.videos || []).map(v => v && v.id).filter(Boolean));
+      // 自己上传那条不在远端清单里，别被下面的「已下架」兜底误判成无效
+      if (isSplashVideoDownloaded(SPLASH_VIDEO_CUSTOM_ID)) ids.add(SPLASH_VIDEO_CUSTOM_ID);
       // 清单里已经没有这条了（下架/改名）：回退内置，免得 UI 上找不到「使用中」那一项
       if (state.selected !== 'builtin' && !ids.has(state.selected)) {
         writeSplashVideoState({ selected: 'builtin' });
@@ -5923,6 +6009,22 @@ const server = http.createServer(async (req, res) => {
         url: source.base + (v.file || ''),
         downloaded: downloaded.includes(v.id),
       }));
+      /* 用户自己上传的那条不在远端清单里，单独补一张卡 */
+      if (isSplashVideoDownloaded(SPLASH_VIDEO_CUSTOM_ID)) {
+        let customBytes = 0;
+        try { customBytes = fs.statSync(splashVideoPath(SPLASH_VIDEO_CUSTOM_ID)).size; } catch (e) {}
+        items.push({
+          id: SPLASH_VIDEO_CUSTOM_ID,
+          name: '我的视频',
+          desc: '本地上传',
+          tint: '',
+          bytes: customBytes,
+          thumb: '/splash-thumb/' + SPLASH_VIDEO_CUSTOM_ID + '.jpg' + thumbQuery,
+          url: '',
+          downloaded: true,
+          custom: true,
+        });
+      }
       sendJSON(res, {
         ok: true,
         items,
@@ -5965,6 +6067,84 @@ const server = http.createServer(async (req, res) => {
       splashManifestCache = { at: 0, data: null, sourceId: '' };
       splashSourceCache = { at: 0, id: '' };
       sendJSON(res, { ok: true, sourcePref: next });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 500);
+    }
+    return;
+  }
+
+  /* 上传本地视频作为启动页（固定一条，id=custom，重新上传即覆盖） */
+  if (pn === '/api/splash/upload' && req.method === 'POST') {
+    const tmpFile = path.join(SPLASH_VIDEO_DIR, 'upload.part');
+    try {
+      fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
+      const size = await saveRawBodyToFile(req, tmpFile, SPLASH_VIDEO_UPLOAD_MAX_BYTES);
+      if (!size || size < 64 * 1024) throw new Error('文件太小，可能不是有效视频');
+      const buf = fs.readFileSync(tmpFile);
+      const meta = readMp4Meta(buf);
+      if (!meta.width || !meta.height) throw new Error('不是可识别的 MP4（请用 H.264 编码的 .mp4）');
+      if (meta.width < SPLASH_VIDEO_MIN_WIDTH || meta.height < SPLASH_VIDEO_MIN_HEIGHT) {
+        throw new Error('分辨率太低（' + meta.width + '×' + meta.height + '），至少要 ' +
+          SPLASH_VIDEO_MIN_WIDTH + '×' + SPLASH_VIDEO_MIN_HEIGHT);
+      }
+      if (meta.duration > 120) throw new Error('视频太长（' + Math.round(meta.duration) + ' 秒），建议 5~15 秒');
+      const dest = splashVideoPath(SPLASH_VIDEO_CUSTOM_ID);
+      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+      fs.renameSync(tmpFile, dest);
+      // 旧缩略图跟新视频对不上了，先删掉等前端补
+      try { fs.unlinkSync(path.join(SPLASH_VIDEO_DIR, 'thumbs', SPLASH_VIDEO_CUSTOM_ID + '.jpg')); } catch (e) {}
+      writeSplashVideoState({ selected: SPLASH_VIDEO_CUSTOM_ID });
+      console.log('[SplashVideo] 已上传自定义视频:', meta.width + 'x' + meta.height, (size / 1048576).toFixed(1) + 'MB');
+      sendJSON(res, { ok: true, width: meta.width, height: meta.height, duration: meta.duration, bytes: size });
+    } catch (err) {
+      try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch (e) {}
+      sendJSON(res, { ok: false, error: err.message }, 400);
+    }
+    return;
+  }
+
+  /* 上传时前端用 canvas 抽一帧当缩略图 */
+  if (pn === '/api/splash/custom-thumb' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const raw = String((body && body.data) || '');
+      const hit = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(raw);
+      if (!hit) throw new Error('缩略图格式不对');
+      const buf = Buffer.from(hit[1], 'base64');
+      if (!buf.length || buf.length > 2 * 1024 * 1024) throw new Error('缩略图体积异常');
+      const dir = path.join(SPLASH_VIDEO_DIR, 'thumbs');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, SPLASH_VIDEO_CUSTOM_ID + '.jpg'), buf);
+      sendJSON(res, { ok: true });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 400);
+    }
+    return;
+  }
+
+  /* 清理已下载的视频（含自己上传那条），回到内置默认 */
+  if (pn === '/api/splash/clear' && req.method === 'POST') {
+    try {
+      let removed = 0;
+      let freed = 0;
+      try {
+        for (const f of fs.readdirSync(SPLASH_VIDEO_DIR)) {
+          if (!/\.mp4$/i.test(f) && !/\.part$/i.test(f)) continue;
+          const p = path.join(SPLASH_VIDEO_DIR, f);
+          try { freed += fs.statSync(p).size; fs.unlinkSync(p); removed += 1; } catch (e) {}
+        }
+      } catch (e) {}
+      try {
+        const thumbDir = path.join(SPLASH_VIDEO_DIR, 'thumbs');
+        for (const f of fs.readdirSync(thumbDir)) {
+          if (!/\.jpg$/i.test(f)) continue;
+          try { fs.unlinkSync(path.join(thumbDir, f)); } catch (e) {}
+        }
+      } catch (e) {}
+      splashDownloadState.clear();
+      writeSplashVideoState({ selected: 'builtin' });
+      console.log('[SplashVideo] 已清理下载:', removed, '个文件，释放', (freed / 1048576).toFixed(1) + 'MB');
+      sendJSON(res, { ok: true, removed, freed });
     } catch (err) {
       sendJSON(res, { ok: false, error: err.message }, 500);
     }

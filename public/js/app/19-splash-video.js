@@ -26,7 +26,8 @@ var splashVideoPanel = {
   pollTimer: null,
   source: '',         // 实际用的源：cnb | github
   sourceLabel: '',
-  sourcePref: 'auto'  // 用户偏好：auto | cnb | github
+  sourcePref: 'auto', // 用户偏好：auto | cnb | github
+  uploading: false
 };
 
 function splashVideoBytes(n) {
@@ -100,8 +101,18 @@ function renderSplashVideoPanel() {
         'title="点击切换下载源：自动（竞速）/ CNB / GitHub。国内用 CNB，开 VPN 用 GitHub">' +
         '源 ' + escHtml(srcText) + ' · ' + prefText +
       '</button>' +
-      '<button class="fx-mini-btn ghost" type="button" onclick="fetchSplashVideoList(true)"' +
-        (p.refreshing ? ' disabled' : '') + '>' + (p.refreshing ? '刷新中…' : '刷新') + '</button>' +
+      '<div class="sv-tools">' +
+        '<button class="sv-tool" type="button" onclick="clearSplashVideos()" title="删除所有已下载的视频（含自己上传的），启动页回到内置默认">清理</button>' +
+        '<button class="sv-tool" type="button" onclick="pickSplashVideoFile()"' +
+          (p.uploading ? ' disabled' : '') + ' title="上传本地 MP4 作为启动页">' +
+          (p.uploading ? '上传中…' : '上传') + '</button>' +
+        '<button class="sv-tool" type="button" onclick="fetchSplashVideoList(true)"' +
+          (p.refreshing ? ' disabled' : '') + '>' + (p.refreshing ? '刷新中…' : '刷新') + '</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="sv-tip">' +
+      '自己上传：MP4（H.264）· 建议 1920×1080（最低 1280×720）· ≤40MB · 5~15 秒最佳；' +
+      '首尾画面一致循环才不跳' +
     '</div>' +
     '<div class="splash-video-list">' + cards + '</div>' +
     (p.error ? '<div class="splash-video-note">离线：' + escHtml(p.error) + '</div>' : '');
@@ -207,6 +218,126 @@ function selectSplashVideo(id) {
     .catch(function (e) {
       showToast('切换失败：' + ((e && e.message) || '未知错误'));
     });
+}
+
+/* 清理：删掉所有已下载的视频（含自定义），回到内置默认 */
+function clearSplashVideos() {
+  var p = splashVideoPanel;
+  if (!p.downloaded || !p.downloaded.length) {
+    showToast('没有已下载的视频');
+    return;
+  }
+  var ok = window.confirm('确定删除全部 ' + p.downloaded.length + ' 个已下载视频吗？\n' +
+    '（包括自己上传的那条，删除后启动页回到内置默认视频）');
+  if (!ok) return;
+  fetch('/api/splash/clear', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || '清理失败');
+      showToast('已清理 ' + d.removed + ' 个文件，释放 ' + (d.freed / 1048576).toFixed(1) + 'MB');
+      fetchSplashVideoList(true);
+    })
+    .catch(function (e) {
+      showToast('清理失败：' + ((e && e.message) || '未知错误'));
+    });
+}
+
+function pickSplashVideoFile() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'video/mp4';
+  input.style.display = 'none';
+  input.addEventListener('change', function () {
+    var file = input.files && input.files[0];
+    if (file) uploadSplashVideo(file);
+    try { input.remove(); } catch (e) {}
+  });
+  document.body.appendChild(input);
+  input.click();
+}
+
+/* 从本地文件抽一帧当缩略图，顺便读宽高和时长（服务端还会再校验一次） */
+function captureSplashFrame(file, done) {
+  var url = URL.createObjectURL(file);
+  var video = document.createElement('video');
+  var finished = false;
+  var finish = function (dataUrl, w, h, dur) {
+    if (finished) return;
+    finished = true;
+    try { URL.revokeObjectURL(url); } catch (e) {}
+    done(dataUrl, w, h, dur);
+  };
+  video.preload = 'auto';
+  video.muted = true;
+  video.playsInline = true;
+  video.addEventListener('loadeddata', function () {
+    var dur = Number(video.duration) || 0;
+    video.currentTime = dur > 0 ? Math.min(1, dur / 2) : 0.5;
+  });
+  video.addEventListener('seeked', function () {
+    var dataUrl = '';
+    try {
+      var c = document.createElement('canvas');
+      var w = video.videoWidth || 480;
+      var hgt = video.videoHeight || 270;
+      c.width = 480;
+      c.height = Math.max(1, Math.round(480 * hgt / w));
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      dataUrl = c.toDataURL('image/jpeg', 0.82);
+    } catch (e) { dataUrl = ''; }
+    finish(dataUrl, video.videoWidth, video.videoHeight, Number(video.duration) || 0);
+  });
+  video.addEventListener('error', function () { finish('', 0, 0, 0); });
+  // 兜底：2.5s 没抽到就别卡住上传
+  setTimeout(function () {
+    finish('', video.videoWidth, video.videoHeight, Number(video.duration) || 0);
+  }, 2500);
+  video.src = url;
+}
+
+function uploadSplashVideo(file) {
+  var p = splashVideoPanel;
+  var MAX = 40 * 1024 * 1024;
+  if (!/\.mp4$/i.test(file.name) && file.type !== 'video/mp4') {
+    showToast('只支持 MP4（H.264）文件');
+    return;
+  }
+  if (file.size > MAX) {
+    showToast('文件 ' + (file.size / 1048576).toFixed(1) + 'MB，超过 40MB 上限');
+    return;
+  }
+  p.uploading = true;
+  renderSplashVideoPanel();
+  captureSplashFrame(file, function (dataUrl, w, h) {
+    if (w && h && (w < 1280 || h < 720)) {
+      showToast('分辨率 ' + w + '×' + h + ' 偏低（建议 1920×1080）');
+    }
+    fetch('/api/splash/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'video/mp4' },
+      body: file
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) throw new Error((d && d.error) || '上传失败');
+        if (!dataUrl) return d;
+        return fetch('/api/splash/custom-thumb', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ data: dataUrl })
+        }).then(function () { return d; });
+      })
+      .then(function (d) {
+        p.uploading = false;
+        showToast('已上传 ' + d.width + '×' + d.height + '，已设为启动页');
+        fetchSplashVideoList(true);
+      })
+      .catch(function (e) {
+        p.uploading = false;
+        renderSplashVideoPanel();
+        showToast('上传失败：' + ((e && e.message) || '未知错误'));
+      });
+  });
 }
 
 function initSplashVideoPanel() {
