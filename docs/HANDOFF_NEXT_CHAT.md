@@ -1,6 +1,6 @@
 # BhandsMusic Next Chat Handoff
 
-更新时间：2026-10-20 ｜ 当前版本：`2.2.6`
+更新时间：2026-10-23 ｜ 当前版本：`2.2.7`
 
 ## 新对话先执行
 
@@ -85,7 +85,7 @@ npm run check:reorg       # 加载期读写顺序等价
 
 ```powershell
 # 1. 改版本（package.json / package-lock.json / README 当前版本行）
-npm version 2.2.6 --no-git-tag-version
+npm version 2.2.7 --no-git-tag-version
 
 # 2. 跑闸门
 npm test; npm run check:hoisting; npm run check:reorg

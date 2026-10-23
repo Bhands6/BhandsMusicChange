@@ -36,7 +36,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 ## 立即下载
 
-**当前版本：`v2.2.6`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
+**当前版本：`v2.2.7`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
 
 在 Release 页面认准对应平台的文件名：
 

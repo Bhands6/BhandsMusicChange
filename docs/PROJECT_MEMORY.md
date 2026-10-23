@@ -15,7 +15,7 @@
 - 源码仓库（当前）：`F:\UE\Bhands_Music_Window\BhandsMusic\BhandsMusicChange`
 - 本机安装版：`D:\BhandsMusic\BhandsMusic.exe` —— 跑的是打包产物，改完源码必须重新打包 + 重装
 - GitHub 仓库：`https://github.com/Bhands6/BhandsMusicChange.git`
-- 当前版本：`2.2.6`
+- 当前版本：`2.2.7`
 - 可写数据目录：`userData`（Windows `%APPDATA%\BhandsMusic`），清单见 `README.md`「本机数据存哪里」
 - 历史路径（已失效，仅作考古）：`E:\桌面\播放器软件\BhandsMusic\resources\app`、`v1.4.0`、`v1.1.0` 发布基线
 - 发布入口：GitHub Releases，更新检查依赖 `latest.yml` 和可选轻量补丁 JSON。
