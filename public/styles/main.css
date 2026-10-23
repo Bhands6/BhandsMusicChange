@@ -4,6 +4,18 @@
 /* ⚠️ -webkit-font-smoothing 不要写 antialiased：这条只对 macOS 生效（Windows 忽略），
  * 会把 Mac 上的字形笔画削细一档，跟 Windows 的观感差距拉大（2026-10-23 用户对比截图反馈）。
  * 用 auto 让系统走默认抗锯齿，Mac 的字重更接近 Windows。 */
+/* ==================== 内嵌字体：统一 macOS / Windows 观感 ====================
+ * 打包 Noto Sans SC 中文子集（@fontsource v5.3.1，含基本拉丁 + 常用标点，
+ * 单字重约 1.2MB）。两端吃同一份字形，不再出现 macOS（PingFang 细）与
+ * Windows（微软雅黑粗、字面大）的落差。
+ * 400/500/700/800 四档覆盖项目现用的全部字重，650/680/720/760/850 等
+ * 非标准值会就近映射。代价：安装包与仓库 +4.6MB。
+ * 注：→ ← ▶ ⚠ 这类符号字体里没有，仍会回退系统字体（影响可忽略）。 */
+@font-face{font-family:'Bhands Sans';font-style:normal;font-weight:400;font-display:swap;src:url('../fonts/bhands-sans-400.woff2') format('woff2')}
+@font-face{font-family:'Bhands Sans';font-style:normal;font-weight:500;font-display:swap;src:url('../fonts/bhands-sans-500.woff2') format('woff2')}
+@font-face{font-family:'Bhands Sans';font-style:normal;font-weight:700;font-display:swap;src:url('../fonts/bhands-sans-700.woff2') format('woff2')}
+@font-face{font-family:'Bhands Sans';font-style:normal;font-weight:800;font-display:swap;src:url('../fonts/bhands-sans-800.woff2') format('woff2')}
+
 html,body{font-family:var(--font-sans);background:#000;color:#fff;overflow:hidden;height:100vh;width:100vw;user-select:none;-webkit-font-smoothing:auto;-moz-osx-font-smoothing:auto}
 body.cursor-hidden,body.cursor-hidden *{cursor:none!important}                /* 沉浸模式隐藏光标 */
 html.desktop-shell-root,html.desktop-shell-root body{background:transparent}   /* 桌面壳透明背景 */
@@ -11,7 +23,7 @@ html.desktop-shell-root,html.desktop-shell-root body{background:transparent}   /
 /* ==================== CSS 自定义属性（设计令牌）==================== */
 :root{
   /* 字体族 */
-  --font-sans:"Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Alibaba PuHuiTi","Inter",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --font-sans:"Bhands Sans","Noto Sans SC","PingFang SC","HarmonyOS Sans SC","Alibaba PuHuiTi","Inter",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
   --font-mono:"JetBrains Mono","Geist Mono","SF Mono",ui-monospace,monospace;
   /* 主题色系：深色背景 + 青色强调色 */
   --fc-bg:#08090B;--fc-paper:#0E1014;--fc-ink:#E8ECEF;--fc-ink-2:#D2D7DC;--fc-muted:#8A9099;
