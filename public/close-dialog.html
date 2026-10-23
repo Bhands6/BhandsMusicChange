@@ -1,3 +1,10 @@
+<!--
+  ⚠️ 已停用（2026-10-23）：关闭应用确认框改成页内弹层了
+  （public/js/app/19-splash-video.js 的 openCloseAppDialog，复用 .sv-confirm-* 样式）。
+  原因：这是个独立的全屏透明窗口，backdrop-filter 模糊不到主窗口内容，
+  遮罩质感跟删除确认框对不上；另外还踩过 alwaysOnTop 压在所有程序之上、
+  destroy() 留下模态死锁两个坑。此文件仅作回滚参考，主进程已不再加载它。
+-->
 <!DOCTYPE html>
 <html lang="zh">
 <head>

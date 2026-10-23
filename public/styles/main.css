@@ -2478,8 +2478,12 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 .sv-confirm-body{font-size:12.5px;line-height:1.9;color:rgba(255,255,255,.46);margin-bottom:24px;letter-spacing:.15px}
 .sv-confirm-actions{display:flex;align-items:center;justify-content:center;gap:28px}
 .sv-confirm-btn{height:36px;padding:0 22px;border-radius:18px;border:1px solid transparent;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.15px}
-.sv-confirm-btn[data-act="cancel"]{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
-.sv-confirm-btn[data-act="cancel"]:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
+/* 非主按钮统一灰底（取消 / 退出应用等），避免落到浏览器默认按钮的白底黑字 */
+.sv-confirm-btn:not(.primary){background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
+.sv-confirm-btn:not(.primary):hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
 .sv-confirm-btn.primary{background:linear-gradient(135deg,color-mix(in srgb,#f4d28a 88%,#fff),color-mix(in srgb,#f4d28a 65%,#c9963d));border-color:rgba(244,210,138,.44);color:#1a1200}
 .sv-confirm-btn.primary:hover{box-shadow:0 8px 28px rgba(244,210,138,.22),inset 0 1px 0 rgba(255,255,255,.2);transform:translateY(-1px)}
 .sv-confirm-btn:focus-visible{outline:2px solid rgba(244,210,138,.55);outline-offset:2px}
+/* 关闭应用确认框里的「记住我的选择」行 */
+.sv-confirm-check{display:flex;align-items:center;gap:9px;margin:-10px 0 22px;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.48);letter-spacing:.1px;user-select:none}
+.sv-confirm-check input{width:15px;height:15px;margin:0;accent-color:#f4d28a;cursor:pointer;filter:saturate(.6)}

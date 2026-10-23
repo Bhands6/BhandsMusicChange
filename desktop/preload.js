@@ -31,6 +31,12 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   getState: () => ipcRenderer.invoke('desktop-window-get-state'),
   /** 关闭窗口 */
   close: () => ipcRenderer.invoke('desktop-window-close'),
+  /**
+   * 关闭应用确认框的选择结果（页内弹窗用）
+   * @param {'exit'|'minimize'|'cancel'} action 选中项
+   * @param {boolean} remember 是否记住这次选择
+   */
+  closeChoice: (action, remember) => ipcRenderer.invoke('bhandsmusic-close-choice', { action, remember: !!remember }),
 
   // ==================== 音乐平台登录 ====================
   /** 打开网易云音乐登录窗口 */

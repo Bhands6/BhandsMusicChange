@@ -2521,7 +2521,6 @@ async function createWindow() {
   mainWindow.on('resize', () => scheduleWindowStateSend(mainWindow));
   // 点击关闭按钮时弹出自定义选择对话框
   let forceQuit = false;
-  let closeDialogWindow = null;
   app.on('before-quit', () => { forceQuit = true; });
   // 读取记住的关闭选择
   const CLOSE_PREF_KEY = 'bhandsmusic-close-preference';
@@ -2564,32 +2563,19 @@ async function createWindow() {
   ipcMain.handle('get-system-settings', () => {
     return readSystemSettings();
   });
-  // IPC: 接收关闭对话框用户选择
-  ipcMain.on('close-dialog-action', (_event, data) => {
+  /* 关闭方式选择的结果处理：页内确认框（19-splash-video.js → window.openCloseAppDialog）
+   * 与旧的独立遮罩窗口共用这一份逻辑。 */
+  function applyCloseChoice(data) {
+    data = data || {};
     // 「取消」不是一个选择：勾了「记住我的选择」点取消也不该被存成偏好。
     // 以前会把 {action:'cancel'} 存进去，下次点关闭按钮读到它、又不匹配 exit/minimize，
     // 结果是既不弹窗也不退出 —— 表现为「点 X 没反应」（2026-10-23 用户反馈）。
-    if (data.remember && data.action !== 'cancel') {
+    if (data.remember && data.action && data.action !== 'cancel') {
       saveClosePreference({ action: data.action });
-      // 同步到系统设置
-      const behaviorMap = { exit: 'exit', minimize: 'minimize', cancel: 'ask' };
-      const newSettings = { behavior: behaviorMap[data.action] || 'ask', remember: true };
-      writeSystemSettings(newSettings);
+      const behaviorMap = { exit: 'exit', minimize: 'minimize' };
+      writeSystemSettings({ behavior: behaviorMap[data.action] || 'ask', remember: true });
     }
-    if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
-      // 用 close() 而不是 destroy()：destroy 会跳过正常关闭流程，Windows 上 parent 的
-      // 模态禁用状态可能留着不解除 —— 表现就是「点界面没反应、应用也关不掉」。
-      const closingWin = closeDialogWindow;
-      closeDialogWindow = null;
-      closingWin.close();
-    }
-    // 兜底：把焦点还给主窗口，避免模态关掉后主窗口收不到点击
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      try { mainWindow.focus(); } catch (e) {}
-    }
-    // 直接刷新主窗口的系统设置 UI
     if (mainWindow && !mainWindow.isDestroyed() && !forceQuit) {
-      const sysSettings = readSystemSettings();
       mainWindow.webContents.executeJavaScript(
         `typeof applySystemSettingsUI === 'function' && applySystemSettingsUI()`
       ).catch(() => {});
@@ -2598,9 +2584,11 @@ async function createWindow() {
       forceQuit = true;
       app.quit();
     } else if (data.action === 'minimize') {
-      mainWindow.hide();
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     }
-  });
+  }
+  ipcMain.on('close-dialog-action', (_event, data) => applyCloseChoice(data));
+  ipcMain.handle('bhandsmusic-close-choice', (_event, data) => { applyCloseChoice(data); return true; });
   mainWindow.on('close', (e) => {
     if (forceQuit) return;
     e.preventDefault();
@@ -2630,38 +2618,19 @@ async function createWindow() {
       }
       return;
     }
-    // 3. 弹出自定义关闭对话框
-    if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
-      closeDialogWindow.focus();
-      return;
-    }
-    const { width: mw, height: mh, x: mx, y: my } = mainWindow.getBounds();
-    closeDialogWindow = new BrowserWindow({
-      width: mw, height: mh,
-      x: mx, y: my,
-      frame: false,
-      transparent: true,
-      // ⚠️ 必须显式全透明（对齐 mainWindow / desktopLyricsWindow）：缺省的不透明底色
-      //    会盖掉 transparent，导致关闭对话框弹出一整块直角窗口底 —— dialog 的 18px
-      //    圆角外露出窗口矩形（2026-09-24 用户反馈「弹出的是个角不是圆的」）
-      backgroundColor: '#00000000',
-      hasShadow: false,          // 全屏遮罩窗口：DWM 阴影会沿直角窗口矩形露出轮廓
-      resizable: false,
-      skipTaskbar: true,
-      parent: mainWindow,
-      modal: true,
-      // ⚠️ 不要 alwaysOnTop：那会让这层全屏遮罩压在所有程序窗口之上，
-      //    切到浏览器 / 别的应用它还在最顶层（2026-10-23 用户反馈「一直处于最顶端」）。
-      //    parent + modal 已经足够保证它盖在主窗口之上并禁用主窗口交互。
-      alwaysOnTop: false,
-      webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false,
-      },
+    // 3. 通知渲染进程弹「关闭应用」确认框（页内弹层）
+    //    改成页内弹层的理由：原来那套是独立的全屏透明窗口，它的 backdrop-filter
+    //    模糊不到主窗口内容（窗口下面没有东西可模糊），遮罩看起来跟删除确认框不是一个质感；
+    //    而且独立窗口还踩过 alwaysOnTop 压在所有程序之上、destroy() 留下模态死锁两个坑。
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.executeJavaScript(
+      'typeof openCloseAppDialog === "function" ? (openCloseAppDialog(), true) : false'
+    ).then((shown) => {
+      // 渲染层还没就绪（开机立刻点关闭）就退化为最小化，至少不会卡成关不掉
+      if (!shown && mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+    }).catch(() => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
     });
-    closeDialogWindow.setIgnoreMouseEvents(false);
-    closeDialogWindow.loadFile(path.join(__dirname, '..', 'public', 'close-dialog.html'));
-    closeDialogWindow.on('closed', () => { closeDialogWindow = null; });
   });
   // 窗口关闭时清理所有资源
   mainWindow.on('closed', () => {

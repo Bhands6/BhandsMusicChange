@@ -283,6 +283,53 @@ function splashConfirm(opts) {
   });
 }
 
+/* 关闭应用确认框（页内版）：替代原来那个独立的全屏透明窗口。
+ * 独立窗口的 backdrop-filter 模糊不到主窗口内容（窗口下面没东西可糊），
+ * 遮罩质感跟删除确认框对不上；还会踩 alwaysOnTop 压在所有程序之上、
+ * destroy() 留下模态死锁两个坑。页内版直接复用 .sv-confirm-*，遮罩能真正糊住界面。
+ * 主进程在 mainWindow 'close' 时通过 executeJavaScript 调它。 */
+function openCloseAppDialog() {
+  if (document.querySelector('.sv-confirm-mask')) return;
+  var mask = document.createElement('div');
+  mask.className = 'sv-confirm-mask in';
+  mask.innerHTML =
+    '<div class="sv-confirm-card" role="dialog" aria-modal="true">' +
+      '<div class="sv-confirm-title">关闭应用</div>' +
+      '<button class="sv-confirm-close" type="button" data-act="cancel" aria-label="关闭">&times;</button>' +
+      '<div class="sv-confirm-body">请选择关闭方式</div>' +
+      '<label class="sv-confirm-check"><input type="checkbox"><span>记住我的选择</span></label>' +
+      '<div class="sv-confirm-actions">' +
+        '<button class="sv-confirm-btn" type="button" data-act="exit">退出应用</button>' +
+        '<button class="sv-confirm-btn primary" type="button" data-act="minimize">最小化到托盘</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(mask);
+
+  var closed = false;
+  var done = function (action) {
+    if (closed) return;
+    closed = true;
+    var box = mask.querySelector('input[type="checkbox"]');
+    var remember = !!(box && box.checked);
+    try { document.body.removeChild(mask); } catch (e) {}
+    document.removeEventListener('keydown', onKey, true);
+    if (action === 'exit' || action === 'minimize') {
+      var api = window.desktopWindow;
+      if (api && typeof api.closeChoice === 'function') {
+        try { api.closeChoice(action, remember).catch(function () {}); } catch (e) {}
+      }
+    }
+  };
+  var onKey = function (e) {
+    if (e.key === 'Escape') { e.stopPropagation(); done('cancel'); }
+  };
+  mask.addEventListener('click', function (e) {
+    var act = e.target && e.target.getAttribute && e.target.getAttribute('data-act');
+    if (act === 'exit' || act === 'minimize' || act === 'cancel') done(act);
+  });
+  document.addEventListener('keydown', onKey, true);
+}
+
 /* 清理：删掉所有已下载的视频（含自定义），回到内置默认 */
 function clearSplashVideos() {
   var p = splashVideoPanel;
