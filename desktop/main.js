@@ -2528,7 +2528,12 @@ async function createWindow() {
   function readClosePreference() {
     try {
       const prefPath = path.join(app.getPath('userData'), 'close-pref.json');
-      if (fs.existsSync(prefPath)) return JSON.parse(fs.readFileSync(prefPath, 'utf8'));
+      if (fs.existsSync(prefPath)) {
+        const pref = JSON.parse(fs.readFileSync(prefPath, 'utf8'));
+        // 只认 exit / minimize：老版本点「取消」也会写 {action:'cancel'}，
+        // 这种「偏好」不该影响关闭流程，直接当没有（2026-10-23 修）
+        if (pref && (pref.action === 'exit' || pref.action === 'minimize')) return pref;
+      }
     } catch (e) {}
     return null;
   }
@@ -2561,7 +2566,10 @@ async function createWindow() {
   });
   // IPC: 接收关闭对话框用户选择
   ipcMain.on('close-dialog-action', (_event, data) => {
-    if (data.remember) {
+    // 「取消」不是一个选择：勾了「记住我的选择」点取消也不该被存成偏好。
+    // 以前会把 {action:'cancel'} 存进去，下次点关闭按钮读到它、又不匹配 exit/minimize，
+    // 结果是既不弹窗也不退出 —— 表现为「点 X 没反应」（2026-10-23 用户反馈）。
+    if (data.remember && data.action !== 'cancel') {
       saveClosePreference({ action: data.action });
       // 同步到系统设置
       const behaviorMap = { exit: 'exit', minimize: 'minimize', cancel: 'ask' };
@@ -2610,12 +2618,14 @@ async function createWindow() {
       return;
     }
     // 2. 检查对话框记住偏好（兼容旧逻辑）
+    // ⚠️ 只认 exit / minimize。旧版本会把「取消」也存成 {action:'cancel'}，
+    //    这里若对任意 saved 都 return，就会既不弹窗也不退出（用户：点 X 没作用）。
     const saved = readClosePreference();
-    if (saved) {
+    if (saved && (saved.action === 'exit' || saved.action === 'minimize')) {
       if (saved.action === 'exit') {
         forceQuit = true;
         app.quit();
-      } else if (saved.action === 'minimize') {
+      } else {
         mainWindow.hide();
       }
       return;
