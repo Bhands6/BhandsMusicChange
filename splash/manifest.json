@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "updated": "2026-10-23",
+  "note": "启动页可选背景视频。内置默认是滑雪（随安装包分发），这里的视频按需下载。",
+  "videos": [
+    {
+      "id": "vaultra",
+      "name": "点阵地球",
+      "desc": "红蓝品红边缘光的粒子地球",
+      "tint": "#d8b06a",
+      "file": "videos/vaultra.mp4",
+      "thumb": "thumbs/vaultra.jpg",
+      "bytes": 1383898,
+      "sha256": "e2c2147648ffff3d7ea944e4f5c66cfc4bc718fd2265b23374143454c12c971f"
+    },
+    {
+      "id": "meadow",
+      "name": "风起草浪",
+      "desc": "山坡午后，风吹草动",
+      "tint": "#7fb069",
+      "file": "videos/meadow.mp4",
+      "thumb": "thumbs/meadow.jpg",
+      "bytes": 3238975,
+      "sha256": "cc689d80ca2637ec515ff7085cbec77b3da738a12f9d3eecbb111caedf4aa82e"
+    },
+    {
+      "id": "neural",
+      "name": "光纤热核",
+      "desc": "金蓝光纤汇聚成中央光核",
+      "tint": "#e8b25a",
+      "file": "videos/neural.mp4",
+      "thumb": "thumbs/neural.jpg",
+      "bytes": 3491317,
+      "sha256": "2621f7b45e538bc31a102005fc8c4ff30c05a0c2fbd02c208ff6975bd48de802"
+    },
+    {
+      "id": "lumen",
+      "name": "暗夜花光",
+      "desc": "纯黑背景里的发光花朵",
+      "tint": "#9a8fd6",
+      "file": "videos/lumen.mp4",
+      "thumb": "thumbs/lumen.jpg",
+      "bytes": 1043540,
+      "sha256": "d88ff0a7aa9d2b3d87143d42e470304579d0c18cbdf8768206695e9250d5dc41"
+    },
+    {
+      "id": "nexum",
+      "name": "巨木森林",
+      "desc": "森林小径，光束穿透树冠",
+      "tint": "#6f9c6a",
+      "file": "videos/nexum.mp4",
+      "thumb": "thumbs/nexum.jpg",
+      "bytes": 4058604,
+      "sha256": "c08c048b7a226136d51033233721e1155a3a81bd7994ade0782a630c01384b34"
+    },
+    {
+      "id": "vortx",
+      "name": "夕阳花海",
+      "desc": "暖调夕阳下的花海与蝴蝶",
+      "tint": "#e08a5a",
+      "file": "videos/vortx.mp4",
+      "thumb": "thumbs/vortx.jpg",
+      "bytes": 4871391,
+      "sha256": "04a44205a8e61bb49dbe23d04269232d3c25b480106c32b3d970c7242af1998e"
+    }
+  ]
+}
