@@ -129,6 +129,13 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 /* ==================== 文件路径配置 ==================== */
 const COOKIE_FILE = process.env.COOKIE_FILE || path.join(PROJECT_ROOT, '.cookie');           // 网易云 Cookie 文件
 const QQ_COOKIE_FILE = process.env.QQ_COOKIE_FILE || path.join(PROJECT_ROOT, '.qq-cookie');  // QQ音乐 Cookie 文件
+/* 启动页可下载视频（2026-10-23）
+ * 安装包里只带内置默认那条（滑雪），其余按需从 CNB 资源仓库下载到 userData。
+ * ⚠️ 打包后 PROJECT_ROOT = app.asar（只读），这两个路径必须由 desktop/main.js 注入 userData 版本。 */
+const SPLASH_VIDEO_DIR = process.env.BHANDSMUSIC_SPLASH_VIDEO_DIR || path.join(PROJECT_ROOT, '.splash-videos');
+const SPLASH_VIDEO_STATE_FILE = process.env.BHANDSMUSIC_SPLASH_VIDEO_STATE || path.join(PROJECT_ROOT, '.splash-video.json');
+const SPLASH_VIDEO_REPO_BASE = 'https://cnb.cool/BhandsCnb/BhandsMusicVideo/-/git/raw/main/';
+const SPLASH_VIDEO_MANIFEST_URL = SPLASH_VIDEO_REPO_BASE + 'manifest.json';
 const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
@@ -466,6 +473,168 @@ function saveQQCookie(c) {
 }
 
 // ---------- 工具 ----------
+
+/* ==================== 启动页视频：清单 / 下载 / 切换（2026-10-23） ====================
+ * 安装包内置只有默认那条（滑雪，public/media/splash-bg.mp4）。
+ * 其余候选放在 CNB 资源仓库，用户点「下载」后落到 userData/splash-videos/<id>.mp4，
+ * 选择记录写 userData/splash-video.json；启动页按记录决定用哪条。
+ */
+let splashManifestCache = { at: 0, data: null };
+const splashDownloadState = new Map();   // id -> { status: downloading|done|error, received, total, error }
+
+function isValidSplashVideoId(id) {
+  return /^[a-z0-9][a-z0-9_-]{0,40}$/i.test(String(id || ''));
+}
+function splashVideoPath(id) {
+  return path.join(SPLASH_VIDEO_DIR, id + '.mp4');
+}
+function isSplashVideoDownloaded(id) {
+  if (!isValidSplashVideoId(id)) return false;
+  try { return fs.statSync(splashVideoPath(id)).size > 1024; } catch (e) { return false; }
+}
+function listDownloadedSplashVideos() {
+  try {
+    return fs.readdirSync(SPLASH_VIDEO_DIR)
+      .filter(f => f.toLowerCase().endsWith('.mp4'))
+      .map(f => f.slice(0, -4))
+      .filter(id => isSplashVideoDownloaded(id));
+  } catch (e) { return []; }
+}
+function readSplashVideoState() {
+  try {
+    const obj = JSON.parse(fs.readFileSync(SPLASH_VIDEO_STATE_FILE, 'utf8'));
+    return { selected: typeof obj.selected === 'string' && obj.selected ? obj.selected : 'builtin' };
+  } catch (e) {
+    return { selected: 'builtin' };
+  }
+}
+function writeSplashVideoState(state) {
+  try {
+    fs.mkdirSync(path.dirname(SPLASH_VIDEO_STATE_FILE), { recursive: true });
+    fs.writeFileSync(SPLASH_VIDEO_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    console.warn('[SplashVideo] 保存选择失败:', e.message);
+    return false;
+  }
+}
+/* 手动跟随 3xx：CNB 的 raw 链接会跳到 CDN，跳转后的地址没有凭证要求，匿名可取 */
+function httpGetStream(url, redirects) {
+  redirects = redirects || 0;
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try { parsed = new URL(url); } catch (e) { reject(new Error('URL 无效')); return; }
+    const mod = parsed.protocol === 'http:' ? http : https;
+    const req = mod.get(url, { headers: { 'User-Agent': UA, Accept: '*/*' } }, (res) => {
+      const code = res.statusCode || 0;
+      if (code >= 300 && code < 400 && res.headers.location && redirects < 5) {
+        res.resume();
+        resolve(httpGetStream(new URL(res.headers.location, url).toString(), redirects + 1));
+        return;
+      }
+      resolve(res);
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => req.destroy(new Error('请求超时')));
+  });
+}
+function readStreamText(res) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    res.on('data', c => chunks.push(c));
+    res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    res.on('error', reject);
+  });
+}
+async function fetchSplashManifest(force) {
+  const now = Date.now();
+  if (!force && splashManifestCache.data && now - splashManifestCache.at < 10 * 60 * 1000) {
+    return splashManifestCache.data;
+  }
+  const res = await httpGetStream(SPLASH_VIDEO_MANIFEST_URL);
+  if (res.statusCode !== 200) throw new Error('清单拉取失败 HTTP ' + res.statusCode);
+  const text = await readStreamText(res);
+  let data;
+  try { data = JSON.parse(text); } catch (e) { throw new Error('清单不是合法 JSON'); }
+  if (!data || !Array.isArray(data.videos)) throw new Error('清单格式不正确');
+  splashManifestCache = { at: now, data };
+  return data;
+}
+async function downloadSplashVideo(id) {
+  if (!isValidSplashVideoId(id)) throw new Error('非法的视频 id');
+  const running = splashDownloadState.get(id);
+  if (running && running.status === 'downloading') return;   // 防重入
+
+  const manifest = await fetchSplashManifest();
+  const item = (manifest.videos || []).find(v => v && v.id === id);
+  if (!item || !item.file) throw new Error('清单里没有这个视频');
+
+  fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
+  const tmpFile = path.join(SPLASH_VIDEO_DIR, id + '.part');
+  const finalFile = splashVideoPath(id);
+  splashDownloadState.set(id, { status: 'downloading', received: 0, total: Number(item.bytes) || 0, error: '' });
+
+  try {
+    const res = await httpGetStream(SPLASH_VIDEO_REPO_BASE + item.file);
+    if (res.statusCode !== 200) throw new Error('下载失败 HTTP ' + res.statusCode);
+    const declaredTotal = Number(res.headers['content-length'] || item.bytes || 0) || 0;
+    let received = 0;
+    await new Promise((resolve, reject) => {
+      const ws = fs.createWriteStream(tmpFile);
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        const st = splashDownloadState.get(id);
+        if (st) { st.received = received; if (declaredTotal) st.total = declaredTotal; }
+      });
+      res.on('error', reject);
+      ws.on('error', reject);
+      ws.on('finish', resolve);
+      res.pipe(ws);
+    });
+    // 清单里带了 sha256：校验不过就删掉重来（CDN 截断/串包时能立刻发现）
+    if (item.sha256) {
+      const hash = crypto.createHash('sha256').update(fs.readFileSync(tmpFile)).digest('hex');
+      if (hash !== String(item.sha256).toLowerCase()) {
+        try { fs.unlinkSync(tmpFile); } catch (e) {}
+        throw new Error('文件校验失败（sha256 不匹配）');
+      }
+    }
+    fs.renameSync(tmpFile, finalFile);
+    const size = fs.statSync(finalFile).size;
+    splashDownloadState.set(id, { status: 'done', received: size, total: size, error: '' });
+    console.log('[SplashVideo] 下载完成:', id, (size / 1048576).toFixed(1) + 'MB');
+  } catch (err) {
+    try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch (e) {}
+    splashDownloadState.set(id, { status: 'error', received: 0, total: 0, error: err.message });
+    throw err;
+  }
+}
+/* 视频按 Range 分片返回：<video> 循环/跳播会发 Range，缺了 206 在部分场景会卡住首帧 */
+function serveSplashVideoFile(req, res, filePath) {
+  let stat;
+  try { stat = fs.statSync(filePath); } catch (e) { res.writeHead(404); res.end('Not Found'); return; }
+  const total = stat.size;
+  const headers = { 'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' };
+  const range = req.headers.range;
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
+    if (m) {
+      let start = m[1] ? parseInt(m[1], 10) : 0;
+      let end = m[2] ? parseInt(m[2], 10) : total - 1;
+      if (!Number.isFinite(start) || start < 0) start = 0;
+      if (!Number.isFinite(end) || end >= total) end = total - 1;
+      if (start > end) { res.writeHead(416, { 'Content-Range': 'bytes */' + total }); res.end(); return; }
+      headers['Content-Range'] = 'bytes ' + start + '-' + end + '/' + total;
+      headers['Content-Length'] = end - start + 1;
+      res.writeHead(206, headers);
+      fs.createReadStream(filePath, { start, end }).pipe(res);
+      return;
+    }
+  }
+  headers['Content-Length'] = total;
+  res.writeHead(200, headers);
+  fs.createReadStream(filePath).pipe(res);
+}
 
 /* 静态根兜底：public/ 是静态根，serveStatic 没有路径白名单。
  * 历史上 server.js(200K) / dj-analyzer.js(51K) 这两个 **Node 模块** 曾被放在 public/js/ 下，
@@ -5607,6 +5776,95 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       sendJSON(res, { error: err.message }, 500);
     }
+    return;
+  }
+
+  /* ---------- 启动页视频：清单 / 下载 / 切换 ---------- */
+  if (pn === '/api/splash/videos' && req.method === 'GET') {
+    const downloaded = listDownloadedSplashVideos();
+    const state = readSplashVideoState();
+    try {
+      const manifest = await fetchSplashManifest(url.searchParams.has('refresh'));
+      const items = (manifest.videos || []).filter(v => v && v.id).map(v => ({
+        id: v.id,
+        name: v.name || v.id,
+        desc: v.desc || '',
+        tint: v.tint || '',
+        bytes: Number(v.bytes) || 0,
+        thumb: SPLASH_VIDEO_REPO_BASE + (v.thumb || ''),
+        url: SPLASH_VIDEO_REPO_BASE + (v.file || ''),
+        downloaded: downloaded.includes(v.id),
+      }));
+      sendJSON(res, { ok: true, items, downloaded, selected: state.selected });
+    } catch (err) {
+      // 离线 / 仓库不通时不能让控制台白屏：返回已下载的本地项 + 错误原因
+      console.warn('[SplashVideo] 清单不可用:', err.message);
+      sendJSON(res, {
+        ok: false,
+        error: err.message,
+        items: downloaded.map(id => ({ id, name: id, desc: '', tint: '', bytes: 0, thumb: '', url: '', downloaded: true })),
+        downloaded,
+        selected: state.selected,
+      });
+    }
+    return;
+  }
+
+  if (pn === '/api/splash/download' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const id = body && body.id;
+      if (!isValidSplashVideoId(id)) { sendJSON(res, { ok: false, error: '缺少或非法 id' }, 400); return; }
+      if (isSplashVideoDownloaded(id)) { sendJSON(res, { ok: true, already: true }); return; }
+      downloadSplashVideo(id).catch(err => console.warn('[SplashVideo] 下载失败:', id, err.message));
+      sendJSON(res, { ok: true, started: true });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/splash/progress' && req.method === 'GET') {
+    const states = {};
+    splashDownloadState.forEach((v, k) => { states[k] = v; });
+    sendJSON(res, { ok: true, states, downloaded: listDownloadedSplashVideos() });
+    return;
+  }
+
+  if (pn === '/api/splash/select' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const id = body && body.id;
+      if (id === 'builtin') {
+        writeSplashVideoState({ selected: 'builtin' });
+        sendJSON(res, { ok: true, selected: 'builtin' });
+        return;
+      }
+      if (!isValidSplashVideoId(id)) { sendJSON(res, { ok: false, error: '非法 id' }, 400); return; }
+      if (!isSplashVideoDownloaded(id)) { sendJSON(res, { ok: false, error: '视频还没下载' }, 400); return; }
+      writeSplashVideoState({ selected: id });
+      sendJSON(res, { ok: true, selected: id });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 500);
+    }
+    return;
+  }
+
+  if (pn === '/api/splash/current' && req.method === 'GET') {
+    const state = readSplashVideoState();
+    const custom = state.selected && state.selected !== 'builtin' && isSplashVideoDownloaded(state.selected);
+    sendJSON(res, custom
+      ? { ok: true, id: state.selected, url: '/splash-video/' + state.selected + '.mp4' }
+      : { ok: true, id: 'builtin', url: 'media/splash-bg.mp4' });
+    return;
+  }
+
+  if (pn.startsWith('/splash-video/')) {
+    const videoId = pn.slice('/splash-video/'.length).replace(/\.mp4$/i, '');
+    if (!isValidSplashVideoId(videoId) || !isSplashVideoDownloaded(videoId)) {
+      res.writeHead(404); res.end('Not Found'); return;
+    }
+    serveSplashVideoFile(req, res, splashVideoPath(videoId));
     return;
   }
 

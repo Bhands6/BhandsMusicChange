@@ -2340,6 +2340,9 @@ async function createWindow() {
     process.env.BHANDSMUSIC_BEAT_CACHE_DIR = getDefaultBeatCacheDir();
   }
   process.env.BHANDSMUSIC_CUEFIELD_FEEDBACK_FILE = path.join(app.getPath('userData'), 'cuefield-feedback.jsonl');
+  // 启动页可下载视频：下载目录与当前选择同样必须落在 userData（PROJECT_ROOT 打包后只读）
+  process.env.BHANDSMUSIC_SPLASH_VIDEO_DIR = path.join(app.getPath('userData'), 'splash-videos');
+  process.env.BHANDSMUSIC_SPLASH_VIDEO_STATE = path.join(app.getPath('userData'), 'splash-video.json');
   // 音源配置（含酷狗 / 第三方音源登录凭据）必须落在 userData：
   // 打包后 PROJECT_ROOT 指向 app.asar（只读），写在项目根会抛 ENOTDIR 且被 catch 吞掉，
   // 表现为「扫码提示登录成功，但状态永远是未登录 / 重启掉登录」（2026-10-19 实锤）。
