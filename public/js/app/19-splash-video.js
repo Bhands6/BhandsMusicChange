@@ -277,9 +277,9 @@ function splashConfirm(opts) {
       else if (act === 'cancel') done(false);
     });
     document.addEventListener('keydown', onKey, true);
+    // 不自动 focus「确定」：程序式 focus 会让 :focus-visible 命中，弹窗一出来就带着描边环；
+    // Enter 由 document 级监听处理，鼠标用户点按钮即可，键盘用户 Tab 过去时才有焦点环。
     requestAnimationFrame(function () { mask.classList.add('in'); });
-    var okBtn = mask.querySelector('[data-act="ok"]');
-    if (okBtn) setTimeout(function () { try { okBtn.focus(); } catch (e) {} }, 40);
   });
 }
 

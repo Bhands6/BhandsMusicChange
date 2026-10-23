@@ -2476,7 +2476,7 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 .sv-confirm-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:rgba(255,255,255,.4);font-size:16px;line-height:1;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .18s}
 .sv-confirm-close:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.8)}
 .sv-confirm-body{font-size:12.5px;line-height:1.9;color:rgba(255,255,255,.46);margin-bottom:24px;letter-spacing:.15px}
-.sv-confirm-actions{display:flex;align-items:center;justify-content:center;gap:10px}
+.sv-confirm-actions{display:flex;align-items:center;justify-content:center;gap:28px}
 .sv-confirm-btn{height:36px;padding:0 22px;border-radius:18px;border:1px solid transparent;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.15px}
 .sv-confirm-btn[data-act="cancel"]{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
 .sv-confirm-btn[data-act="cancel"]:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
