@@ -249,10 +249,11 @@ function splashConfirm(opts) {
     mask.innerHTML =
       '<div class="sv-confirm-card" role="dialog" aria-modal="true">' +
         '<div class="sv-confirm-title">' + title + '</div>' +
+        '<button class="sv-confirm-close" type="button" data-act="cancel" aria-label="关闭">&times;</button>' +
         '<div class="sv-confirm-body">' + message + '</div>' +
         '<div class="sv-confirm-actions">' +
           '<button class="sv-confirm-btn" type="button" data-act="cancel">' + (opts.cancelText || '取消') + '</button>' +
-          '<button class="sv-confirm-btn danger" type="button" data-act="ok">' + (opts.okText || '确定') + '</button>' +
+          '<button class="sv-confirm-btn primary" type="button" data-act="ok">' + (opts.okText || '确定') + '</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(mask);

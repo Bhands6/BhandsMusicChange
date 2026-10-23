@@ -2459,19 +2459,20 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 .sv-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 8px 8px}
 .sv-actions .sv-btn{margin:0}
 
-/* ==================== 主题内确认框（替代 window.confirm 的系统白框） ==================== */
-/* ⚠️ 这里刻意不用任何会创建合成层的属性：
- *    backdrop-filter（上一层已去）、opacity 过渡、卡片上的 transform 动画，
- *    在这台机器的 GPU 路径上都会让 border-radius 的光栅化被跳过 → 四角变直角。
- *    只留 background-color 过渡（不建层），卡片本身完全静态。 */
-.sv-confirm-mask{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(3,3,5,0);transition:background-color .16s ease}
-.sv-confirm-mask.in{background:rgba(3,3,5,.74)}
-.sv-confirm-card{width:min(400px,86vw);border-radius:20px;overflow:hidden;border:1px solid rgba(244,210,138,.22);background:#1b1b1f;box-shadow:0 28px 70px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.07);padding:18px 18px 14px}
-.sv-confirm-title{font-size:13px;font-weight:700;color:rgba(255,246,225,.96);letter-spacing:.3px;margin-bottom:9px}
-.sv-confirm-body{font-size:12.5px;line-height:1.8;color:rgba(255,255,255,.66)}
-.sv-confirm-actions{display:flex;justify-content:center;gap:16px;margin-top:17px}
-.sv-confirm-btn{height:30px;padding:0 16px;border-radius:8px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:rgba(255,255,255,.82);font-family:inherit;font-size:12px;font-weight:600;letter-spacing:.2px;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
-.sv-confirm-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff}
-.sv-confirm-btn.danger{border-color:rgba(255,86,72,.45);background:rgba(255,86,72,.14);color:#ffb4ab}
-.sv-confirm-btn.danger:hover{background:rgba(255,86,72,.24);border-color:rgba(255,86,72,.65);color:#ffd7d2}
+/* ==================== 主题内确认框（替代 window.confirm 的系统白框） ====================
+ * 视觉参数直接对齐 public/close-dialog.html 里那套「关闭应用」弹窗（真机验证过圆角正常）：
+ * 370px 宽 / 18px 圆角 / rgba(18,19,24,.92) + backdrop-filter:blur(40px) / 36px 高胶囊按钮。
+ * ⚠️ 别再自作聪明去掉 backdrop-filter 或改动画：那套参数是实测能正常出圆角的组合。 */
+.sv-confirm-mask{position:fixed;inset:0;z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.55);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.sv-confirm-card{position:relative;width:370px;max-width:86vw;background:rgba(18,19,24,.92);border:1px solid rgba(255,255,255,.08);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.55),0 0 40px rgba(244,210,138,.04);padding:28px 26px 22px;backdrop-filter:blur(40px) saturate(1.4);-webkit-backdrop-filter:blur(40px) saturate(1.4)}
+.sv-confirm-title{font-size:17px;font-weight:700;color:rgba(255,255,255,.94);margin-bottom:8px;letter-spacing:.2px}
+.sv-confirm-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.04);color:rgba(255,255,255,.4);font-size:16px;line-height:1;cursor:pointer;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .18s}
+.sv-confirm-close:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.8)}
+.sv-confirm-body{font-size:12.5px;line-height:1.9;color:rgba(255,255,255,.46);margin-bottom:24px;letter-spacing:.15px}
+.sv-confirm-actions{display:flex;align-items:center;justify-content:center;gap:10px}
+.sv-confirm-btn{height:36px;padding:0 22px;border-radius:18px;border:1px solid transparent;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.15px}
+.sv-confirm-btn[data-act="cancel"]{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
+.sv-confirm-btn[data-act="cancel"]:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
+.sv-confirm-btn.primary{background:linear-gradient(135deg,color-mix(in srgb,#f4d28a 88%,#fff),color-mix(in srgb,#f4d28a 65%,#c9963d));border-color:rgba(244,210,138,.44);color:#1a1200}
+.sv-confirm-btn.primary:hover{box-shadow:0 8px 28px rgba(244,210,138,.22),inset 0 1px 0 rgba(255,255,255,.2);transform:translateY(-1px)}
 .sv-confirm-btn:focus-visible{outline:2px solid rgba(244,210,138,.55);outline-offset:2px}
