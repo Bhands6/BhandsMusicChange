@@ -2633,7 +2633,10 @@ async function createWindow() {
       skipTaskbar: true,
       parent: mainWindow,
       modal: true,
-      alwaysOnTop: true,
+      // ⚠️ 不要 alwaysOnTop：那会让这层全屏遮罩压在所有程序窗口之上，
+      //    切到浏览器 / 别的应用它还在最顶层（2026-10-23 用户反馈「一直处于最顶端」）。
+      //    parent + modal 已经足够保证它盖在主窗口之上并禁用主窗口交互。
+      alwaysOnTop: false,
       webPreferences: {
         nodeIntegration: true,
         contextIsolation: false,
