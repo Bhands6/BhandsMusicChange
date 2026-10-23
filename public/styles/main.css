@@ -2440,3 +2440,6 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 .sv-btn:disabled{opacity:.62;cursor:default}
 .sv-progress{height:3px;margin:0 8px;border-radius:2px;background:rgba(255,255,255,.12);overflow:hidden}
 .sv-progress i{display:block;height:100%;background:linear-gradient(90deg,#f4d28a,#c9963d);transition:width .25s ease}
+/* 面板里那颗「刷新」按钮别跟着 .fx-mini-btn 的 flex:1 铺满整行 */
+.splash-video-head .fx-mini-btn{flex:0 0 auto;min-width:66px;height:26px;padding:0 10px;font-size:11px}
+.splash-video-head .fx-mini-btn:disabled{opacity:.6;cursor:default}

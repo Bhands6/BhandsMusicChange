@@ -21,6 +21,7 @@ var splashVideoPanel = {
   error: '',
   loading: false,
   loadedOnce: false,
+  refreshing: false,
   busy: {},           // id -> { status: downloading|done|error, received, total, error }
   pollTimer: null
 };
@@ -93,7 +94,8 @@ function renderSplashVideoPanel() {
       '<span class="splash-video-note">' + (p.error
         ? '离线：' + escHtml(p.error)
         : '内置默认之外，点下载后即可切换') + '</span>' +
-      '<button class="fx-mini-btn ghost" type="button" onclick="fetchSplashVideoList(true)">刷新</button>' +
+      '<button class="fx-mini-btn ghost" type="button" onclick="fetchSplashVideoList(true)"' +
+        (p.refreshing ? ' disabled' : '') + '>' + (p.refreshing ? '刷新中…' : '刷新') + '</button>' +
     '</div>' +
     '<div class="splash-video-list">' + cards + '</div>';
 }
@@ -101,12 +103,14 @@ function renderSplashVideoPanel() {
 function fetchSplashVideoList(force) {
   var p = splashVideoPanel;
   p.loading = true;
+  if (force) p.refreshing = true;
   renderSplashVideoPanel();
   var url = '/api/splash/videos' + (force ? '?refresh=1' : '');
   fetch(url, { cache: 'no-store' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       p.loading = false;
+      p.refreshing = false;
       p.loadedOnce = true;
       p.error = d && d.ok === false ? (d.error || '清单不可用') : '';
       p.items = (d && d.items) || [];
@@ -114,12 +118,15 @@ function fetchSplashVideoList(force) {
       p.selected = (d && d.selected) || 'builtin';
       p.busy = {};
       renderSplashVideoPanel();
+      if (force) showToast(p.error ? '刷新失败：' + p.error : '清单已更新（' + p.items.length + ' 条）');
     })
     .catch(function (e) {
       p.loading = false;
+      p.refreshing = false;
       p.loadedOnce = true;
       p.error = (e && e.message) || '网络错误';
       renderSplashVideoPanel();
+      if (force) showToast('刷新失败：' + p.error);
     });
 }
 

@@ -557,12 +557,14 @@ function readStreamBuffer(res) {
 /* 缩略图必须由本服务中转：CNB 的 raw 返回 Cross-Origin-Resource-Policy: same-origin，
  * 浏览器会直接拒绝在 127.0.0.1 页面的 <img> 里加载它（2026-10-23 实测，卡片全黑）。
  * 这里拉一次存到 userData，之后同源返回。 */
-async function fetchSplashThumbFile(id) {
+async function fetchSplashThumbFile(id, force) {
   const dir = path.join(SPLASH_VIDEO_DIR, 'thumbs');
   const file = path.join(dir, id + '.jpg');
-  try {
-    if (fs.statSync(file).size > 200) return file;
-  } catch (e) {}
+  if (!force) {
+    try {
+      if (fs.statSync(file).size > 200) return file;
+    } catch (e) {}
+  }
   const manifest = await fetchSplashManifest();
   const item = (manifest.videos || []).find(v => v && v.id === id);
   if (!item || !item.thumb) throw new Error('清单里没有这个缩略图');
@@ -5812,13 +5814,15 @@ const server = http.createServer(async (req, res) => {
     const downloaded = listDownloadedSplashVideos();
     let state = readSplashVideoState();
     try {
-      const manifest = await fetchSplashManifest(url.searchParams.has('refresh'));
+      const forceRefresh = url.searchParams.has('refresh');
+      const manifest = await fetchSplashManifest(forceRefresh);
       const ids = new Set((manifest.videos || []).map(v => v && v.id).filter(Boolean));
       // 清单里已经没有这条了（下架/改名）：回退内置，免得 UI 上找不到「使用中」那一项
       if (state.selected !== 'builtin' && !ids.has(state.selected)) {
         writeSplashVideoState({ selected: 'builtin' });
         state = { selected: 'builtin' };
       }
+      const thumbQuery = forceRefresh ? '?refresh=1&t=' + Date.now() : '';
       const items = (manifest.videos || []).filter(v => v && v.id).map(v => ({
         id: v.id,
         name: v.name || v.id,
@@ -5826,7 +5830,7 @@ const server = http.createServer(async (req, res) => {
         tint: v.tint || '',
         bytes: Number(v.bytes) || 0,
         // 缩略图走本地中转（CNB 的 CORP: same-origin 会挡住页面直连）
-        thumb: v.thumb ? '/splash-thumb/' + v.id + '.jpg' : '',
+        thumb: v.thumb ? '/splash-thumb/' + v.id + '.jpg' + thumbQuery : '',
         url: SPLASH_VIDEO_REPO_BASE + (v.file || ''),
         downloaded: downloaded.includes(v.id),
       }));
@@ -5898,8 +5902,12 @@ const server = http.createServer(async (req, res) => {
     const thumbId = pn.slice('/splash-thumb/'.length).replace(/\.jpg$/i, '');
     if (!isValidSplashVideoId(thumbId)) { res.writeHead(404); res.end('Not Found'); return; }
     try {
-      const thumbFile = await fetchSplashThumbFile(thumbId);
-      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+      const thumbFile = await fetchSplashThumbFile(thumbId, url.searchParams.has('refresh'));
+      // 强制刷新时别让浏览器吃 24h 缓存，否则换了远端图也看不到
+      res.writeHead(200, {
+        'Content-Type': 'image/jpeg',
+        'Cache-Control': url.searchParams.has('refresh') ? 'no-cache' : 'public, max-age=86400',
+      });
       fs.createReadStream(thumbFile).pipe(res);
     } catch (err) {
       res.writeHead(404); res.end('Not Found');
