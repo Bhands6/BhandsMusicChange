@@ -12,6 +12,16 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
   <img src="docs/screenshots/00-hero.jpg" width="720" alt="BhandsMusic 启动页"/>
 </p>
 
+## 🎬 启动页背景视频
+
+启动页背景为无缝循环视频：「滑雪」随安装包内置，其余 6 条放在仓库 `splash/` 目录按需下载；在「视觉控制台 → 启动页视频」面板可下载、切换、上传本地 MP4，也能关闭水波动效只留视频与文字。
+
+| | | |
+|:---:|:---:|:---:|
+| ![](docs/screenshots/splash-01-snowboard.jpg)<br>**滑雪**（内置默认） | ![](docs/screenshots/splash-02-meadow.jpg)<br>**风起草浪** | ![](docs/screenshots/splash-03-vaultra.jpg)<br>**点阵地球** |
+| ![](docs/screenshots/splash-04-neural.jpg)<br>**光纤热核** | ![](docs/screenshots/splash-05-lumen.jpg)<br>**暗夜花光** | ![](docs/screenshots/splash-06-nexum.jpg)<br>**巨木森林** |
+| ![](docs/screenshots/splash-07-vortx.jpg)<br>**夕阳花海** | | |
+
 ## ✨ 界面预览
 
 **首页**（未登录 / 登录）
@@ -61,6 +71,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 - Open-Meteo 天气电台，根据当前位置、城市和天气 mood 生成更合适的播放队列
 - 首页包含天气电台、每日推荐、私人电台、继续听、听歌画像和我的歌单入口
 - Wallpaper 银河首页背景，未播放状态保持干净的星河氛围
+- **启动页背景视频**：内置「滑雪」默认视频，另有 6 条可下载切换，支持上传本地 MP4 与水波动效开关
 - 播放后切换到 Emily / 默认播放态视觉，歌词舞台与粒子舞台同步工作
 - 基于节奏的电影镜头视觉系统
 - 面向长播客和 DJ 曲目的专属视觉模式
