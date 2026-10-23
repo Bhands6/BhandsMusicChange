@@ -520,9 +520,9 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 #user-btn.multi-account{height:auto;min-width:0;padding:0;flex-direction:column;align-items:flex-end;gap:7px;border:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
 #user-btn.multi-account:hover{background:transparent;border-color:transparent;box-shadow:none;transform:none;color:#fff}
 #user-avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;background:rgba(255,255,255,0.1)}
-/* 网易云会员徽章：官方红角标（VIP 纯红 / SVIP 红金渐变） */
+/* 会员徽章：VIP = 网易云红角标；SVIP 保持原来的香槟金（红金两档一眼分得开） */
 #user-vip-tag{font-size:8px;padding:2px 5px;border-radius:5px;background:linear-gradient(180deg,#ff4438,#c20c0c);color:#fff;font-weight:800;letter-spacing:.4px;text-shadow:0 1px 1px rgba(90,0,0,.52);box-shadow:0 0 10px rgba(216,30,26,.42),inset 0 1px 0 rgba(255,255,255,.30)}
-#user-vip-tag.svip{background:linear-gradient(180deg,#ff6a3d,#c2130c 62%,#7d0a06);box-shadow:0 0 12px rgba(226,52,34,.52),inset 0 1px 0 rgba(255,226,170,.48)}
+#user-vip-tag.svip{background:linear-gradient(135deg,#fff3c2,var(--champagne),#c9963d);color:#201303;text-shadow:none;box-shadow:0 0 12px rgba(244,210,138,.26),inset 0 1px 0 rgba(255,255,255,.42);border-color:rgba(16,11,3,.92)}
 #user-vip-tag.qq{background:linear-gradient(135deg,#e7fff9,#00f5d4,#61a8ff);color:#03100f;text-shadow:none;box-shadow:0 0 12px rgba(0,245,212,.22)}
 /* 登录后账号入口为纯头像圆形按钮（不再显示昵称胶囊）；VIP/SVIP 徽章挂头像正下方 */
 /* :not(.multi-account) —— 双平台模式（.multi-account）保留原胶囊布局不受影响 */
