@@ -109,6 +109,7 @@ function renderSplashVideoPanel() {
     '</div>';
   }).join('');
 
+  var fxOff = (typeof isSplashFxOff === 'function') ? isSplashFxOff() : false;
   var prefText = p.sourcePref === 'auto' ? '自动' : '锁定';
   var srcText = p.sourceLabel || '未连接';
   host.innerHTML =
@@ -118,6 +119,8 @@ function renderSplashVideoPanel() {
         '源 ' + escHtml(srcText) + ' · ' + prefText +
       '</button>' +
       '<div class="sv-tools">' +
+        '<button class="sv-tool' + (fxOff ? ' off' : '') + '" type="button" onclick="toggleSplashFx()" ' +
+          'title="关闭后启动页只保留背景视频和 Bhands Music 文字，不画水波/流光那一层">水波 ' + (fxOff ? '关' : '开') + '</button>' +
         '<button class="sv-tool" type="button" onclick="clearSplashVideos()" title="删除所有已下载的视频（含自己上传的），启动页回到内置默认">清理</button>' +
         '<button class="sv-tool" type="button" onclick="pickSplashVideoFile()"' +
           (p.uploading ? ' disabled' : '') + ' title="上传本地 MP4 作为启动页">' +
@@ -281,6 +284,18 @@ function splashConfirm(opts) {
     // Enter 由 document 级监听处理，鼠标用户点按钮即可，键盘用户 Tab 过去时才有焦点环。
     requestAnimationFrame(function () { mask.classList.add('in'); });
   });
+}
+
+/* 启动页水波动效开关：关掉后 #splash-canvas 整层不画，只留视频 + Bhands Music 文字。
+ * 启动页只在启动时出现，所以改完是「下次启动生效」。 */
+function toggleSplashFx() {
+  var wasOff = (typeof isSplashFxOff === 'function') ? isSplashFxOff() : false;
+  var nextOff = !wasOff;
+  if (typeof setSplashFxEnabled === 'function') setSplashFxEnabled(!nextOff);
+  renderSplashVideoPanel();
+  showToast(nextOff
+    ? '启动页水波动效已关闭（只留视频 + Bhands Music），下次启动生效'
+    : '启动页水波动效已开启，下次启动生效');
 }
 
 /* 关闭应用确认框（页内版）：替代原来那个独立的全屏透明窗口。

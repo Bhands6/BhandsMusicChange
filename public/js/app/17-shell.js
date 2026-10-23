@@ -954,6 +954,15 @@ var splashSoundFallbackArmed = false;
 var splashTimer = null;
 var reduceSplashMotion = false;
 var splashReadyToEnter = false;
+/* 启动页水波动效开关（2026-10-23）：关掉后只留背景视频 + Bhands Music 文字，
+ * #splash-canvas 那一整层波纹/流光直接不画。状态存 localStorage，下次启动生效。 */
+var SPLASH_FX_STORAGE_KEY = 'bhandsmusic-splash-fx';
+function isSplashFxOff() {
+  try { return localStorage.getItem(SPLASH_FX_STORAGE_KEY) === '0'; } catch (e) { return false; }
+}
+function setSplashFxEnabled(enabled) {
+  try { localStorage.setItem(SPLASH_FX_STORAGE_KEY, enabled ? '1' : '0'); } catch (e) {}
+}
 
 // 启动视频本地优先：先问本地服务「用户有没有换过启动页视频」，
 // 有就播下载到 userData 的那条；没有/拿不到就用安装包内置的 media/splash-bg.mp4；
@@ -1198,6 +1207,8 @@ function drawBhandsMusicSplashWebgl(elapsed) {
 (function initBhandsMusicSplashCanvas() {
   splashCanvas = document.getElementById('splash-canvas');
   if (!splashCanvas) return;
+  // 用户关掉了启动页水波动效：整层跳过，只留视频 + 文字（2026-10-23）
+  if (isSplashFxOff()) { splashCanvas.style.display = 'none'; return; }
   if (!reduceSplashMotion && initBhandsMusicSplashWebgl(splashCanvas)) {
     splashCtx = null;
   } else {

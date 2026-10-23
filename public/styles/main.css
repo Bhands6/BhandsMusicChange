@@ -2487,3 +2487,6 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 /* 关闭应用确认框里的「记住我的选择」行 */
 .sv-confirm-check{display:flex;align-items:center;gap:9px;margin:-10px 0 22px;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.48);letter-spacing:.1px;user-select:none}
 .sv-confirm-check input{width:15px;height:15px;margin:0;accent-color:#f4d28a;cursor:pointer;filter:saturate(.6)}
+/* 「水波 关」时的弱化样式 */
+.sv-tool.off{color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.09);background:rgba(255,255,255,.025)}
+.sv-tool.off:hover:not(:disabled){color:rgba(255,255,255,.72)}
