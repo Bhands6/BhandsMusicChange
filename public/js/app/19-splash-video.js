@@ -363,12 +363,12 @@ function deleteSplashVideo(id) {
     if (splashVideoPanel.items[i].id === id) { hit = splashVideoPanel.items[i]; break; }
   }
   var isCustom = id === 'custom';
+  var isCurrent = splashVideoPanel.selected === id;
   var label = isCustom ? '「我的视频」' : '「' + ((hit && hit.name) || id) + '」';
-  // 自己上传的那条删了要重新上传，不是「重新下载」
-  var tail = isCustom
-    ? '删除后需要重新上传才能再用（启动页会回到内置默认）。'
-    : '删除后需要重新下载才能再用（启动页会回到内置默认）。';
-  if (!window.confirm('确定删除' + label + '吗？\n' + tail)) return;
+  // 删的正好是正在用的那条，启动页才会回退内置；删别的，当前启动页不受影响
+  var how = isCustom ? '删除后需要重新上传才能再用' : '删除后需要重新下载才能再用';
+  var impact = isCurrent ? '，启动页会回到内置默认。' : '，当前启动页不受影响。';
+  if (!window.confirm('确定删除' + label + '吗？\n' + how + impact)) return;
   fetch('/api/splash/delete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
