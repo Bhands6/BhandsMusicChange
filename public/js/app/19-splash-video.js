@@ -23,7 +23,10 @@ var splashVideoPanel = {
   loadedOnce: false,
   refreshing: false,
   busy: {},           // id -> { status: downloading|done|error, received, total, error }
-  pollTimer: null
+  pollTimer: null,
+  source: '',         // 实际用的源：cnb | github
+  sourceLabel: '',
+  sourcePref: 'auto'  // 用户偏好：auto | cnb | github
 };
 
 function splashVideoBytes(n) {
@@ -89,15 +92,19 @@ function renderSplashVideoPanel() {
     '</div>';
   }).join('');
 
+  var prefText = p.sourcePref === 'auto' ? '自动' : '锁定';
+  var srcText = p.sourceLabel || '未连接';
   host.innerHTML =
     '<div class="splash-video-head">' +
-      '<span class="splash-video-note">' + (p.error
-        ? '离线：' + escHtml(p.error)
-        : '内置默认之外，点下载后即可切换') + '</span>' +
+      '<button class="sv-src" type="button" onclick="cycleSplashSource()" ' +
+        'title="点击切换下载源：自动（竞速）/ CNB / GitHub。国内用 CNB，开 VPN 用 GitHub">' +
+        '源 ' + escHtml(srcText) + ' · ' + prefText +
+      '</button>' +
       '<button class="fx-mini-btn ghost" type="button" onclick="fetchSplashVideoList(true)"' +
         (p.refreshing ? ' disabled' : '') + '>' + (p.refreshing ? '刷新中…' : '刷新') + '</button>' +
     '</div>' +
-    '<div class="splash-video-list">' + cards + '</div>';
+    '<div class="splash-video-list">' + cards + '</div>' +
+    (p.error ? '<div class="splash-video-note">离线：' + escHtml(p.error) + '</div>' : '');
 }
 
 function fetchSplashVideoList(force) {
@@ -116,6 +123,9 @@ function fetchSplashVideoList(force) {
       p.items = (d && d.items) || [];
       p.downloaded = (d && d.downloaded) || [];
       p.selected = (d && d.selected) || 'builtin';
+      p.source = (d && d.source) || '';
+      p.sourceLabel = (d && d.sourceLabel) || '';
+      p.sourcePref = (d && d.sourcePref) || 'auto';
       p.busy = {};
       renderSplashVideoPanel();
       if (force) showToast(p.error ? '刷新失败：' + p.error : '清单已更新（' + p.items.length + ' 条）');
@@ -202,6 +212,31 @@ function selectSplashVideo(id) {
 function initSplashVideoPanel() {
   if (splashVideoPanel.loadedOnce || splashVideoPanel.loading) return;
   fetchSplashVideoList();
+}
+
+/* 下载源：auto（两源竞速，谁快用谁）→ CNB（国内直连）→ GitHub（开 VPN 用）→ 回到 auto */
+function cycleSplashSource() {
+  var order = ['auto', 'cnb', 'github'];
+  var names = { auto: '自动（竞速）', cnb: 'CNB', github: 'GitHub' };
+  var cur = splashVideoPanel.sourcePref || 'auto';
+  var next = order[(order.indexOf(cur) + 1) % order.length];
+  splashVideoPanel.sourcePref = next;
+  renderSplashVideoPanel();
+  fetch('/api/splash/source', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: next })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || '切换失败');
+      showToast('下载源：' + names[next]);
+      fetchSplashVideoList(true);
+    })
+    .catch(function (e) {
+      showToast('切换下载源失败：' + ((e && e.message) || '未知错误'));
+      fetchSplashVideoList();
+    });
 }
 
 /* 控制台平时隐藏：用户第一次把鼠标移进面板 / 点 FAB 时才拉清单，别抢启动带宽。

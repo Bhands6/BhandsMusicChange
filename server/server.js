@@ -130,12 +130,17 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 const COOKIE_FILE = process.env.COOKIE_FILE || path.join(PROJECT_ROOT, '.cookie');           // 网易云 Cookie 文件
 const QQ_COOKIE_FILE = process.env.QQ_COOKIE_FILE || path.join(PROJECT_ROOT, '.qq-cookie');  // QQ音乐 Cookie 文件
 /* 启动页可下载视频（2026-10-23）
- * 安装包里只带内置默认那条（滑雪），其余按需从 CNB 资源仓库下载到 userData。
+ * 安装包里只带内置默认那条（滑雪），其余按需下载到 userData。
+ * 资源就放在本项目仓库的 `splash/` 下（不进安装包：build.files 是白名单，不含 splash/），
+ * 于是天然有两条下载线：国内走 CNB 镜像，开 VPN 走 GitHub。
  * ⚠️ 打包后 PROJECT_ROOT = app.asar（只读），这两个路径必须由 desktop/main.js 注入 userData 版本。 */
 const SPLASH_VIDEO_DIR = process.env.BHANDSMUSIC_SPLASH_VIDEO_DIR || path.join(PROJECT_ROOT, '.splash-videos');
 const SPLASH_VIDEO_STATE_FILE = process.env.BHANDSMUSIC_SPLASH_VIDEO_STATE || path.join(PROJECT_ROOT, '.splash-video.json');
-const SPLASH_VIDEO_REPO_BASE = 'https://cnb.cool/BhandsCnb/BhandsMusicVideo/-/git/raw/main/';
-const SPLASH_VIDEO_MANIFEST_URL = SPLASH_VIDEO_REPO_BASE + 'manifest.json';
+const SPLASH_VIDEO_SOURCES = [
+  { id: 'cnb', label: 'CNB', base: 'https://cnb.cool/BhandsCnb/BhandsMusic/-/git/raw/main/splash/' },
+  { id: 'github', label: 'GitHub', base: 'https://raw.githubusercontent.com/Bhands6/BhandsMusicChange/main/splash/' },
+];
+const SPLASH_VIDEO_MANIFEST_NAME = 'manifest.json';
 const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
 const UPDATE_DOWNLOAD_DIR = process.env.BHANDSMUSIC_UPDATE_DOWNLOAD_DIR || path.join(UPDATE_WORK_DIR, 'downloads');  // 更新下载目录
 const UPDATE_PATCH_BACKUP_DIR = process.env.BHANDSMUSIC_PATCH_BACKUP_DIR || path.join(UPDATE_WORK_DIR, 'backups', 'patches');  // 补丁备份目录
@@ -479,7 +484,10 @@ function saveQQCookie(c) {
  * 其余候选放在 CNB 资源仓库，用户点「下载」后落到 userData/splash-videos/<id>.mp4，
  * 选择记录写 userData/splash-video.json；启动页按记录决定用哪条。
  */
-let splashManifestCache = { at: 0, data: null };
+let splashManifestCache = { at: 0, data: null, sourceId: '' };
+/* 当前生效的下载源。auto 模式下由「谁的 manifest 先到」决定，结果缓存 5 分钟；
+ * 用户在面板里手动指定时直接用它，不再竞速。 */
+let splashSourceCache = { at: 0, id: '' };
 const splashDownloadState = new Map();   // id -> { status: downloading|done|error, received, total, error }
 
 function isValidSplashVideoId(id) {
@@ -503,15 +511,19 @@ function listDownloadedSplashVideos() {
 function readSplashVideoState() {
   try {
     const obj = JSON.parse(fs.readFileSync(SPLASH_VIDEO_STATE_FILE, 'utf8'));
-    return { selected: typeof obj.selected === 'string' && obj.selected ? obj.selected : 'builtin' };
+    return {
+      selected: typeof obj.selected === 'string' && obj.selected ? obj.selected : 'builtin',
+      source: obj.source === 'cnb' || obj.source === 'github' ? obj.source : 'auto',
+    };
   } catch (e) {
-    return { selected: 'builtin' };
+    return { selected: 'builtin', source: 'auto' };
   }
 }
-function writeSplashVideoState(state) {
+function writeSplashVideoState(patch) {
   try {
+    const next = Object.assign({}, readSplashVideoState(), patch || {});
     fs.mkdirSync(path.dirname(SPLASH_VIDEO_STATE_FILE), { recursive: true });
-    fs.writeFileSync(SPLASH_VIDEO_STATE_FILE, JSON.stringify(state, null, 2), 'utf8');
+    fs.writeFileSync(SPLASH_VIDEO_STATE_FILE, JSON.stringify(next, null, 2), 'utf8');
     return true;
   } catch (e) {
     console.warn('[SplashVideo] 保存选择失败:', e.message);
@@ -519,7 +531,7 @@ function writeSplashVideoState(state) {
   }
 }
 /* 手动跟随 3xx：CNB 的 raw 链接会跳到 CDN，跳转后的地址没有凭证要求，匿名可取 */
-function httpGetStream(url, redirects) {
+function httpGetStream(url, redirects, timeoutMs) {
   redirects = redirects || 0;
   return new Promise((resolve, reject) => {
     let parsed;
@@ -529,13 +541,13 @@ function httpGetStream(url, redirects) {
       const code = res.statusCode || 0;
       if (code >= 300 && code < 400 && res.headers.location && redirects < 5) {
         res.resume();
-        resolve(httpGetStream(new URL(res.headers.location, url).toString(), redirects + 1));
+        resolve(httpGetStream(new URL(res.headers.location, url).toString(), redirects + 1, timeoutMs));
         return;
       }
       resolve(res);
     });
     req.on('error', reject);
-    req.setTimeout(30000, () => req.destroy(new Error('请求超时')));
+    req.setTimeout(timeoutMs || 30000, () => req.destroy(new Error('请求超时')));
   });
 }
 function readStreamText(res) {
@@ -565,10 +577,10 @@ async function fetchSplashThumbFile(id, force) {
       if (fs.statSync(file).size > 200) return file;
     } catch (e) {}
   }
-  const manifest = await fetchSplashManifest();
-  const item = (manifest.videos || []).find(v => v && v.id === id);
+  const { source, data } = await loadSplashManifest();
+  const item = (data.videos || []).find(v => v && v.id === id);
   if (!item || !item.thumb) throw new Error('清单里没有这个缩略图');
-  const res = await httpGetStream(SPLASH_VIDEO_REPO_BASE + item.thumb);
+  const res = await httpGetStream(source.base + item.thumb, 0, 20000);
   if (res.statusCode !== 200) throw new Error('缩略图拉取失败 HTTP ' + res.statusCode);
   const buf = await readStreamBuffer(res);
   if (!buf.length) throw new Error('缩略图内容为空');
@@ -576,18 +588,46 @@ async function fetchSplashThumbFile(id, force) {
   fs.writeFileSync(file, buf);
   return file;
 }
-async function fetchSplashManifest(force) {
-  const now = Date.now();
-  if (!force && splashManifestCache.data && now - splashManifestCache.at < 10 * 60 * 1000) {
-    return splashManifestCache.data;
-  }
-  const res = await httpGetStream(SPLASH_VIDEO_MANIFEST_URL);
-  if (res.statusCode !== 200) throw new Error('清单拉取失败 HTTP ' + res.statusCode);
+/* 双源：国内走 CNB 镜像，开 VPN 走 GitHub。
+ * auto 时两个 manifest 同时发出，谁先回可用的就用谁（缓存 5 分钟）；
+ * 面板里锁定某个源时只用那个，不再竞速。 */
+function splashSourceById(id) {
+  return SPLASH_VIDEO_SOURCES.find(s => s.id === id) || null;
+}
+async function probeSplashSource(src, timeoutMs) {
+  const res = await httpGetStream(src.base + SPLASH_VIDEO_MANIFEST_NAME, 0, timeoutMs);
+  if (res.statusCode !== 200) { res.resume(); throw new Error(src.label + ' HTTP ' + res.statusCode); }
   const text = await readStreamText(res);
   let data;
-  try { data = JSON.parse(text); } catch (e) { throw new Error('清单不是合法 JSON'); }
-  if (!data || !Array.isArray(data.videos)) throw new Error('清单格式不正确');
-  splashManifestCache = { at: now, data };
+  try { data = JSON.parse(text); } catch (e) { throw new Error(src.label + ' 清单不是合法 JSON'); }
+  if (!data || !Array.isArray(data.videos)) throw new Error(src.label + ' 清单格式不正确');
+  return { src, data };
+}
+async function loadSplashManifest(force) {
+  const now = Date.now();
+  if (!force && splashManifestCache.data && splashManifestCache.sourceId && now - splashManifestCache.at < 10 * 60 * 1000) {
+    const cachedSource = splashSourceById(splashManifestCache.sourceId);
+    if (cachedSource) return { source: cachedSource, data: splashManifestCache.data };
+  }
+  const prefer = readSplashVideoState().source;
+  let picked = null;
+  if (prefer === 'cnb' || prefer === 'github') {
+    picked = await probeSplashSource(splashSourceById(prefer), 15000);
+  } else {
+    // auto：先成功的赢（Promise.any 会吞掉另一个的失败）
+    picked = await Promise.any([
+      probeSplashSource(SPLASH_VIDEO_SOURCES[0], 6000),
+      probeSplashSource(SPLASH_VIDEO_SOURCES[1], 6000),
+    ]).catch(() => null);
+    if (!picked) throw new Error('两个下载源都不可用（检查网络 / VPN）');
+    console.log('[SplashVideo] 自动选源:', picked.src.label);
+  }
+  splashSourceCache = { at: now, id: picked.src.id };
+  splashManifestCache = { at: now, data: picked.data, sourceId: picked.src.id };
+  return picked;
+}
+async function fetchSplashManifest(force) {
+  const { data } = await loadSplashManifest(force);
   return data;
 }
 async function downloadSplashVideo(id) {
@@ -595,8 +635,8 @@ async function downloadSplashVideo(id) {
   const running = splashDownloadState.get(id);
   if (running && running.status === 'downloading') return;   // 防重入
 
-  const manifest = await fetchSplashManifest();
-  const item = (manifest.videos || []).find(v => v && v.id === id);
+  const { source, data } = await loadSplashManifest();
+  const item = (data.videos || []).find(v => v && v.id === id);
   if (!item || !item.file) throw new Error('清单里没有这个视频');
 
   fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
@@ -605,7 +645,7 @@ async function downloadSplashVideo(id) {
   splashDownloadState.set(id, { status: 'downloading', received: 0, total: Number(item.bytes) || 0, error: '' });
 
   try {
-    const res = await httpGetStream(SPLASH_VIDEO_REPO_BASE + item.file);
+    const res = await httpGetStream(source.base + item.file);
     if (res.statusCode !== 200) throw new Error('下载失败 HTTP ' + res.statusCode);
     const declaredTotal = Number(res.headers['content-length'] || item.bytes || 0) || 0;
     let received = 0;
@@ -5815,15 +5855,15 @@ const server = http.createServer(async (req, res) => {
     let state = readSplashVideoState();
     try {
       const forceRefresh = url.searchParams.has('refresh');
-      const manifest = await fetchSplashManifest(forceRefresh);
-      const ids = new Set((manifest.videos || []).map(v => v && v.id).filter(Boolean));
+      const { source, data } = await loadSplashManifest(forceRefresh);
+      const ids = new Set((data.videos || []).map(v => v && v.id).filter(Boolean));
       // 清单里已经没有这条了（下架/改名）：回退内置，免得 UI 上找不到「使用中」那一项
       if (state.selected !== 'builtin' && !ids.has(state.selected)) {
         writeSplashVideoState({ selected: 'builtin' });
-        state = { selected: 'builtin' };
+        state = readSplashVideoState();
       }
       const thumbQuery = forceRefresh ? '?refresh=1&t=' + Date.now() : '';
-      const items = (manifest.videos || []).filter(v => v && v.id).map(v => ({
+      const items = (data.videos || []).filter(v => v && v.id).map(v => ({
         id: v.id,
         name: v.name || v.id,
         desc: v.desc || '',
@@ -5831,10 +5871,19 @@ const server = http.createServer(async (req, res) => {
         bytes: Number(v.bytes) || 0,
         // 缩略图走本地中转（CNB 的 CORP: same-origin 会挡住页面直连）
         thumb: v.thumb ? '/splash-thumb/' + v.id + '.jpg' + thumbQuery : '',
-        url: SPLASH_VIDEO_REPO_BASE + (v.file || ''),
+        url: source.base + (v.file || ''),
         downloaded: downloaded.includes(v.id),
       }));
-      sendJSON(res, { ok: true, items, downloaded, selected: state.selected });
+      sendJSON(res, {
+        ok: true,
+        items,
+        downloaded,
+        selected: state.selected,
+        source: source.id,
+        sourceLabel: source.label,
+        sourcePref: state.source,
+        sources: SPLASH_VIDEO_SOURCES.map(s => ({ id: s.id, label: s.label })),
+      });
     } catch (err) {
       // 离线 / 仓库不通时不能让控制台白屏：返回已下载的本地项 + 错误原因
       console.warn('[SplashVideo] 清单不可用:', err.message);
@@ -5844,7 +5893,31 @@ const server = http.createServer(async (req, res) => {
         items: downloaded.map(id => ({ id, name: id, desc: '', tint: '', bytes: 0, thumb: '', url: '', downloaded: true })),
         downloaded,
         selected: state.selected,
+        source: '',
+        sourceLabel: '',
+        sourcePref: state.source,
+        sources: SPLASH_VIDEO_SOURCES.map(s => ({ id: s.id, label: s.label })),
       });
+    }
+    return;
+  }
+
+  /* 切下载源：auto = 竞速，cnb / github = 锁定 */
+  if (pn === '/api/splash/source' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const next = body && body.source;
+      if (next !== 'auto' && next !== 'cnb' && next !== 'github') {
+        sendJSON(res, { ok: false, error: '非法 source' }, 400);
+        return;
+      }
+      writeSplashVideoState({ source: next });
+      // 换源必须让清单缓存失效，否则还会拿旧源的清单和 base
+      splashManifestCache = { at: 0, data: null, sourceId: '' };
+      splashSourceCache = { at: 0, id: '' };
+      sendJSON(res, { ok: true, sourcePref: next });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 500);
     }
     return;
   }
