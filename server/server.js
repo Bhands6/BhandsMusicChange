@@ -746,15 +746,18 @@ function saveRawBodyToFile(req, dest, maxBytes) {
     const fail = (err) => {
       if (failed) return;
       failed = true;
+      try { req.unpipe(ws); } catch (e) {}
       try { ws.destroy(); } catch (e) {}
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+      // 继续把剩余请求体读掉（丢弃）：直接 destroy 会让响应发不出去，
+      // 客户端只能看到「网络错误」而看不到「超过 40MB 上限」
+      try { req.resume(); } catch (e) {}
       reject(err);
     };
     req.on('data', (chunk) => {
       size += chunk.length;
-      if (size > maxBytes) {
+      if (!failed && size > maxBytes) {
         fail(new Error('文件超过 ' + Math.round(maxBytes / 1048576) + 'MB 上限'));
-        try { req.destroy(); } catch (e) {}
       }
     });
     req.on('error', fail);
@@ -6077,9 +6080,21 @@ const server = http.createServer(async (req, res) => {
   if (pn === '/api/splash/upload' && req.method === 'POST') {
     const tmpFile = path.join(SPLASH_VIDEO_DIR, 'upload.part');
     try {
+      // 先看 Content-Length：超限直接 413。否则得先把几十 MB 收下来再拒绝，
+      // 而且中途断流会让客户端只看到网络错误、拿不到原因（2026-10-23 修）
+      const declaredSize = Number(req.headers['content-length'] || 0);
+      if (declaredSize && declaredSize > SPLASH_VIDEO_UPLOAD_MAX_BYTES) {
+        req.resume();
+        sendJSON(res, {
+          ok: false,
+          error: '文件 ' + (declaredSize / 1048576).toFixed(1) + 'MB，超过 ' +
+            Math.round(SPLASH_VIDEO_UPLOAD_MAX_BYTES / 1048576) + 'MB 上限',
+        }, 413);
+        return;
+      }
       fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
       const size = await saveRawBodyToFile(req, tmpFile, SPLASH_VIDEO_UPLOAD_MAX_BYTES);
-      if (!size || size < 64 * 1024) throw new Error('文件太小，可能不是有效视频');
+      if (!size || size < 4 * 1024) throw new Error('文件太小，可能不是有效视频');
       const buf = fs.readFileSync(tmpFile);
       const meta = readMp4Meta(buf);
       if (!meta.width || !meta.height) throw new Error('不是可识别的 MP4（请用 H.264 编码的 .mp4）');

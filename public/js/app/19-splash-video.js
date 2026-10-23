@@ -194,10 +194,12 @@ function startSplashVideoDownload(id) {
 function startSplashVideoPoll() {
   var p = splashVideoPanel;
   if (p.pollTimer) return;
+  var failures = 0;
   var tick = function () {
     fetch('/api/splash/progress', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) {
+        failures = 0;
         var downloading = false;
         var states = (d && d.states) || {};
         Object.keys(states).forEach(function (id) {
@@ -215,6 +217,9 @@ function startSplashVideoPoll() {
         }
       })
       .catch(function () {
+        // 连续失败就放弃轮询（服务在退出 / 挂了），别无限重试
+        failures += 1;
+        if (failures >= 10) { p.pollTimer = null; return; }
         p.pollTimer = setTimeout(tick, 1200);
       });
   };
