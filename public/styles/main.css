@@ -2455,3 +2455,6 @@ html.control-glass-svg-ok #visual-guide-btn:hover{
 .sv-tool:hover:not(:disabled){background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);color:#fff}
 .sv-tool:disabled{opacity:.55;cursor:default}
 .sv-tip{font-size:9.5px;line-height:1.5;color:rgba(255,255,255,.38);margin-top:6px}
+/* 自己上传那条：删除 + 使用 并排 */
+.sv-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin:7px 8px 8px}
+.sv-actions .sv-btn{margin:0}

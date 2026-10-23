@@ -6122,6 +6122,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  /* 删除单条（自定义视频卡上的「删除」用它；删除当前选中的会回退内置） */
+  if (pn === '/api/splash/delete' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const id = body && body.id;
+      if (!isValidSplashVideoId(id)) { sendJSON(res, { ok: false, error: '非法 id' }, 400); return; }
+      const file = splashVideoPath(id);
+      let existed = false;
+      try { if (fs.existsSync(file)) { fs.unlinkSync(file); existed = true; } } catch (e) {}
+      try { fs.unlinkSync(path.join(SPLASH_VIDEO_DIR, 'thumbs', id + '.jpg')); } catch (e) {}
+      splashDownloadState.delete(id);
+      if (readSplashVideoState().selected === id) writeSplashVideoState({ selected: 'builtin' });
+      sendJSON(res, { ok: true, existed });
+    } catch (err) {
+      sendJSON(res, { ok: false, error: err.message }, 500);
+    }
+    return;
+  }
+
   /* 清理已下载的视频（含自己上传那条），回到内置默认 */
   if (pn === '/api/splash/clear' && req.method === 'POST') {
     try {

@@ -53,6 +53,17 @@ function splashVideoActionHtml(item) {
   var downloaded = item.id === 'builtin' || p.downloaded.indexOf(item.id) >= 0 || item.downloaded;
   var current = p.selected === item.id;
 
+  // 自己上传那条：左边「删除」，右边「使用 / 使用中」
+  if (item.custom) {
+    var useBtn = current
+      ? '<button class="sv-btn current" type="button" disabled>使用中</button>'
+      : '<button class="sv-btn primary" type="button" onclick="selectSplashVideo(\'' + item.id + '\')">使用</button>';
+    return '<div class="sv-actions">' +
+      '<button class="sv-btn danger" type="button" onclick="deleteSplashVideo(\'' + item.id + '\')">删除</button>' +
+      useBtn +
+    '</div>';
+  }
+
   if (busy && busy.status === 'downloading') {
     var pct = busy.total ? Math.max(1, Math.round((busy.received / busy.total) * 100)) : 0;
     return '<div class="sv-progress"><i style="width:' + pct + '%"></i></div>' +
@@ -338,6 +349,26 @@ function uploadSplashVideo(file) {
         showToast('上传失败：' + ((e && e.message) || '未知错误'));
       });
   });
+}
+
+/* 删除自己上传的那条（只删 custom，不影响远端清单里的视频） */
+function deleteSplashVideo(id) {
+  var label = id === 'custom' ? '「我的视频」' : '这个视频';
+  if (!window.confirm('确定删除' + label + '吗？\n删除后启动页会回到内置默认视频。')) return;
+  fetch('/api/splash/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: id })
+  })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.ok) throw new Error((d && d.error) || '删除失败');
+      showToast('已删除' + label);
+      fetchSplashVideoList(true);
+    })
+    .catch(function (e) {
+      showToast('删除失败：' + ((e && e.message) || '未知错误'));
+    });
 }
 
 function initSplashVideoPanel() {
