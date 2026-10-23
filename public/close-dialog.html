@@ -66,9 +66,9 @@
     btn.addEventListener('click', function() { send(btn.dataset.action); });
   });
   document.getElementById('close-x').addEventListener('click', function() { send('cancel'); });
-  document.getElementById('overlay').addEventListener('click', function(e) {
-    if (e.target === e.currentTarget) send('cancel');
-  });
+  // 点遮罩空白处不关闭（对齐删除视频确认弹窗）：只有「取消 / 右上角 ×」才退出。
+  // 之前 e.target === overlay 就 send('cancel')，手滑点背景会把弹窗点没，
+  // 还会留下主窗口的模态状态没解除，表现为「界面点了没反应、应用关不掉」。
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') send('cancel');
   });

@@ -2569,8 +2569,15 @@ async function createWindow() {
       writeSystemSettings(newSettings);
     }
     if (closeDialogWindow && !closeDialogWindow.isDestroyed()) {
-      closeDialogWindow.destroy();
+      // 用 close() 而不是 destroy()：destroy 会跳过正常关闭流程，Windows 上 parent 的
+      // 模态禁用状态可能留着不解除 —— 表现就是「点界面没反应、应用也关不掉」。
+      const closingWin = closeDialogWindow;
       closeDialogWindow = null;
+      closingWin.close();
+    }
+    // 兜底：把焦点还给主窗口，避免模态关掉后主窗口收不到点击
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try { mainWindow.focus(); } catch (e) {}
     }
     // 直接刷新主窗口的系统设置 UI
     if (mainWindow && !mainWindow.isDestroyed() && !forceQuit) {
