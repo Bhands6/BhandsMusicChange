@@ -1,7 +1,10 @@
 /* 全局重置 */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 /* 基础布局 */
-html,body{font-family:var(--font-sans);background:#000;color:#fff;overflow:hidden;height:100vh;width:100vw;user-select:none;-webkit-font-smoothing:antialiased}
+/* ⚠️ -webkit-font-smoothing 不要写 antialiased：这条只对 macOS 生效（Windows 忽略），
+ * 会把 Mac 上的字形笔画削细一档，跟 Windows 的观感差距拉大（2026-10-23 用户对比截图反馈）。
+ * 用 auto 让系统走默认抗锯齿，Mac 的字重更接近 Windows。 */
+html,body{font-family:var(--font-sans);background:#000;color:#fff;overflow:hidden;height:100vh;width:100vw;user-select:none;-webkit-font-smoothing:auto;-moz-osx-font-smoothing:auto}
 body.cursor-hidden,body.cursor-hidden *{cursor:none!important}                /* 沉浸模式隐藏光标 */
 html.desktop-shell-root,html.desktop-shell-root body{background:transparent}   /* 桌面壳透明背景 */
 
