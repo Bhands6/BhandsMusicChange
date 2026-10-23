@@ -18,10 +18,9 @@
   .remember-row{display:flex;align-items:center;gap:9px;margin-bottom:24px}
   .remember-row input[type=checkbox]{width:15px;height:15px;accent-color:#f4d28a;cursor:pointer;filter:saturate(.6)}
   .remember-row label{font-size:12.5px;color:rgba(255,255,255,.48);cursor:pointer;letter-spacing:.1px}
-  .dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px}
-  .dialog-btn{height:36px;padding:0 20px;border-radius:18px;border:1px solid transparent;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.15px}
-  .btn-cancel{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
-  .btn-cancel:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
+  .dialog-actions{display:flex;align-items:center;gap:12px}
+  /* 两个按钮等宽平分：「退出应用」和「最小化到托盘」字数不同，靠 padding 撑会一宽一窄 */
+  .dialog-btn{flex:1 1 0;min-width:0;height:36px;padding:0 14px;border-radius:18px;border:1px solid transparent;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.15px;white-space:nowrap}
   .btn-exit{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.08);color:rgba(255,255,255,.52)}
   .btn-exit:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.16);color:rgba(255,255,255,.78)}
   .btn-minimize{background:linear-gradient(135deg,color-mix(in srgb,#f4d28a 88%,#fff),color-mix(in srgb,#f4d28a 65%,#c9963d));border-color:rgba(244,210,138,.44);color:#1a1200}
@@ -39,7 +38,6 @@
       <label for="remember">记住我的选择</label>
     </div>
     <div class="dialog-actions">
-      <button class="dialog-btn btn-cancel" data-action="cancel">取消</button>
       <button class="dialog-btn btn-exit" data-action="exit">退出应用</button>
       <button class="dialog-btn btn-minimize" data-action="minimize">最小化到托盘</button>
     </div>
