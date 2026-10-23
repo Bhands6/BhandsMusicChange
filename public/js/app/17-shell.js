@@ -1208,7 +1208,14 @@ function drawBhandsMusicSplashWebgl(elapsed) {
   splashCanvas = document.getElementById('splash-canvas');
   if (!splashCanvas) return;
   // 用户关掉了启动页水波动效：整层跳过，只留视频 + 文字（2026-10-23）
-  if (isSplashFxOff()) { splashCanvas.style.display = 'none'; return; }
+  // 同时给 #splash 挂 splash-fx-off：把四周暗角遮罩（::after + inset 阴影）一起去掉，
+  // 视频完整显示、不再压暗四边。
+  if (isSplashFxOff()) {
+    splashCanvas.style.display = 'none';
+    var shell = document.getElementById('splash');
+    if (shell) shell.classList.add('splash-fx-off');
+    return;
+  }
   if (!reduceSplashMotion && initBhandsMusicSplashWebgl(splashCanvas)) {
     splashCtx = null;
   } else {

@@ -597,7 +597,7 @@
     "cde943d8ae75cdea": 1,
     "30a8e33857cdd54e": 1,
     "617a7d9dd1894180": 1,
-    "cd4b4e37e16d3fd4": 1,
+    "690ce3c865a411bc": 1,
     "a40685baf04f675a": 1,
     "3787604a66c31275": 1,
     "0fd341ac90cda16c": 1,
@@ -2018,7 +2018,7 @@
       "5f4e4ba37323b978": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "cd734182087bd0dd": false,
       "e7c4be6f101e5087": false,
       "7dd765af5e8b5a82": false,
@@ -2243,7 +2243,7 @@
       "2b1f8e5835303d7e": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
       "f7c040a61fc9b918": false,
@@ -2275,7 +2275,7 @@
       "cb466c1be56bd583": false,
       "cb17d64c8aefa67f": false,
       "51d1a14db6470847": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
       "03f3c73d4274ebba": false,
@@ -2296,7 +2296,7 @@
       "83869a5adc466612": false,
       "ef59522d33a52fc6": false,
       "4e8655a253a61e9c": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
       "03f3c73d4274ebba": false,
@@ -2360,7 +2360,7 @@
       "000dc53bed59909d": false,
       "873ed4688aa18e46": false,
       "253aa4a4597b8c17": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "7355e3f4f333d730": false,
       "dac98c600c91462d": false,
       "5624be9892e126d8": false,
@@ -2438,7 +2438,7 @@
       "87bf20ea10de7d94": false,
       "5382a296dfed1aec": false,
       "5f23ce43c928ebb9": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "3787604a66c31275": false,
       "7355e3f4f333d730": false,
       "4f093cd6a1f62598": false,
@@ -3281,7 +3281,7 @@
       "7e9f2deaf4eb9bf6": false,
       "a7df3830cf373775": false,
       "f31cacd1ec28cb38": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "5624be9892e126d8": false,
       "3fde340b99fc0191": false,
       "a72eef1f764dbec2": false,
@@ -3629,7 +3629,7 @@
     },
     "requestAnimationFrame": {
       "ec8298c210a9e515": false,
-      "cd4b4e37e16d3fd4": false,
+      "690ce3c865a411bc": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
       "be738fdd11a8961c": false,
@@ -3926,70 +3926,70 @@
       "6de4d5b721e72779": false
     },
     "SPLASH_FX_STORAGE_KEY": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "drawBhandsMusicSplash": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "drawBhandsMusicSplashWebgl": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "initBhandsMusicSplashWebgl": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "isSplashFxOff": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "reduceSplashMotion": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashAnimating": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashCanvas": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashClamp01": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "splashCtx": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashDust": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashEaseOutCubic": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "splashGl": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashGlBuffer": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashGlProgram": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashGlUniforms": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashH": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashShards": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashSmoothstep": {
-      "cd4b4e37e16d3fd4": false
+      "690ce3c865a411bc": false
     },
     "splashStartedAt": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashStreaks": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "splashW": {
-      "cd4b4e37e16d3fd4": true
+      "690ce3c865a411bc": true
     },
     "desktopFullscreenActive": {
       "7355e3f4f333d730": true,

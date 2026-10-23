@@ -2490,3 +2490,7 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 /* 「水波 关」时的弱化样式 */
 .sv-tool.off{color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.09);background:rgba(255,255,255,.025)}
 .sv-tool.off:hover:not(:disabled){color:rgba(255,255,255,.72)}
+
+/* 关掉启动页水波动效时：连四周暗角遮罩一起去掉，视频完整显示（2026-10-23） */
+#splash.splash-fx-off{box-shadow:none}
+#splash.splash-fx-off::after{opacity:0;transition:opacity .8s ease}
