@@ -269,11 +269,12 @@ function splashConfirm(opts) {
       if (e.key === 'Escape') { e.stopPropagation(); done(false); }
       else if (e.key === 'Enter') { e.stopPropagation(); done(true); }
     };
+    // 点遮罩空白处不关闭：只有「取消 / 确定 / 右上角 ×」这三个明确操作才生效
+    // （避免手滑点到背景把确认框点没了，2026-10-23 按反馈调整）
     mask.addEventListener('click', function (e) {
       var act = e.target && e.target.getAttribute && e.target.getAttribute('data-act');
       if (act === 'ok') done(true);
       else if (act === 'cancel') done(false);
-      else if (e.target === mask) done(false);
     });
     document.addEventListener('keydown', onKey, true);
     requestAnimationFrame(function () { mask.classList.add('in'); });
