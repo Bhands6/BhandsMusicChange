@@ -88,6 +88,11 @@
 
   // 与 CSS 的 #desktop-titlebar height 保持一致
   var TITLEBAR_HEIGHT = 44;
+  // 标题栏顶部「留给纵向缩放的敏感带」高度（像素）。
+  // 只有贴在这条带内、且方向含 n（n / nw / ne）才走 resize，其余标题栏区域一律拖动，
+  // 这样既能从顶部拉高窗口，又不会在框内正常拖动时误触发缩放。
+  // 调大 = 更好点中但更容易误触；1 表示只有最上面一像素。
+  var TOP_RESIZE_BAND = 1;
 
   var layer = document.getElementById('window-gesture-layer');
   if (layer && layer.parentNode) layer.parentNode.removeChild(layer); // 重复注入时先清掉旧层
@@ -98,12 +103,13 @@
     var handle = document.createElement('i');
     handle.setAttribute('data-dir', dir);
     handle.addEventListener('pointerdown', function (event) {
-      // 标题栏高度范围内一律按"移动窗口"处理。
-      // 原因：n / nw / ne 手柄横在标题栏顶部（w / e 手柄的上段也伸进标题栏），
-      // 用户在标题栏框内按下拖动时经常先命中手柄，结果变成缩放而不是移动 ——
-      // 表现就是"在框里一拖，窗口自己变高/变宽"。标题栏是拖动区，不是缩放区。
-      // 缩放请用标题栏以下的左右边缘、底边和下方两个角。
       if (event.clientY <= TITLEBAR_HEIGHT) {
+        // 贴着窗口最顶上那一像素、且是上边方向的，才允许缩放
+        if (event.clientY < TOP_RESIZE_BAND && dir.indexOf('n') !== -1) {
+          beginGesture(event, 'resize', dir);
+          return;
+        }
+        // 标题栏其余区域：移动窗口（框内不缩放）
         beginGesture(event, 'drag', '');
         return;
       }
