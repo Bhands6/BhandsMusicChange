@@ -1847,13 +1847,21 @@ ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
     win.unmaximize();
   }
 
-  const [minWidth, minHeight] = win.getMinimumSize();
+  // 缩放下限不能用 win.getMinimumSize()：
+  // Windows 上 transparent + frameless 的窗口会被 Electron 置为 resizable:false，
+  // 此时系统把窗口的 tracksize（最小/最大尺寸）锁成"当前尺寸"，
+  // getMinimumSize() 于是返回 1920x1080 这类当前值 —— 拿它当缩放下限，
+  // 窗口就永远无法缩小（setBounds 能突破它，所以放大依旧正常，症状看起来像"只能放大"）。
+  // 这里改成按当前显示器工作区自适应算下限，小屏也不会顶死。
+  const gestureDisplayArea = screen.getDisplayMatching(win.getBounds()).workArea;
+  const minWidth = Math.min(MIN_WINDOWED_WIDTH, Math.max(640, gestureDisplayArea.width - WINDOWED_MARGIN));
+  const minHeight = Math.min(MIN_WINDOWED_HEIGHT, Math.max(400, gestureDisplayArea.height - WINDOWED_MARGIN));
   const gesture = {
     mode,
     dir,
     start: win.getBounds(), // unmaximize 之后再取，保证起点是还原后的真实位置
-    minWidth: Math.max(480, minWidth || MIN_WINDOWED_WIDTH),
-    minHeight: Math.max(320, minHeight || MIN_WINDOWED_HEIGHT),
+    minWidth,
+    minHeight,
     startCursor: screen.getCursorScreenPoint(),
     winId: win.id,
   };
