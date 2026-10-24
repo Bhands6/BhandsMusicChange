@@ -32,6 +32,15 @@ contextBridge.exposeInMainWorld('desktopWindow', {
   /** 关闭窗口 */
   close: () => ipcRenderer.invoke('desktop-window-close'),
   /**
+   * 自绘窗口手势：开始（标题栏拖动 / 拉边缩放）
+   * 主窗口是无边框透明窗口，既没有系统 resize 边框，app-region 拖动也可能失效，
+   * 因此由渲染层发起手势、主进程跟随光标改 bounds（位置计算全在主进程，渲染层不用上报位移）。
+   * @param {{mode: 'drag'|'resize', dir?: string}} payload 手势类型；dir 取 n/s/w/e/nw/ne/sw/se
+   */
+  beginWindowGesture: (payload) => ipcRenderer.send('desktop-window-gesture-start', payload || {}),
+  /** 自绘窗口手势：结束 */
+  endWindowGesture: () => ipcRenderer.send('desktop-window-gesture-end'),
+  /**
    * 关闭应用确认框的选择结果（页内弹窗用）
    * @param {'exit'|'minimize'|'cancel'} action 选中项
    * @param {boolean} remember 是否记住这次选择

@@ -1760,6 +1760,141 @@ ipcMain.handle('desktop-window-close', (event) => {
   getSenderWindow(event)?.close();
 });
 
+// ==================== IPC 处理器：自绘窗口手势（拖动 / 缩放）====================
+// 为什么不用原生方案：
+// 1) 主窗口是 frame:false + transparent:true，Windows 下这类窗口没有系统 resize 边框，
+//    用户拉边缩放必然无效（Electron 官方限制：transparent 窗口不可 resize）。
+// 2) -webkit-app-region: drag 在部分 Electron/Chromium 组合下会整体失效
+//    （实测：标题栏按钮可点，但按住拖动毫无反应）。
+// 所以拖动与缩放统一改为「渲染层发起手势 → 主进程跟随鼠标改 bounds」，不依赖任何原生能力。
+//
+// 关键实现细节：**位置由主进程自己轮询光标算出来，不靠渲染层上报 pointermove**。
+// 因为窗口跟着鼠标走时，光标相对窗口几乎不动，Chromium 的 pointermove 会变稀疏甚至断流，
+// 靠它会一卡一卡；screen.getCursorScreenPoint() 拿的是屏幕绝对坐标，不受窗口移动影响。
+
+/** 当前进行中的窗口手势：{ mode, dir, start, minWidth, minHeight, startCursor, winId } */
+let windowGestureState = null;
+/** 手势期间的光标轮询定时器 */
+let windowGestureTimer = null;
+/** 手势安全超时（防止 pointerup 丢失后窗口一直跟着鼠标跑） */
+let windowGestureSafetyTimer = null;
+
+/** 停止手势并清理定时器（幂等） */
+function stopWindowGesture() {
+  if (windowGestureTimer) {
+    clearInterval(windowGestureTimer);
+    windowGestureTimer = null;
+  }
+  if (windowGestureSafetyTimer) {
+    clearTimeout(windowGestureSafetyTimer);
+    windowGestureSafetyTimer = null;
+  }
+  windowGestureState = null;
+}
+
+/**
+ * 按位移把一次手势应用成新的窗口 bounds
+ * @param {BrowserWindow} win - 目标窗口
+ * @param {object} gesture - 手势快照
+ * @param {number} dx - 相对手势起点的屏幕 X 位移
+ * @param {number} dy - 相对手势起点的屏幕 Y 位移
+ */
+function applyWindowGesture(win, gesture, dx, dy) {
+  const s = gesture.start;
+  // 只是点了一下标题栏（没拖动）：不做任何 bounds 变更，免得白触发 move/resize 事件
+  if (dx === 0 && dy === 0) return;
+
+  if (gesture.mode === 'drag') {
+    win.setPosition(s.x + dx, s.y + dy, false);
+    return;
+  }
+
+  let x = s.x;
+  let y = s.y;
+  let width = s.width;
+  let height = s.height;
+  if (gesture.dir.includes('e')) width = s.width + dx;
+  if (gesture.dir.includes('s')) height = s.height + dy;
+  if (gesture.dir.includes('w')) { width = s.width - dx; x = s.x + dx; }
+  if (gesture.dir.includes('n')) { height = s.height - dy; y = s.y + dy; }
+
+  // 触到最小尺寸时锁住被拖的那条边，否则窗口会反向漂移
+  if (width < gesture.minWidth) {
+    if (gesture.dir.includes('w')) x = s.x + (s.width - gesture.minWidth);
+    width = gesture.minWidth;
+  }
+  if (height < gesture.minHeight) {
+    if (gesture.dir.includes('n')) y = s.y + (s.height - gesture.minHeight);
+    height = gesture.minHeight;
+  }
+
+  win.setBounds({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: Math.round(height) }, false);
+}
+
+ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
+  stopWindowGesture();
+  const win = getSenderWindow(event);
+  if (!win || win.isDestroyed()) return;
+  const mode = payload.mode === 'resize' ? 'resize' : 'drag';
+  const dir = String(payload.dir || '');
+
+  // 全屏时既没有标题栏也没有边框，手势无意义
+  if (win.isFullScreen()) return;
+  // 最大化时：拖动标题栏 = 先把窗口拉出来还原（对齐 Windows 习惯）；
+  // 拉边缩放对最大化窗口无意义，直接忽略
+  if (win.isMaximized()) {
+    if (mode === 'resize') return;
+    win.unmaximize();
+  }
+
+  const [minWidth, minHeight] = win.getMinimumSize();
+  const gesture = {
+    mode,
+    dir,
+    start: win.getBounds(), // unmaximize 之后再取，保证起点是还原后的真实位置
+    minWidth: Math.max(480, minWidth || MIN_WINDOWED_WIDTH),
+    minHeight: Math.max(320, minHeight || MIN_WINDOWED_HEIGHT),
+    startCursor: screen.getCursorScreenPoint(),
+    winId: win.id,
+  };
+  windowGestureState = gesture;
+
+  // 安全网：60s 内没收到 gesture-end（pointerup 丢失、渲染进程卡住等）就强制收尾，
+  // 否则窗口会一直跟着鼠标跑到鼠标松开为止
+  windowGestureSafetyTimer = setTimeout(stopWindowGesture, 60000);
+
+  // 16ms ≈ 60fps：与原生拖动的手感接近，同时不至于把主进程打满
+  windowGestureTimer = setInterval(() => {
+    if (!windowGestureState) {
+      stopWindowGesture();
+      return;
+    }
+    if (win.isDestroyed()) {
+      stopWindowGesture();
+      return;
+    }
+    // 中途被最大化的极端情况：立即收尾，避免和系统行为互相拉扯
+    if (win.isMaximized() || win.isFullScreen()) {
+      stopWindowGesture();
+      return;
+    }
+    const point = screen.getCursorScreenPoint();
+    applyWindowGesture(win, gesture, point.x - gesture.startCursor.x, point.y - gesture.startCursor.y);
+  }, 16);
+});
+
+ipcMain.on('desktop-window-gesture-end', (event) => {
+  stopWindowGesture();
+  const win = getSenderWindow(event);
+  if (win && !win.isDestroyed()) sendWindowState(win);
+});
+
+// 窗口被关掉/最小化时兜底清理，防止定时器挂着继续改 bounds
+app.on('browser-window-created', (_event, win) => {
+  win.on('closed', stopWindowGesture);
+  win.on('minimize', stopWindowGesture);
+});
+
 // ==================== IPC 处理器：全局快捷键 ====================
 
 /** 配置全局快捷键绑定 */
