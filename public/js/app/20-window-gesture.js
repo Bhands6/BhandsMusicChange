@@ -80,13 +80,9 @@
     beginGesture(event, 'drag', '');
   }, true);
 
-  // 原来靠 app-region 时系统自带双击最大化，自绘后补回这个习惯（与最大化按钮一致：切换全屏）
-  document.addEventListener('dblclick', function (event) {
-    if (!isTitlebarBlank(event.target)) return;
-    if (typeof api.toggleFullscreen !== 'function') return;
-    event.preventDefault();
-    api.toggleFullscreen();
-  }, true);
+  // 刻意不做「双击标题栏切换全屏」：用户按住标题栏试拖动时会形成 down-up-down 序列，
+  // 很容易被判定成双击，窗口突然全屏，看起来就像"长按不动窗口自己放大了"。
+  // 全屏入口保留在右上角的窗口按钮里。
 
   // ==================== 缩放：8 个透明热区 ====================
 

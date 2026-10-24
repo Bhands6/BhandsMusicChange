@@ -1772,7 +1772,10 @@ ipcMain.handle('desktop-window-close', (event) => {
 // 因为窗口跟着鼠标走时，光标相对窗口几乎不动，Chromium 的 pointermove 会变稀疏甚至断流，
 // 靠它会一卡一卡；screen.getCursorScreenPoint() 拿的是屏幕绝对坐标，不受窗口移动影响。
 
-/** 当前进行中的窗口手势：{ mode, dir, start, minWidth, minHeight, startCursor, winId } */
+/** 手势死区（像素）：光标位移小于该值时不改动窗口，用来吃掉长按时的抖动 */
+const GESTURE_DEADZONE = 4;
+
+/** 当前进行中的窗口手势：{ mode, dir, start, minWidth, minHeight, startCursor, winId, armed } */
 let windowGestureState = null;
 /** 手势期间的光标轮询定时器 */
 let windowGestureTimer = null;
@@ -1864,6 +1867,8 @@ ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
     minHeight,
     startCursor: screen.getCursorScreenPoint(),
     winId: win.id,
+    // 死区解锁标记：光标位移超过 GESTURE_DEADZONE 之前，窗口一律不动
+    armed: false,
   };
   windowGestureState = gesture;
 
@@ -1887,6 +1892,21 @@ ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
       return;
     }
     const point = screen.getCursorScreenPoint();
+    const dx = point.x - gesture.startCursor.x;
+    const dy = point.y - gesture.startCursor.y;
+
+    // 死区：长按不动时，鼠标/串流带来的 1~2px 抖动也会被逐帧应用，
+    // 结果窗口会一点点被推大、推歪（松手还停在偏移处），肉眼看就是"手没动窗口自己长大"。
+    // 位移没到阈值就完全不碰窗口；一旦越过阈值，以当前光标为新基准重新起算，
+    // 避免第一帧就跳掉一个阈值距离。
+    if (!gesture.armed) {
+      if (Math.abs(dx) < GESTURE_DEADZONE && Math.abs(dy) < GESTURE_DEADZONE) return;
+      gesture.armed = true;
+      gesture.start = win.getBounds();
+      gesture.startCursor = point;
+      return;
+    }
+
     applyWindowGesture(win, gesture, point.x - gesture.startCursor.x, point.y - gesture.startCursor.y);
   }, 16);
 });
