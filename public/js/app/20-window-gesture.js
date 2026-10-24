@@ -91,8 +91,8 @@
   // 标题栏顶部「留给纵向缩放的敏感带」高度（像素）。
   // 只有贴在这条带内、且方向含 n（n / nw / ne）才走 resize，其余标题栏区域一律拖动，
   // 这样既能从顶部拉高窗口，又不会在框内正常拖动时误触发缩放。
-  // 调大 = 更好点中但更容易误触；1 表示只有最上面一像素。
-  var TOP_RESIZE_BAND = 1;
+  // 调大 = 更好点中但更容易误触。必须与 main.css 里 n / nw / ne 三条的 height 保持一致。
+  var TOP_RESIZE_BAND = 3;
 
   var layer = document.getElementById('window-gesture-layer');
   if (layer && layer.parentNode) layer.parentNode.removeChild(layer); // 重复注入时先清掉旧层

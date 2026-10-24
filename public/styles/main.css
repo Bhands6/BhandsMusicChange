@@ -142,15 +142,15 @@ body.desktop-shell.desktop-maximized #window-gesture-layer,
 body.desktop-shell.desktop-fullscreen #window-gesture-layer,
 html:fullscreen body.desktop-shell #window-gesture-layer{display:none}
 #window-gesture-layer>i{position:absolute;display:block;pointer-events:auto;-webkit-app-region:no-drag;background:transparent}
-/* 上边方向（n / nw / ne）的敏感带只留 1px：标题栏是拖动区，顶部这一条才允许拉高。
+/* 上边方向（n / nw / ne）的敏感带只留 3px：标题栏是拖动区，顶部这一条才允许拉高。
    高度必须与 20-window-gesture.js 的 TOP_RESIZE_BAND 保持一致 —— 改这里同时改那里，
    否则会出现"光标变成 ns-resize 但按下去却是拖动窗口"的错位。 */
-#window-gesture-layer>i[data-dir="n"]{top:0;left:0;right:0;height:1px;cursor:ns-resize}
+#window-gesture-layer>i[data-dir="n"]{top:0;left:0;right:0;height:3px;cursor:ns-resize}
 #window-gesture-layer>i[data-dir="s"]{bottom:0;left:10px;right:10px;height:5px;cursor:ns-resize}
 #window-gesture-layer>i[data-dir="w"]{left:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
 #window-gesture-layer>i[data-dir="e"]{right:0;top:10px;bottom:10px;width:5px;cursor:ew-resize}
-#window-gesture-layer>i[data-dir="nw"]{top:0;left:0;width:10px;height:1px;cursor:nwse-resize}
-#window-gesture-layer>i[data-dir="ne"]{top:0;right:0;width:10px;height:1px;cursor:nesw-resize}
+#window-gesture-layer>i[data-dir="nw"]{top:0;left:0;width:10px;height:3px;cursor:nwse-resize}
+#window-gesture-layer>i[data-dir="ne"]{top:0;right:0;width:10px;height:3px;cursor:nesw-resize}
 #window-gesture-layer>i[data-dir="sw"]{bottom:0;left:0;width:10px;height:10px;cursor:nesw-resize}
 #window-gesture-layer>i[data-dir="se"]{bottom:0;right:0;width:10px;height:10px;cursor:nwse-resize}
 /* 手势进行中：全局禁止选中/拖拽，避免拖动窗口时选中文字或触发原生 drag */
