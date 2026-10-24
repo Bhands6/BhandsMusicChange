@@ -86,6 +86,9 @@
 
   // ==================== 缩放：8 个透明热区 ====================
 
+  // 与 CSS 的 #desktop-titlebar height 保持一致
+  var TITLEBAR_HEIGHT = 44;
+
   var layer = document.getElementById('window-gesture-layer');
   if (layer && layer.parentNode) layer.parentNode.removeChild(layer); // 重复注入时先清掉旧层
   layer = document.createElement('div');
@@ -95,6 +98,15 @@
     var handle = document.createElement('i');
     handle.setAttribute('data-dir', dir);
     handle.addEventListener('pointerdown', function (event) {
+      // 标题栏高度范围内一律按"移动窗口"处理。
+      // 原因：n / nw / ne 手柄横在标题栏顶部（w / e 手柄的上段也伸进标题栏），
+      // 用户在标题栏框内按下拖动时经常先命中手柄，结果变成缩放而不是移动 ——
+      // 表现就是"在框里一拖，窗口自己变高/变宽"。标题栏是拖动区，不是缩放区。
+      // 缩放请用标题栏以下的左右边缘、底边和下方两个角。
+      if (event.clientY <= TITLEBAR_HEIGHT) {
+        beginGesture(event, 'drag', '');
+        return;
+      }
       beginGesture(event, 'resize', dir);
     });
     layer.appendChild(handle);

@@ -1876,7 +1876,7 @@ ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
   // 否则窗口会一直跟着鼠标跑到鼠标松开为止
   windowGestureSafetyTimer = setTimeout(stopWindowGesture, 60000);
 
-  // 16ms ≈ 60fps：与原生拖动的手感接近，同时不至于把主进程打满
+  // 10ms ≈ 100fps：比 16ms 明显跟手，主进程开销可忽略（每帧只是一次 setPosition/setBounds）
   windowGestureTimer = setInterval(() => {
     if (!windowGestureState) {
       stopWindowGesture();
@@ -1897,18 +1897,15 @@ ipcMain.on('desktop-window-gesture-start', (event, payload = {}) => {
 
     // 死区：长按不动时，鼠标/串流带来的 1~2px 抖动也会被逐帧应用，
     // 结果窗口会一点点被推大、推歪（松手还停在偏移处），肉眼看就是"手没动窗口自己长大"。
-    // 位移没到阈值就完全不碰窗口；一旦越过阈值，以当前光标为新基准重新起算，
-    // 避免第一帧就跳掉一个阈值距离。
+    // 位移没到阈值就完全不碰窗口；越过阈值后**不重置基准**，
+    // 立刻按真实位移跟随 —— 否则解锁那一瞬间要丢掉一个死区距离，起步会有明显迟滞感。
     if (!gesture.armed) {
       if (Math.abs(dx) < GESTURE_DEADZONE && Math.abs(dy) < GESTURE_DEADZONE) return;
       gesture.armed = true;
-      gesture.start = win.getBounds();
-      gesture.startCursor = point;
-      return;
     }
 
     applyWindowGesture(win, gesture, point.x - gesture.startCursor.x, point.y - gesture.startCursor.y);
-  }, 16);
+  }, 10); // 10ms ≈ 100fps：比 16ms 跟手，主进程开销可忽略
 });
 
 ipcMain.on('desktop-window-gesture-end', (event) => {
