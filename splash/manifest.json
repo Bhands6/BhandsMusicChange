@@ -102,6 +102,16 @@
       "thumb": "thumbs/ridge.jpg",
       "bytes": 5178681,
       "sha256": "607aa9c5cfe59d3846c9a34c513ec67abdbe9a3b6108c77c5cc44b0f1f287653"
+    },
+    {
+      "id": "cutora",
+      "name": "金厦流光",
+      "desc": "仰视金色摩天楼，镜头顺着天际缓缓上移",
+      "tint": "#e0a34a",
+      "file": "videos/cutora.mp4",
+      "thumb": "thumbs/cutora.jpg",
+      "bytes": 5522115,
+      "sha256": "df90b3b275356f3d97580ad460a32ea5fe7af93b920f4eafa378070f439307ba"
     }
   ]
 }
