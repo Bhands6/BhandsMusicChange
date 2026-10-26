@@ -510,12 +510,12 @@ function isCustomSplashVideoId(id) {
 function newSplashCustomId() {
   return SPLASH_VIDEO_CUSTOM_PREFIX + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
 }
-/* 上传时带的原始文件名（跨 URL 编码传过来），只用来在卡片上显示 */
+/* 上传时带的显示名（前端改过名就用改过的）。
+ * ⚠️ 只从 url.searchParams 取，它**已经解过一次码**；这里再 decodeURIComponent
+ * 会把名字里合法的 "%41" 二次还原成 "A"。清掉 .mp4 尾巴和控制字符就够了。 */
 function normalizeSplashCustomName(raw, fallback) {
-  let name = '';
-  try { name = decodeURIComponent(String(raw || '')); } catch (e) { name = String(raw || ''); }
-  name = name.replace(/\.mp4$/i, '').replace(/[\r\n\t]+/g, ' ').trim();
-  if (name.length > 48) name = name.slice(0, 48);
+  let name = String(raw || '').replace(/\.mp4$/i, '').replace(/[\r\n\t]+/g, ' ').trim();
+  if (name.length > 48) name = name.slice(0, 48).trim();
   return name || fallback || '我的视频';
 }
 function splashVideoPath(id) {

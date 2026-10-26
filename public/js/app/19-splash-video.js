@@ -29,7 +29,7 @@ var splashVideoPanel = {
   sourcePref: 'auto', // 用户偏好：auto | cnb | github
   uploading: false,
   uploadBusy: false,  // 队列是否在跑
-  uploadQueue: [],    // 待上传的文件（支持一次多选，逐条传）
+  uploadQueue: [],    // 待上传项 { file, name }（支持一次多选，逐条传）
   uploadDone: 0,
   uploadTotal: 0
 };
@@ -295,6 +295,74 @@ function splashConfirm(opts) {
   });
 }
 
+/* escHtml 只转义 & < >，塞进 value="" 属性里还得自己挡引号 */
+function escAttr(s) {
+  return escHtml(String(s == null ? '' : s)).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* 上传前命名：一条文件一个输入框，默认填文件名（去掉 .mp4）。
+ * 多选时一次弹一个列表，别一条一条问；取消 = 整批不上传。 */
+function splashNamePrompt(files) {
+  return new Promise(function (resolve) {
+    var mask = document.createElement('div');
+    mask.className = 'sv-confirm-mask';
+    var rows = files.map(function (f, i) {
+      var base = String((f && f.name) || '').replace(/\.mp4$/i, '').trim() || ('视频 ' + (i + 1));
+      return '<label class="sv-name-row">' +
+        '<span class="sv-name-idx">' + (i + 1) + '</span>' +
+        '<input class="sv-name-input" type="text" maxlength="48" spellcheck="false" value="' + escAttr(base) + '">' +
+        '<small class="sv-name-meta">' + splashVideoBytes(f && f.size) + '</small>' +
+      '</label>';
+    }).join('');
+    mask.innerHTML =
+      '<div class="sv-confirm-card sv-name-card" role="dialog" aria-modal="true">' +
+        '<div class="sv-confirm-title">' + (files.length > 1 ? '给这 ' + files.length + ' 个视频起名' : '给视频起个名字') + '</div>' +
+        '<button class="sv-confirm-close" type="button" data-act="cancel" aria-label="关闭">&times;</button>' +
+        '<div class="sv-confirm-body">' +
+          '<div class="sv-name-tip">默认取文件名，可以改成任意名字；它会显示在启动页视频列表的卡片上。</div>' +
+          '<div class="sv-name-list">' + rows + '</div>' +
+        '</div>' +
+        '<div class="sv-confirm-actions">' +
+          '<button class="sv-confirm-btn" type="button" data-act="cancel">取消</button>' +
+          '<button class="sv-confirm-btn primary" type="button" data-act="ok">开始上传</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(mask);
+    var closed = false;
+    var inputs = Array.prototype.slice.call(mask.querySelectorAll('.sv-name-input'));
+    var done = function (ok) {
+      if (closed) return;
+      closed = true;
+      var names = null;
+      if (ok) {
+        names = inputs.map(function (inp, i) {
+          var v = String(inp.value || '').trim().slice(0, 48);
+          var fallback = String((files[i] && files[i].name) || '').replace(/\.mp4$/i, '').trim();
+          return v || fallback || ('视频 ' + (i + 1));
+        });
+      }
+      try { document.body.removeChild(mask); } catch (e) {}
+      document.removeEventListener('keydown', onKey, true);
+      resolve(names);
+    };
+    var onKey = function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); done(false); }
+      else if (e.key === 'Enter') { e.stopPropagation(); done(true); }
+    };
+    mask.addEventListener('click', function (e) {
+      var act = e.target && e.target.getAttribute && e.target.getAttribute('data-act');
+      if (act === 'ok') done(true);
+      else if (act === 'cancel') done(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+    // 光标落第一个输入框并全选：直接打字就是覆盖默认名
+    requestAnimationFrame(function () {
+      mask.classList.add('in');
+      if (inputs[0]) { inputs[0].focus(); inputs[0].select(); }
+    });
+  });
+}
+
 /* 启动页水波动效开关：关掉后 #splash-canvas 整层不画，只留视频 + Bhands Music 文字。
  * 启动页只在启动时出现，所以改完是「下次启动生效」。 */
 function toggleSplashFx() {
@@ -423,11 +491,16 @@ function enqueueSplashVideoUploads(files) {
   });
   if (firstError) showToast(firstError + (skipped ? '（另有 ' + skipped + ' 个文件被跳过）' : ''));
   if (!accepted.length) return;
-  p.uploadQueue = p.uploadQueue.concat(accepted);
-  // 正在传的那条已经从队列里 shift 走了，计数时要把它算进去，否则中途追加会少算 1
-  p.uploadTotal = p.uploadDone + (p.uploadBusy ? 1 : 0) + p.uploadQueue.length;
-  renderSplashVideoPanel();
-  if (!p.uploadBusy) drainSplashUploadQueue();
+  // 先问名字再排队：命名框里点「取消」= 整批不上传
+  splashNamePrompt(accepted).then(function (names) {
+    if (!names) return;
+    var items = accepted.map(function (f, i) { return { file: f, name: names[i] }; });
+    p.uploadQueue = p.uploadQueue.concat(items);
+    // 正在传的那条已经从队列里 shift 走了，计数时要把它算进去，否则中途追加会少算 1
+    p.uploadTotal = p.uploadDone + (p.uploadBusy ? 1 : 0) + p.uploadQueue.length;
+    renderSplashVideoPanel();
+    if (!p.uploadBusy) drainSplashUploadQueue();
+  });
 }
 
 function drainSplashUploadQueue() {
@@ -442,11 +515,11 @@ function drainSplashUploadQueue() {
     fetchSplashVideoList(true);
     return;
   }
-  var file = p.uploadQueue.shift();
+  var item = p.uploadQueue.shift();
   p.uploadBusy = true;
   p.uploading = true;
   renderSplashVideoPanel();
-  uploadSplashVideo(file).then(function () {
+  uploadSplashVideo(item.file, item.name).then(function () {
     p.uploadDone += 1;
     drainSplashUploadQueue();
   });
@@ -491,17 +564,19 @@ function captureSplashFrame(file, done) {
   video.src = url;
 }
 
-/* 上传单条：返回 Promise，队列靠它串起来（失败也 resolve，避免卡住后面的文件） */
-function uploadSplashVideo(file) {
+/* 上传单条：返回 Promise，队列靠它串起来（失败也 resolve，避免卡住后面的文件）。
+ * name 是命名框里改过的显示名，缺省用文件名。 */
+function uploadSplashVideo(file, name) {
   return new Promise(function (resolve) {
     var err = splashVideoFileError(file);
     if (err) { showToast(err); resolve(null); return; }
+    var displayName = String(name || '').trim() || String((file && file.name) || '').replace(/\.mp4$/i, '');
     captureSplashFrame(file, function (dataUrl, w, h) {
       if (w && h && (w < 1280 || h < 720)) {
         showToast('分辨率 ' + w + '×' + h + ' 偏低（建议 1920×1080）');
       }
-      // 文件名走 query 传：服务端用它当卡片标题（encodeURIComponent 兜住中文/空格）
-      var qs = '?name=' + encodeURIComponent(file.name || '');
+      // 名字走 query 传：服务端用它当卡片标题（encodeURIComponent 兜住中文/空格/%）
+      var qs = '?name=' + encodeURIComponent(displayName);
       fetch('/api/splash/upload' + qs, {
         method: 'POST',
         headers: { 'Content-Type': 'video/mp4' },

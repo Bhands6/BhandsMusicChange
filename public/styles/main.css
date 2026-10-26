@@ -2531,6 +2531,16 @@ html:fullscreen body.desktop-shell .sv-confirm-mask{border-radius:0;clip-path:no
 /* 关闭应用确认框里的「记住我的选择」行 */
 .sv-confirm-check{display:flex;align-items:center;gap:9px;margin:-10px 0 22px;cursor:pointer;font-size:12.5px;color:rgba(255,255,255,.48);letter-spacing:.1px;user-select:none}
 .sv-confirm-check input{width:15px;height:15px;margin:0;accent-color:#f4d28a;cursor:pointer;filter:saturate(.6)}
+/* 上传前命名框（可一次给多个视频改名）：沿用 .sv-confirm-* 的玻璃底，只是宽一点、正文可滚动 */
+.sv-name-card{width:440px}
+.sv-name-tip{font-size:12px;line-height:1.7;color:rgba(255,255,255,.42);margin-bottom:12px}
+.sv-name-list{display:flex;flex-direction:column;gap:8px;max-height:44vh;overflow-y:auto;padding-right:2px}
+.sv-name-row{display:flex;align-items:center;gap:10px}
+.sv-name-idx{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:rgba(244,210,138,.12);color:rgba(244,210,138,.82);font-size:10.5px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sv-name-input{flex:1 1 auto;min-width:0;height:34px;padding:0 12px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);color:rgba(255,255,255,.9);font-size:12.5px;font-family:inherit;letter-spacing:.1px;transition:border-color .18s,background .18s,box-shadow .18s}
+.sv-name-input:focus{outline:none;border-color:rgba(244,210,138,.44);background:rgba(255,255,255,.06);box-shadow:0 0 0 3px rgba(244,210,138,.1)}
+.sv-name-input::placeholder{color:rgba(255,255,255,.28)}
+.sv-name-meta{flex:0 0 auto;font-size:11px;color:rgba(255,255,255,.3);font-variant-numeric:tabular-nums}
 /* 「水波 关」时的弱化样式 */
 .sv-tool.off{color:rgba(255,255,255,.4);border-color:rgba(255,255,255,.09);background:rgba(255,255,255,.025)}
 .sv-tool.off:hover:not(:disabled){color:rgba(255,255,255,.72)}
