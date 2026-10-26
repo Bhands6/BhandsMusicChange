@@ -141,8 +141,11 @@ const SPLASH_VIDEO_SOURCES = [
   { id: 'github', label: 'GitHub', base: 'https://raw.githubusercontent.com/Bhands6/BhandsMusicChange/main/splash/' },
 ];
 const SPLASH_VIDEO_MANIFEST_NAME = 'manifest.json';
-/* 用户自己上传的那条固定叫 custom（同一时间只保留一条，重新上传会覆盖） */
+/* 用户自己上传的视频：老版本固定写 custom.mp4（同一时间只能存一条，重新上传会覆盖），
+ * 2026-10-26 起每条一个 custom-<时间戳36进制>-<随机>，老文件继续识别，不做物理迁移。 */
 const SPLASH_VIDEO_CUSTOM_ID = 'custom';
+const SPLASH_VIDEO_CUSTOM_PREFIX = 'custom-';
+const SPLASH_VIDEO_CUSTOM_MAX = 12;          // 自定义视频最多留存条数
 const SPLASH_VIDEO_UPLOAD_MAX_BYTES = 40 * 1024 * 1024;
 const SPLASH_VIDEO_MIN_WIDTH = 1280;
 const SPLASH_VIDEO_MIN_HEIGHT = 720;
@@ -498,6 +501,23 @@ const splashDownloadState = new Map();   // id -> { status: downloading|done|err
 function isValidSplashVideoId(id) {
   return /^[a-z0-9][a-z0-9_-]{0,40}$/i.test(String(id || ''));
 }
+/* 自己上传的视频：老 id 固定 'custom'，新的是 'custom-xxxx'。
+ * 远端清单里的视频永远不带 custom 前缀，所以这个判断不会误伤。 */
+function isCustomSplashVideoId(id) {
+  const s = String(id || '');
+  return s === SPLASH_VIDEO_CUSTOM_ID || s.indexOf(SPLASH_VIDEO_CUSTOM_PREFIX) === 0;
+}
+function newSplashCustomId() {
+  return SPLASH_VIDEO_CUSTOM_PREFIX + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+}
+/* 上传时带的原始文件名（跨 URL 编码传过来），只用来在卡片上显示 */
+function normalizeSplashCustomName(raw, fallback) {
+  let name = '';
+  try { name = decodeURIComponent(String(raw || '')); } catch (e) { name = String(raw || ''); }
+  name = name.replace(/\.mp4$/i, '').replace(/[\r\n\t]+/g, ' ').trim();
+  if (name.length > 48) name = name.slice(0, 48);
+  return name || fallback || '我的视频';
+}
 function splashVideoPath(id) {
   return path.join(SPLASH_VIDEO_DIR, id + '.mp4');
 }
@@ -513,15 +533,54 @@ function listDownloadedSplashVideos() {
       .filter(id => isSplashVideoDownloaded(id));
   } catch (e) { return []; }
 }
+/* 自己上传的视频列表（可以有多条）。
+ * 以磁盘上的文件为准、state 里的元数据只补名字：这样即使 splash-video.json
+ * 被删/写坏，上传过的视频也不会凭空消失，只是卡片名字退化成 id。 */
+function listCustomSplashVideos() {
+  let files = [];
+  try {
+    files = fs.readdirSync(SPLASH_VIDEO_DIR)
+      .filter(f => f.toLowerCase().endsWith('.mp4'))
+      .map(f => f.slice(0, -4))
+      .filter(id => isCustomSplashVideoId(id) && isSplashVideoDownloaded(id));
+  } catch (e) { return []; }
+  const meta = new Map(readSplashVideoState().custom.map(m => [m.id, m]));
+  return files.map(id => {
+    const m = meta.get(id) || null;
+    let bytes = 0;
+    try { bytes = fs.statSync(splashVideoPath(id)).size; } catch (e) {}
+    let addedAt = m ? m.addedAt : 0;
+    if (!addedAt) {
+      // 老 'custom' 那条没有 addedAt，用文件 mtime 兜底，保证排序稳定
+      try { addedAt = fs.statSync(splashVideoPath(id)).mtimeMs || 0; } catch (e) {}
+    }
+    return {
+      id,
+      name: (m && m.name) || (id === SPLASH_VIDEO_CUSTOM_ID ? '我的视频' : id),
+      bytes,
+      addedAt: Math.round(addedAt),
+    };
+  }).sort((a, b) => (b.addedAt - a.addedAt) || String(a.id).localeCompare(String(b.id)));
+}
 function readSplashVideoState() {
   try {
     const obj = JSON.parse(fs.readFileSync(SPLASH_VIDEO_STATE_FILE, 'utf8'));
+    // custom: [{ id, name, bytes, addedAt }] —— 自定义视频的显示名/时间，丢了也能靠文件名兜底
+    const custom = Array.isArray(obj.custom) ? obj.custom
+      .filter(m => m && isValidSplashVideoId(m.id) && isCustomSplashVideoId(m.id))
+      .map(m => ({
+        id: m.id,
+        name: typeof m.name === 'string' && m.name ? m.name : '',
+        bytes: Number(m.bytes) || 0,
+        addedAt: Number(m.addedAt) || 0,
+      })) : [];
     return {
       selected: typeof obj.selected === 'string' && obj.selected ? obj.selected : 'builtin',
       source: obj.source === 'cnb' || obj.source === 'github' ? obj.source : 'auto',
+      custom,
     };
   } catch (e) {
-    return { selected: 'builtin', source: 'auto' };
+    return { selected: 'builtin', source: 'auto', custom: [] };
   }
 }
 function writeSplashVideoState(patch) {
@@ -5993,8 +6052,9 @@ const server = http.createServer(async (req, res) => {
       const forceRefresh = url.searchParams.has('refresh');
       const { source, data } = await loadSplashManifest(forceRefresh);
       const ids = new Set((data.videos || []).map(v => v && v.id).filter(Boolean));
-      // 自己上传那条不在远端清单里，别被下面的「已下架」兜底误判成无效
-      if (isSplashVideoDownloaded(SPLASH_VIDEO_CUSTOM_ID)) ids.add(SPLASH_VIDEO_CUSTOM_ID);
+      // 自己上传的视频不在远端清单里，别被下面的「已下架」兜底误判成无效
+      const customVideos = listCustomSplashVideos();
+      customVideos.forEach(c => ids.add(c.id));
       // 清单里已经没有这条了（下架/改名）：回退内置，免得 UI 上找不到「使用中」那一项
       if (state.selected !== 'builtin' && !ids.has(state.selected)) {
         writeSplashVideoState({ selected: 'builtin' });
@@ -6012,22 +6072,21 @@ const server = http.createServer(async (req, res) => {
         url: source.base + (v.file || ''),
         downloaded: downloaded.includes(v.id),
       }));
-      /* 用户自己上传的那条不在远端清单里，单独补一张卡 */
-      if (isSplashVideoDownloaded(SPLASH_VIDEO_CUSTOM_ID)) {
-        let customBytes = 0;
-        try { customBytes = fs.statSync(splashVideoPath(SPLASH_VIDEO_CUSTOM_ID)).size; } catch (e) {}
+      /* 用户自己上传的那些不在远端清单里，逐条补卡（可以有多条） */
+      customVideos.forEach(c => {
         items.push({
-          id: SPLASH_VIDEO_CUSTOM_ID,
-          name: '我的视频',
+          id: c.id,
+          name: c.name || '我的视频',
           desc: '本地上传',
           tint: '',
-          bytes: customBytes,
-          thumb: '/splash-thumb/' + SPLASH_VIDEO_CUSTOM_ID + '.jpg' + thumbQuery,
+          bytes: c.bytes,
+          thumb: '/splash-thumb/' + c.id + '.jpg' + thumbQuery,
           url: '',
           downloaded: true,
           custom: true,
+          addedAt: c.addedAt,
         });
-      }
+      });
       sendJSON(res, {
         ok: true,
         items,
@@ -6041,10 +6100,26 @@ const server = http.createServer(async (req, res) => {
     } catch (err) {
       // 离线 / 仓库不通时不能让控制台白屏：返回已下载的本地项 + 错误原因
       console.warn('[SplashVideo] 清单不可用:', err.message);
+      const customNames = new Map(listCustomSplashVideos().map(c => [c.id, c]));
       sendJSON(res, {
         ok: false,
         error: err.message,
-        items: downloaded.map(id => ({ id, name: id, desc: '', tint: '', bytes: 0, thumb: '', url: '', downloaded: true })),
+        items: downloaded.map(id => {
+          const c = customNames.get(id);
+          if (!c) return { id, name: id, desc: '', tint: '', bytes: 0, thumb: '', url: '', downloaded: true };
+          return {
+            id,
+            name: c.name || '我的视频',
+            desc: '本地上传',
+            tint: '',
+            bytes: c.bytes,
+            thumb: '/splash-thumb/' + id + '.jpg',
+            url: '',
+            downloaded: true,
+            custom: true,
+            addedAt: c.addedAt,
+          };
+        }),
         downloaded,
         selected: state.selected,
         source: '',
@@ -6076,9 +6151,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  /* 上传本地视频作为启动页（固定一条，id=custom，重新上传即覆盖） */
+  /* 上传本地视频作为启动页：每条一个独立 id，可以存多条，重新上传不再覆盖上一条 */
   if (pn === '/api/splash/upload' && req.method === 'POST') {
-    const tmpFile = path.join(SPLASH_VIDEO_DIR, 'upload.part');
+    // 临时文件名带随机后缀：以前固定 upload.part，同时传两条会互相踩
+    const tmpFile = path.join(SPLASH_VIDEO_DIR,
+      'upload-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6) + '.part');
     try {
       // 先看 Content-Length：超限直接 413。否则得先把几十 MB 收下来再拒绝，
       // 而且中途断流会让客户端只看到网络错误、拿不到原因（2026-10-23 修）
@@ -6092,6 +6169,15 @@ const server = http.createServer(async (req, res) => {
         }, 413);
         return;
       }
+      const existing = listCustomSplashVideos();
+      if (existing.length >= SPLASH_VIDEO_CUSTOM_MAX) {
+        req.resume();
+        sendJSON(res, {
+          ok: false,
+          error: '自己上传的视频已经有 ' + existing.length + ' 条（上限 ' + SPLASH_VIDEO_CUSTOM_MAX + ' 条），先删掉几条再传',
+        }, 400);
+        return;
+      }
       fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
       const size = await saveRawBodyToFile(req, tmpFile, SPLASH_VIDEO_UPLOAD_MAX_BYTES);
       if (!size || size < 4 * 1024) throw new Error('文件太小，可能不是有效视频');
@@ -6103,16 +6189,42 @@ const server = http.createServer(async (req, res) => {
           SPLASH_VIDEO_MIN_WIDTH + '×' + SPLASH_VIDEO_MIN_HEIGHT);
       }
       if (meta.duration > 120) throw new Error('视频太长（' + Math.round(meta.duration) + ' 秒），建议 5~15 秒');
-      const dest = splashVideoPath(SPLASH_VIDEO_CUSTOM_ID);
-      try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
+      const id = newSplashCustomId();
+      const dest = splashVideoPath(id);
       fs.renameSync(tmpFile, dest);
-      // 旧缩略图跟新视频对不上了，先删掉等前端补
-      try { fs.unlinkSync(path.join(SPLASH_VIDEO_DIR, 'thumbs', SPLASH_VIDEO_CUSTOM_ID + '.jpg')); } catch (e) {}
-      writeSplashVideoState({ selected: SPLASH_VIDEO_CUSTOM_ID });
-      console.log('[SplashVideo] 已上传自定义视频:', meta.width + 'x' + meta.height, (size / 1048576).toFixed(1) + 'MB');
-      sendJSON(res, { ok: true, width: meta.width, height: meta.height, duration: meta.duration, bytes: size });
+      const name = normalizeSplashCustomName(url.searchParams.get('name'), '我的视频');
+      // 元数据：名字 / 体积 / 上传时间。顺手把文件已经不存在的条目剔掉。
+      const alive = new Set(listDownloadedSplashVideos());
+      const custom = readSplashVideoState().custom
+        .filter(m => m.id !== id)
+        .concat([{ id, name, bytes: size, addedAt: Date.now() }])
+        .filter(m => alive.has(m.id));
+      writeSplashVideoState({ selected: id, custom });
+      console.log('[SplashVideo] 已上传自定义视频:', id, meta.width + 'x' + meta.height, (size / 1048576).toFixed(1) + 'MB');
+      sendJSON(res, { ok: true, id, name, width: meta.width, height: meta.height, duration: meta.duration, bytes: size });
     } catch (err) {
       try { if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile); } catch (e) {}
+      sendJSON(res, { ok: false, error: err.message }, 400);
+    }
+    return;
+  }
+
+  /* 上传时前端用 canvas 抽一帧当缩略图（带 id，多条自定义视频各有各的图） */
+  if (pn === '/api/splash/custom-thumb' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const raw = String((body && body.data) || '');
+      const id = String((body && body.id) || SPLASH_VIDEO_CUSTOM_ID);
+      if (!isValidSplashVideoId(id) || !isCustomSplashVideoId(id)) throw new Error('非法视频 id');
+      const hit = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(raw);
+      if (!hit) throw new Error('缩略图格式不对');
+      const buf = Buffer.from(hit[1], 'base64');
+      if (!buf.length || buf.length > 2 * 1024 * 1024) throw new Error('缩略图体积异常');
+      const dir = path.join(SPLASH_VIDEO_DIR, 'thumbs');
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, id + '.jpg'), buf);
+      sendJSON(res, { ok: true, id });
+    } catch (err) {
       sendJSON(res, { ok: false, error: err.message }, 400);
     }
     return;
@@ -6148,7 +6260,11 @@ const server = http.createServer(async (req, res) => {
       try { if (fs.existsSync(file)) { fs.unlinkSync(file); existed = true; } } catch (e) {}
       try { fs.unlinkSync(path.join(SPLASH_VIDEO_DIR, 'thumbs', id + '.jpg')); } catch (e) {}
       splashDownloadState.delete(id);
-      if (readSplashVideoState().selected === id) writeSplashVideoState({ selected: 'builtin' });
+      const patch = {};
+      const state = readSplashVideoState();
+      if (isCustomSplashVideoId(id)) patch.custom = state.custom.filter(m => m.id !== id);
+      if (state.selected === id) patch.selected = 'builtin';
+      if (Object.keys(patch).length) writeSplashVideoState(patch);
       sendJSON(res, { ok: true, existed });
     } catch (err) {
       sendJSON(res, { ok: false, error: err.message }, 500);
@@ -6176,7 +6292,7 @@ const server = http.createServer(async (req, res) => {
         }
       } catch (e) {}
       splashDownloadState.clear();
-      writeSplashVideoState({ selected: 'builtin' });
+      writeSplashVideoState({ selected: 'builtin', custom: [] });
       console.log('[SplashVideo] 已清理下载:', removed, '个文件，释放', (freed / 1048576).toFixed(1) + 'MB');
       sendJSON(res, { ok: true, removed, freed });
     } catch (err) {

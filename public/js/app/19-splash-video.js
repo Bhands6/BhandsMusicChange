@@ -27,7 +27,11 @@ var splashVideoPanel = {
   source: '',         // 实际用的源：cnb | github
   sourceLabel: '',
   sourcePref: 'auto', // 用户偏好：auto | cnb | github
-  uploading: false
+  uploading: false,
+  uploadBusy: false,  // 队列是否在跑
+  uploadQueue: [],    // 待上传的文件（支持一次多选，逐条传）
+  uploadDone: 0,
+  uploadTotal: 0
 };
 
 function splashVideoBytes(n) {
@@ -123,14 +127,14 @@ function renderSplashVideoPanel() {
           'title="关闭后启动页只保留背景视频和 Bhands Music 文字，不画水波/流光那一层">水波 ' + (fxOff ? '关' : '开') + '</button>' +
         '<button class="sv-tool" type="button" onclick="clearSplashVideos()" title="删除所有已下载的视频（含自己上传的），启动页回到内置默认">清理</button>' +
         '<button class="sv-tool" type="button" onclick="pickSplashVideoFile()"' +
-          (p.uploading ? ' disabled' : '') + ' title="上传本地 MP4 作为启动页">' +
-          (p.uploading ? '上传中…' : '上传') + '</button>' +
+          (p.uploading ? ' disabled' : '') + ' title="上传本地 MP4 作为启动页（可以一次选多个，逐条上传）">' +
+          (p.uploading ? '上传 ' + Math.min(p.uploadDone + 1, p.uploadTotal || 1) + '/' + (p.uploadTotal || 1) + '…' : '上传') + '</button>' +
         '<button class="sv-tool" type="button" onclick="fetchSplashVideoList(true)"' +
           (p.refreshing ? ' disabled' : '') + '>' + (p.refreshing ? '刷新中…' : '刷新') + '</button>' +
       '</div>' +
     '</div>' +
     '<div class="sv-tip">' +
-      '自己上传：MP4（H.264）· 建议 1920×1080（最低 1280×720）· ≤40MB · 5~15 秒最佳；' +
+      '自己上传：MP4（H.264）· 建议 1920×1080（最低 1280×720）· ≤40MB · 5~15 秒最佳 · 最多 12 条，可一次选多个；' +
       '首尾画面一致循环才不跳' +
     '</div>' +
     '<div class="splash-video-list">' + cards + '</div>' +
@@ -359,7 +363,7 @@ function clearSplashVideos() {
   }
   splashConfirm({
     title: '清理已下载的视频',
-    message: '将删除全部 ' + p.downloaded.length + ' 个已下载视频（包括自己上传的那条）。\n' +
+    message: '将删除全部 ' + p.downloaded.length + ' 个已下载视频（包括自己上传的那些）。\n' +
       '清理后启动页会回到内置默认视频。',
     okText: '确定'
   }).then(function (ok) {
@@ -381,14 +385,71 @@ function pickSplashVideoFile() {
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'video/mp4';
+  // 一次多选：以前没有 multiple，选一堆也只传第一个（2026-10-26 修）
+  input.multiple = true;
   input.style.display = 'none';
   input.addEventListener('change', function () {
-    var file = input.files && input.files[0];
-    if (file) uploadSplashVideo(file);
+    var picked = Array.prototype.slice.call(input.files || []);
     try { input.remove(); } catch (e) {}
+    if (picked.length) enqueueSplashVideoUploads(picked);
   });
   document.body.appendChild(input);
   input.click();
+}
+
+function splashVideoFileError(file) {
+  var MAX = 40 * 1024 * 1024;
+  if (!file) return '文件不可读';
+  if (!/\.mp4$/i.test(file.name || '') && file.type !== 'video/mp4') return '只支持 MP4（H.264）文件';
+  if (file.size > MAX) return '文件 ' + (file.size / 1048576).toFixed(1) + 'MB，超过 40MB 上限';
+  return '';
+}
+
+/* 多选后统一入队：先挑出不合格的给一次提示，剩下的串行上传。
+ * 串行而不是并发，一是省内存（每条都要读一遍做校验），二是失败时能对上文件。 */
+function enqueueSplashVideoUploads(files) {
+  var p = splashVideoPanel;
+  var accepted = [];
+  var firstError = '';
+  var skipped = 0;
+  (files || []).forEach(function (file) {
+    var err = splashVideoFileError(file);
+    if (err) {
+      if (!firstError) firstError = (file && file.name ? file.name + '：' : '') + err;
+      else skipped += 1;
+      return;
+    }
+    accepted.push(file);
+  });
+  if (firstError) showToast(firstError + (skipped ? '（另有 ' + skipped + ' 个文件被跳过）' : ''));
+  if (!accepted.length) return;
+  p.uploadQueue = p.uploadQueue.concat(accepted);
+  // 正在传的那条已经从队列里 shift 走了，计数时要把它算进去，否则中途追加会少算 1
+  p.uploadTotal = p.uploadDone + (p.uploadBusy ? 1 : 0) + p.uploadQueue.length;
+  renderSplashVideoPanel();
+  if (!p.uploadBusy) drainSplashUploadQueue();
+}
+
+function drainSplashUploadQueue() {
+  var p = splashVideoPanel;
+  if (!p.uploadQueue.length) {
+    p.uploadBusy = false;
+    p.uploading = false;
+    p.uploadDone = 0;
+    p.uploadTotal = 0;
+    renderSplashVideoPanel();
+    // 一批传完再拉一次清单：中途刷新会让卡片顺序乱跳
+    fetchSplashVideoList(true);
+    return;
+  }
+  var file = p.uploadQueue.shift();
+  p.uploadBusy = true;
+  p.uploading = true;
+  renderSplashVideoPanel();
+  uploadSplashVideo(file).then(function () {
+    p.uploadDone += 1;
+    drainSplashUploadQueue();
+  });
 }
 
 /* 从本地文件抽一帧当缩略图，顺便读宽高和时长（服务端还会再校验一次） */
@@ -430,48 +491,41 @@ function captureSplashFrame(file, done) {
   video.src = url;
 }
 
+/* 上传单条：返回 Promise，队列靠它串起来（失败也 resolve，避免卡住后面的文件） */
 function uploadSplashVideo(file) {
-  var p = splashVideoPanel;
-  var MAX = 40 * 1024 * 1024;
-  if (!/\.mp4$/i.test(file.name) && file.type !== 'video/mp4') {
-    showToast('只支持 MP4（H.264）文件');
-    return;
-  }
-  if (file.size > MAX) {
-    showToast('文件 ' + (file.size / 1048576).toFixed(1) + 'MB，超过 40MB 上限');
-    return;
-  }
-  p.uploading = true;
-  renderSplashVideoPanel();
-  captureSplashFrame(file, function (dataUrl, w, h) {
-    if (w && h && (w < 1280 || h < 720)) {
-      showToast('分辨率 ' + w + '×' + h + ' 偏低（建议 1920×1080）');
-    }
-    fetch('/api/splash/upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'video/mp4' },
-      body: file
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (!d || !d.ok) throw new Error((d && d.error) || '上传失败');
-        if (!dataUrl) return d;
-        return fetch('/api/splash/custom-thumb', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: dataUrl })
-        }).then(function () { return d; });
+  return new Promise(function (resolve) {
+    var err = splashVideoFileError(file);
+    if (err) { showToast(err); resolve(null); return; }
+    captureSplashFrame(file, function (dataUrl, w, h) {
+      if (w && h && (w < 1280 || h < 720)) {
+        showToast('分辨率 ' + w + '×' + h + ' 偏低（建议 1920×1080）');
+      }
+      // 文件名走 query 传：服务端用它当卡片标题（encodeURIComponent 兜住中文/空格）
+      var qs = '?name=' + encodeURIComponent(file.name || '');
+      fetch('/api/splash/upload' + qs, {
+        method: 'POST',
+        headers: { 'Content-Type': 'video/mp4' },
+        body: file
       })
-      .then(function (d) {
-        p.uploading = false;
-        showToast('已上传 ' + d.width + '×' + d.height + '，已设为启动页');
-        fetchSplashVideoList(true);
-      })
-      .catch(function (e) {
-        p.uploading = false;
-        renderSplashVideoPanel();
-        showToast('上传失败：' + ((e && e.message) || '未知错误'));
-      });
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok) throw new Error((d && d.error) || '上传失败');
+          if (!dataUrl) return d;
+          return fetch('/api/splash/custom-thumb', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: d.id, data: dataUrl })
+          }).then(function () { return d; });
+        })
+        .then(function (d) {
+          showToast('已上传「' + (d.name || '我的视频') + '」' + d.width + '×' + d.height + '，已设为启动页');
+          resolve(d);
+        })
+        .catch(function (e) {
+          showToast('上传失败：' + ((e && e.message) || '未知错误'));
+          resolve(null);
+        });
+    });
   });
 }
 
@@ -481,9 +535,9 @@ function deleteSplashVideo(id) {
   for (var i = 0; i < splashVideoPanel.items.length; i++) {
     if (splashVideoPanel.items[i].id === id) { hit = splashVideoPanel.items[i]; break; }
   }
-  var isCustom = id === 'custom';
+  var isCustom = !!(hit && hit.custom) || /^custom(-|$)/i.test(String(id));
   var isCurrent = splashVideoPanel.selected === id;
-  var label = isCustom ? '「我的视频」' : '「' + ((hit && hit.name) || id) + '」';
+  var label = '「' + ((hit && hit.name) || (isCustom ? '我的视频' : id)) + '」';
   // 删的正好是正在用的那条，启动页才会回退内置；删别的，当前启动页不受影响
   var how = isCustom ? '删除后需要重新上传才能再用' : '删除后需要重新下载才能再用';
   var impact = isCurrent ? '，启动页会回到内置默认。' : '，当前启动页不受影响。';
