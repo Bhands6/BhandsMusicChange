@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-10-23",
+  "updated": "2026-10-26",
   "note": "启动页可选背景视频。内置默认是滑雪（随安装包分发），这里的视频按需下载。",
   "videos": [
     {
@@ -62,6 +62,46 @@
       "thumb": "thumbs/vortx.jpg",
       "bytes": 4871391,
       "sha256": "04a44205a8e61bb49dbe23d04269232d3c25b480106c32b3d970c7242af1998e"
+    },
+    {
+      "id": "eclipse",
+      "name": "日蚀烈焰",
+      "desc": "黑底日全食，日冕翻腾、火舌舔边",
+      "tint": "#f08a1e",
+      "file": "videos/eclipse.mp4",
+      "thumb": "thumbs/eclipse.jpg",
+      "bytes": 1309131,
+      "sha256": "7b6d5a1bff728f506a6c97823d524333750228126fea3e9724086b4a0d394036"
+    },
+    {
+      "id": "maren",
+      "name": "紫霞暮光",
+      "desc": "紫霞天光下的针织少女，微风拂发",
+      "tint": "#b79bd8",
+      "file": "videos/maren.mp4",
+      "thumb": "thumbs/maren.jpg",
+      "bytes": 2625087,
+      "sha256": "33607dc1ab138888541550d6a3ba1e749bf87665a219c49b9b86034a2eb7408f"
+    },
+    {
+      "id": "halora",
+      "name": "指缝暖光",
+      "desc": "逆光手掌间的玫瑰金戒指，叶影摇动",
+      "tint": "#c9cfb6",
+      "file": "videos/halora.mp4",
+      "thumb": "thumbs/halora.jpg",
+      "bytes": 1668760,
+      "sha256": "d23396ccc40e5d6a1ff41ef7ba7477eaaf1a90ea4eaed32627918775aa713dc8"
+    },
+    {
+      "id": "ridge",
+      "name": "金松湖谷",
+      "desc": "金松山坡与冰川湖，无人机缓缓推进",
+      "tint": "#d9a34a",
+      "file": "videos/ridge.mp4",
+      "thumb": "thumbs/ridge.jpg",
+      "bytes": 5178681,
+      "sha256": "607aa9c5cfe59d3846c9a34c513ec67abdbe9a3b6108c77c5cc44b0f1f287653"
     }
   ]
 }
