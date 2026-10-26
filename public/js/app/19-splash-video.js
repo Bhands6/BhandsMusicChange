@@ -547,6 +547,8 @@ function captureSplashFrame(file, done) {
     if (finished) return;
     finished = true;
     try { URL.revokeObjectURL(url); } catch (e) {}
+    // 上限放到 100MB 后会遇到 4K 大文件：抽完帧立刻把解码器放掉，别等 GC 慢慢收
+    try { video.removeAttribute('src'); video.load(); } catch (e) {}
     done(dataUrl, w, h, dur);
   };
   video.preload = 'auto';

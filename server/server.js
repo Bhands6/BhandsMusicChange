@@ -863,7 +863,7 @@ function saveRawBodyToFile(req, dest, maxBytes) {
       try { ws.destroy(); } catch (e) {}
       try { if (fs.existsSync(dest)) fs.unlinkSync(dest); } catch (e) {}
       // 继续把剩余请求体读掉（丢弃）：直接 destroy 会让响应发不出去，
-      // 客户端只能看到「网络错误」而看不到「超过 40MB 上限」
+      // 客户端只能看到「网络错误」而看不到「超过 N MB 上限」
       try { req.resume(); } catch (e) {}
       reject(err);
     };
