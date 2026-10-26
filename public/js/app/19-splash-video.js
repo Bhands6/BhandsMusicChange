@@ -41,14 +41,26 @@ function splashVideoBytes(n) {
   return n + ' B';
 }
 
-function splashVideoThumbHtml(item) {
-  if (item && item.thumb) {
-    return '<img src="' + escHtml(item.thumb) + '" alt="" loading="lazy" onerror="this.style.display=\'none\'">';
-  }
-  // 内置那条没有远端缩略图：画一个雪花占位
+/* 没有缩略图时的占位（内置那条本来就画它，自定义视频抽帧失败也用它兜底） */
+function splashVideoPlaceholderHtml() {
   return '<svg viewBox="0 0 48 48" class="sv-placeholder" aria-hidden="true">' +
     '<g stroke="rgba(210,232,255,.55)" stroke-width="1.6" stroke-linecap="round">' +
     '<path d="M24 8v32M9.2 16l29.6 16M38.8 16L9.2 32"/></g></svg>';
+}
+
+/* 缩略图 404 / 解码失败：换成占位图，别在卡片上留一块纯黑 */
+function splashVideoThumbFallback(img) {
+  try {
+    if (img && img.parentNode) img.parentNode.innerHTML = splashVideoPlaceholderHtml();
+  } catch (e) {}
+}
+
+function splashVideoThumbHtml(item) {
+  if (item && item.thumb) {
+    return '<img src="' + escHtml(item.thumb) + '" alt="" loading="lazy" onerror="splashVideoThumbFallback(this)">';
+  }
+  // 内置那条没有远端缩略图：画一个雪花占位
+  return splashVideoPlaceholderHtml();
 }
 
 function splashVideoActionHtml(item) {

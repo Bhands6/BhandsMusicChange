@@ -680,11 +680,16 @@ function readStreamBuffer(res) {
 async function fetchSplashThumbFile(id, force) {
   const dir = path.join(SPLASH_VIDEO_DIR, 'thumbs');
   const file = path.join(dir, id + '.jpg');
-  if (!force) {
+  /* 自己上传的视频：缩略图只可能是前端抽帧写进本地的这一张，远端清单里根本没有这个 id。
+   * force（面板刷新）也不能跳过本地检查 —— 否则刷新后它去清单里找一个不存在的条目、
+   * 拿 404，卡片缩略图就变成空白（重启 app 后不带 refresh 才有图，2026-10-26 修）。 */
+  const localOnly = isCustomSplashVideoId(id);
+  if (!force || localOnly) {
     try {
       if (fs.statSync(file).size > 200) return file;
     } catch (e) {}
   }
+  if (localOnly) throw new Error('自定义视频还没有缩略图');
   const { source, data } = await loadSplashManifest();
   const item = (data.videos || []).find(v => v && v.id === id);
   if (!item || !item.thumb) throw new Error('清单里没有这个缩略图');
@@ -6080,7 +6085,8 @@ const server = http.createServer(async (req, res) => {
           desc: '本地上传',
           tint: '',
           bytes: c.bytes,
-          thumb: '/splash-thumb/' + c.id + '.jpg' + thumbQuery,
+          // 自定义缩略图内容不会变，不带 ?refresh= 去撞远端；带上反倒会走强制刷新那条路
+          thumb: '/splash-thumb/' + c.id + '.jpg',
           url: '',
           downloaded: true,
           custom: true,
@@ -6362,7 +6368,9 @@ const server = http.createServer(async (req, res) => {
       });
       fs.createReadStream(thumbFile).pipe(res);
     } catch (err) {
-      res.writeHead(404); res.end('Not Found');
+      // 404 不能缓存：缩略图是后补的（抽帧上传晚一步），浏览器记住 404 后会一直显示空白
+      res.writeHead(404, { 'Cache-Control': 'no-store' });
+      res.end('Not Found');
     }
     return;
   }
