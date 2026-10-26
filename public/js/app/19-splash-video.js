@@ -146,7 +146,7 @@ function renderSplashVideoPanel() {
       '</div>' +
     '</div>' +
     '<div class="sv-tip">' +
-      '自己上传：MP4（H.264）· 建议 1920×1080（最低 1280×720）· ≤40MB · 5~15 秒最佳 · 最多 12 条，可一次选多个；' +
+      '自己上传：MP4（H.264）· 建议 1920×1080（最低 1280×720）· ≤100MB · 5~15 秒最佳 · 最多 12 条，可一次选多个；' +
       '首尾画面一致循环才不跳' +
     '</div>' +
     '<div class="splash-video-list">' + cards + '</div>' +
@@ -478,10 +478,11 @@ function pickSplashVideoFile() {
 }
 
 function splashVideoFileError(file) {
-  var MAX = 40 * 1024 * 1024;
+  // 与服务端 SPLASH_VIDEO_UPLOAD_MAX_BYTES 保持一致（2026-10-26 从 40MB 放宽到 100MB）
+  var MAX = 100 * 1024 * 1024;
   if (!file) return '文件不可读';
   if (!/\.mp4$/i.test(file.name || '') && file.type !== 'video/mp4') return '只支持 MP4（H.264）文件';
-  if (file.size > MAX) return '文件 ' + (file.size / 1048576).toFixed(1) + 'MB，超过 40MB 上限';
+  if (file.size > MAX) return '文件 ' + (file.size / 1048576).toFixed(1) + 'MB，超过 100MB 上限';
   return '';
 }
 
@@ -569,10 +570,10 @@ function captureSplashFrame(file, done) {
     finish(dataUrl, video.videoWidth, video.videoHeight, Number(video.duration) || 0);
   });
   video.addEventListener('error', function () { finish('', 0, 0, 0); });
-  // 兜底：2.5s 没抽到就别卡住上传
+  // 兜底：6s 没抽到就别卡住上传（上限放宽到 100MB 后，4K 大文件解码更慢，原来 2.5s 容易空手）
   setTimeout(function () {
     finish('', video.videoWidth, video.videoHeight, Number(video.duration) || 0);
-  }, 2500);
+  }, 6000);
   video.src = url;
 }
 

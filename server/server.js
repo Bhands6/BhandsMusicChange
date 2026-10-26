@@ -146,7 +146,7 @@ const SPLASH_VIDEO_MANIFEST_NAME = 'manifest.json';
 const SPLASH_VIDEO_CUSTOM_ID = 'custom';
 const SPLASH_VIDEO_CUSTOM_PREFIX = 'custom-';
 const SPLASH_VIDEO_CUSTOM_MAX = 12;          // 自定义视频最多留存条数
-const SPLASH_VIDEO_UPLOAD_MAX_BYTES = 40 * 1024 * 1024;
+const SPLASH_VIDEO_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;   // 2026-10-26 从 40MB 放宽（4K 直出/长一点的片段 40MB 不够用）
 const SPLASH_VIDEO_MIN_WIDTH = 1280;
 const SPLASH_VIDEO_MIN_HEIGHT = 720;
 const UPDATE_WORK_DIR = process.env.BHANDSMUSIC_UPDATE_DIR || path.join(PROJECT_ROOT, 'updates');         // 更新工作目录
@@ -751,11 +751,11 @@ async function fetchSplashManifest(force) {
 /* ---------- 用户上传：MP4 元数据 / 落盘 / 清理 ---------- */
 /* 极简 MP4 box 扫描：只取 mvhd（时长）与首个视频轨的 tkhd（宽高）。
  * 不引第三方依赖，够用来卡「尺寸太小 / 不是 mp4 / 时长离谱」这三类坏文件。 */
-function readMp4Meta(buf) {
+function readMp4Meta(buf, opts) {
   const out = { width: 0, height: 0, duration: 0 };
   if (!Buffer.isBuffer(buf) || buf.length < 32) return out;
-  // ftyp 必须在文件开头附近
-  if (buf.toString('latin1', 4, 8) !== 'ftyp') return out;
+  // ftyp 必须在文件开头附近。从文件里单独抠出来的 moov 段不带 ftyp，那种情况跳过这条检查。
+  if (!(opts && opts.noFtypCheck) && buf.toString('latin1', 4, 8) !== 'ftyp') return out;
   const tkhdSizes = [];
   function walk(start, end, depth) {
     let offset = start;
@@ -800,6 +800,55 @@ function readMp4Meta(buf) {
   }
   out.duration = Math.round(out.duration * 100) / 100;
   return out;
+}
+/* 从磁盘直接读尺寸/时长：只扫顶层 box 定位 moov，再读那一段（正常几百 KB）。
+ * 以前是 fs.readFileSync 整个文件再解析 —— 40MB 上限时还凑合，抬到 100MB 后
+ * 100MB 的 Buffer 会瞬时压进主进程内存（Electron 里就是卡一下），没必要。
+ * moov 可能在头（+faststart）也可能在尾（ffmpeg 默认），这里两头都能找到。 */
+function readMp4MetaFromFile(filePath) {
+  const out = { width: 0, height: 0, duration: 0 };
+  let fd = 0;
+  try { fd = fs.openSync(filePath, 'r'); } catch (e) { return out; }
+  try {
+    const fileSize = fs.fstatSync(fd).size;
+    if (fileSize < 32) return out;
+    const head = Buffer.alloc(Math.min(16, fileSize));
+    fs.readSync(fd, head, 0, head.length, 0);
+    if (head.length < 8 || head.toString('latin1', 4, 8) !== 'ftyp') return out;
+
+    const MOOV_MAX = 8 * 1024 * 1024;   // moov 正常几百 KB，这里只是保护上限
+    let offset = 0;
+    let guard = 0;
+    while (offset + 8 <= fileSize && guard++ < 256) {
+      const hdr = Buffer.alloc(16);
+      const got = fs.readSync(fd, hdr, 0, 16, offset);
+      if (got < 8) break;
+      let boxSize = hdr.readUInt32BE(0);
+      const type = hdr.toString('latin1', 4, 8);
+      let headerLen = 8;
+      if (boxSize === 1) {
+        if (got < 16) break;
+        boxSize = Number(hdr.readBigUInt64BE(8));
+        headerLen = 16;
+      } else if (boxSize === 0) {
+        boxSize = fileSize - offset;      // boxSize 为 0 表示一直到文件末尾
+      }
+      if (boxSize < headerLen || offset + boxSize > fileSize) break;
+      if (type === 'moov') {
+        const bodyLen = Math.min(boxSize - headerLen, MOOV_MAX);
+        const body = Buffer.alloc(bodyLen);
+        fs.readSync(fd, body, 0, bodyLen, offset + headerLen);
+        // moov 的子 box 序列本身就是 walk 期望的形态，直接复用 buffer 版解析
+        return readMp4Meta(body, { noFtypCheck: true });
+      }
+      offset += boxSize;
+    }
+    return out;
+  } catch (e) {
+    return out;
+  } finally {
+    try { fs.closeSync(fd); } catch (e) {}
+  }
 }
 /* 请求体按原始字节写文件（上传视频走这里，readRequestBody 是给 JSON 用的） */
 function saveRawBodyToFile(req, dest, maxBytes) {
@@ -6187,8 +6236,7 @@ const server = http.createServer(async (req, res) => {
       fs.mkdirSync(SPLASH_VIDEO_DIR, { recursive: true });
       const size = await saveRawBodyToFile(req, tmpFile, SPLASH_VIDEO_UPLOAD_MAX_BYTES);
       if (!size || size < 4 * 1024) throw new Error('文件太小，可能不是有效视频');
-      const buf = fs.readFileSync(tmpFile);
-      const meta = readMp4Meta(buf);
+      const meta = readMp4MetaFromFile(tmpFile);
       if (!meta.width || !meta.height) throw new Error('不是可识别的 MP4（请用 H.264 编码的 .mp4）');
       if (meta.width < SPLASH_VIDEO_MIN_WIDTH || meta.height < SPLASH_VIDEO_MIN_HEIGHT) {
         throw new Error('分辨率太低（' + meta.width + '×' + meta.height + '），至少要 ' +
