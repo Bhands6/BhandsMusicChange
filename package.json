@@ -10,8 +10,8 @@
     "electron_builder_binaries_mirror": "https://npmmirror.com/mirrors/electron-builder-binaries/"
   },
   "scripts": {
-    "start": "electron .",
-    "start:win": "chcp 65001 >nul && electron .",
+    "start": "node scripts/launch.js",
+    "start:win": "node scripts/launch.js",
     "test": "node --test \"tests/**/*.test.js\"",
     "check:hoisting": "node scripts/check-app-hoisting.js",
     "check:reorg": "node scripts/check-app-reorg.js",
