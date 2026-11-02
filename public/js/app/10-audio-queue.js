@@ -991,6 +991,28 @@ async function playQueueAt(idx, opts) {
       }
     }
 
+    // ②.5 官方只给到试听片段（trial）→ 再问一次第三方要完整版
+    //
+    // 为什么必须在 `!data.url` 的兜底之前单独处理：网易云对**订阅制/付费单曲**
+    // 不会返回空 url，而是回一段 30 秒试听 + freeTrialInfo。而整条判定链只看
+    // 「有没有 url」，试听也算「解析成功」→ 第三方源永远不会被问，用户听到的就是
+    // 播放到 30 秒戛然而止（2026-11-02 演员 1439121983 实测：vipType=0 的号，
+    // 四个档位全 TRIAL，而 lxMusic 明明能给出完整 FLAC）。
+    //
+    // 这里**不做「已经试过就跳过」的守卫**：本曲在第三方优先分支里失败过，
+    // 恰恰是最需要再试一次的情况。重复调用几乎不花时间——musicParser 有 60 秒
+    // 失败缓存（failedCache），同样的歌同样的策略会在毫秒级早退，不打上游。
+    if (data && data.url && data.trial
+        && !isQQPlayback && song.type !== 'local' && song.type !== 'podcast') {
+      var trialThirdPartyHit = await tryThirdPartyParse(song, requestedQuality);
+      if (token !== trackSwitchToken) return;
+      var trialThirdPartyData = thirdPartyPlaybackData(trialThirdPartyHit);
+      if (trialThirdPartyData && trialThirdPartyData.url) {
+        console.log('[TrialFallback] 官方仅试听，已用第三方补全完整版:', song.name || '');
+        data = trialThirdPartyData;
+      }
+    }
+
     // ③ 官方 + 第三方都失败 → 尝试跨平台换源 → 最后兜底试听片段
     // （`!data ||` 同理：官方源请求超时会让 data 停在 null，直接取 .url 会抛异常）
     if (!data || !data.url) {
