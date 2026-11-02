@@ -1019,6 +1019,16 @@ async function resolveWithRunner(runner, p) {
     return { url: best.url, source: best.source, quality: best.quality, level: best.level,
              streamInfo: best.streamInfo };
   }
+
+  // 一个地址都没拿到。这里要区分两种性质完全不同的失败：
+  //  · worker 还活着 → 脚本与后端正常应答「没有这首歌」（冷门/独立音乐很常见），
+  //    属于中性失败，不该让策略进 5 分钟冷却；
+  //  · worker 已死（超时被 terminate / 脚本崩了）→ 真实的策略故障，仍然计连败。
+  // 此前一律返回 null，于是两首冷门歌就能把整个 LX 源静默 5 分钟，
+  // 之后所有歌都掉回官方试听（2026-11-02 用户日志实测）。
+  if (runner.isInitialized()) {
+    return { url: '', neutralFailure: true, reason: 'no-resource' };
+  }
   return null;
 }
 

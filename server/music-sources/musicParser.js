@@ -249,7 +249,10 @@ const lxMusicStrategy = {
     return params.enabledSources.includes('lxMusic') && listRunners().length > 0;
   },
   parse: async function (params) {
-    if (isInFailedCache(params.id, 'lxMusic')) return null;
+    // 早退也要回放中性标记（见 failedCache 注释），否则 60 秒内重播同一首冷门歌
+    // 第二次会被当成真实故障计数。
+    const cachedFail = readFailedCache(params.id, 'lxMusic');
+    if (cachedFail) return cachedFail.neutral ? { url: '', neutralFailure: true } : null;
 
     const result = await parseFromLxMusic({
       id: params.id,
@@ -265,8 +268,11 @@ const lxMusicStrategy = {
       return { url: result.url, source: result.source, quality: result.quality };
     }
 
-    addFailedCache(params.id, 'lxMusic');
-    return null;
+    // 中性失败：脚本/后端活着，只是没有这首歌 → 不动策略连败计数。
+    // 否则两首冷门歌就能让整个 LX 源冷却 5 分钟（2026-11-02 用户日志）。
+    const neutral = !!(result && result.neutralFailure);
+    addFailedCache(params.id, 'lxMusic', neutral);
+    return neutral ? { url: '', neutralFailure: true } : null;
   }
 };
 

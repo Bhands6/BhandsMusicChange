@@ -5378,6 +5378,7 @@ const server = http.createServer(async (req, res) => {
         .filter(Boolean);
       if (!ids.length) { sendJSON(res, { error: 'Missing song id', liked: {}, ids: [] }, 400); return; }
       let likedIds = [];
+      let directFailed = false;
       try {
         if (typeof song_like_check === 'function') {
           const checked = await song_like_check({ ids: JSON.stringify(ids.map(Number).filter(Boolean)), cookie: userCookie, timestamp: Date.now() });
@@ -5390,7 +5391,17 @@ const server = http.createServer(async (req, res) => {
           }
         }
       } catch (e) {
+        directFailed = true;
         console.warn('[LikeCheck] direct check failed:', e.message);
+      }
+      // 直查失败时**不要**再回落到 likelist：那是拉全量红心列表的重请求，
+      // 网易云正因「操作频繁(405)」拒绝我们时，再补一刀只会把风控拖得更久
+      //（2026-11-02 日志里连续三段 [ERR] 405 就是这么放大的）。
+      // 返回 liked:null 让前端跳过更新（它本来就 `if (!r || !r.liked) return;`），
+      // 而不是把所有歌都刷成「未红心」。
+      if (directFailed) {
+        sendJSON(res, { loggedIn: true, ids, liked: null, degraded: true });
+        return;
       }
       if (!likedIds.length) {
         const r = await likelist({ uid: info.userId, cookie: userCookie, timestamp: Date.now() });
