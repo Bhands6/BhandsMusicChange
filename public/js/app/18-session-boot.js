@@ -1341,6 +1341,16 @@ function animate() {
       audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
     });
   }
+  // 玫瑰绽放（预设21）
+  if (window.MineradioAudioRose) {
+    MineradioAudioRose.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
   // 音轨缎带 / 轨道环 / 双螺旋（预设21-23）已移除
   updateSkullParticleLayer(dt);
   updateStageLyrics3D(dt);

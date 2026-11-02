@@ -505,12 +505,14 @@
     "e471fee5b816a040": 1,
     "3db7601405362dec": 1,
     "4d714d1a272fbfa6": 1,
+    "bdfa8f69be8f850c": 1,
     "963327b076c1f0ac": 1,
     "ae1406074e69e7d8": 1,
     "b2867956df99c2a5": 1,
     "488e84a752c376a0": 1,
     "924616ca3a44f0b2": 1,
-    "b81e558c9a7f20e0": 1,
+    "588894c9d2b0a922": 1,
+    "e48fc7eabfef5d2e": 1,
     "d9518798f1ba4eff": 1,
     "71960c822261fb92": 1,
     "0c6afd8b8932cb8b": 1,
@@ -3759,6 +3761,7 @@
       "e471fee5b816a040": true,
       "3db7601405362dec": true,
       "4d714d1a272fbfa6": true,
+      "bdfa8f69be8f850c": true,
       "d9518798f1ba4eff": true,
       "11a52bbbe5123731": true,
       "ed7fe9ee51fbe9a5": true,
@@ -3777,6 +3780,7 @@
       "b2867956df99c2a5": true,
       "488e84a752c376a0": true,
       "924616ca3a44f0b2": true,
+      "588894c9d2b0a922": true,
       "61787d62eeccee3f": true
     },
     "wfic": {
@@ -4121,6 +4125,13 @@
       "48d43e1c74a26e76": false
     },
     "MineradioAudioRing": {
+      "5624be9892e126d8": false,
+      "3fde340b99fc0191": false,
+      "9503d2715a8b28b2": false,
+      "40aae9d97b64df31": false,
+      "48d43e1c74a26e76": false
+    },
+    "MineradioAudioRose": {
       "5624be9892e126d8": false,
       "3fde340b99fc0191": false,
       "9503d2715a8b28b2": false,
