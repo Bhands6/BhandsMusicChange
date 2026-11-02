@@ -4421,10 +4421,27 @@ function isVipPackageActive(pkg) {
   const expire = Number(pkg.expireTime || 0) || 0;
   return expire <= 0 || expire > Date.now();
 }
+/**
+ * 家庭会员（familyVip）是否有效。
+ *
+ * ⚠️ 不能套 isVipPackageActive：**未开通家庭会员的载荷是
+ * `{ vipCode: 600, expireTime: 0, vipLevel: 0 }`** —— vipCode 照样大于 0，
+ * 而 isVipPackageActive 把 `expire <= 0` 当作「永久包」放行，直接套会把这个
+ * 账号判成会员（2026-11-02 用真实 vip_info 抓到：该账号 familyVip 就是 600/0）。
+ * 家庭会员是订阅制，必然有到期时间，所以只认 `expireTime > now`。
+ */
+function isFamilyVipActive(pkg) {
+  if (!pkg || typeof pkg !== 'object') return false;
+  const expire = Number(pkg.expireTime || 0) || 0;
+  return expire > Date.now();
+}
+
 function vipLevelFromVipInfo(data) {
   data = data || {};
   if (isVipPackageActive(data.redplus)) return 'svip';
   if (isVipPackageActive(data.associator) || isVipPackageActive(data.musicPackage)) return 'vip';
+  // 家庭会员共享的会员权益与黑胶同档（没有红plus 的 SVIP 权益）
+  if (isFamilyVipActive(data.familyVip)) return 'vip';
   return 'none';
 }
 
@@ -4449,6 +4466,11 @@ function vipExpireAtFromVipInfo(data) {
     if (!isVipPackageActive(pkg)) continue;
     const expire = Number(pkg.expireTime || 0) || 0;
     if (expire > latest) latest = expire;
+  }
+  // 家庭会员单独判（判据不同，见 isFamilyVipActive）
+  if (isFamilyVipActive(data.familyVip)) {
+    const familyExpire = Number(data.familyVip.expireTime || 0) || 0;
+    if (familyExpire > latest) latest = familyExpire;
   }
   return latest;
 }
