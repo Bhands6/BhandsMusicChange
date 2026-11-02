@@ -37,9 +37,9 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 | | | |
 |:---:|:---:|:---:|
-| ![](docs/screenshots/02-emily-cover.jpg)<br>**emily专辑封面** | ![](docs/screenshots/03-drum.png)<br>**滚筒** | ![](docs/screenshots/04-planet.jpg)<br>**星球** |
-| ![](docs/screenshots/05-void.jpg)<br>**虚空** | ![](docs/screenshots/06-vinyl.png)<br>**唱片** | ![](docs/screenshots/07-galaxy.jpg)<br>**星河** |
-| ![](docs/screenshots/08-requiem.jpg)<br>**安魂** | ![](docs/screenshots/09-sonic-topography.jpg)<br>**音域回响** | ![](docs/screenshots/10-wallpaper-engine.png)<br>**音域回响** |
+| ![](docs/screenshots/02-emily-cover.jpg)<br>**emily专辑封面** | ![](docs/screenshots/03-drum.jpg)<br>**滚筒** | ![](docs/screenshots/04-planet.jpg)<br>**星球** |
+| ![](docs/screenshots/05-void.png)<br>**虚空** | ![](docs/screenshots/06-vinyl.jpg)<br>**唱片** | ![](docs/screenshots/07-galaxy.png)<br>**星河** |
+| ![](docs/screenshots/08-requiem.png)<br>**安魂** | ![](docs/screenshots/09-sonic-topography.jpg)<br>**音域回响** | ![](docs/screenshots/10-wallpaper-engine.jpg)<br>**音域回响** |
 | ![](docs/screenshots/11-aurora.jpg)<br>**极光** | ![](docs/screenshots/12-kaleido.jpg)<br>**万花筒** | ![](docs/screenshots/13-burst.jpg)<br>**迸发** |
 | ![](docs/screenshots/14-sonic.png)<br>**声波地形** | ![](docs/screenshots/15-spiral.jpg)<br>**螺旋星云** | ![](docs/screenshots/16-jelly.jpg)<br>**水母花** |
 | ![](docs/screenshots/17-rose.jpg)<br>**玫瑰** | ![](docs/screenshots/18-heart.jpg)<br>**心跳** | ![](docs/screenshots/19-rain.png)<br>**字符雨** |
