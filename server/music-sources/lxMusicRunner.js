@@ -20,6 +20,7 @@
  */
 
 const { Worker } = require('worker_threads');
+const { probeAudio, levelFromProbe } = require('./durationProbe');
 
 /** 音源中文名称映射 */
 const SOURCE_NAMES = {
@@ -30,18 +31,69 @@ const SOURCE_NAMES = {
   tx: 'QQ音乐'
 };
 
-/** 音质映射（用户音质 → LX Music 音质标识） */
+/**
+ * 音质映射（用户音质 → LX Music 音质标识）
+ *
+ * ⚠️ 无损及以上的三档全部请求 `master`（母带），不再压到 `flac`：
+ * 脚本给 wy 声明的是 ['128k','320k','flac','hires','atmos','master']，
+ * 而实测（2026-11-02，读 FLAC STREAMINFO）各档真实规格是：
+ *   flac   → 16bit/44.1kHz（17.5MB）  或 24bit/44.1kHz（62MB，视曲目母带源而定）
+ *   hires  → 与 flac 返回**同一个文件**，纯属摆设
+ *   atmos  → 24bit/96kHz（62MB）
+ *   master → 24bit/192kHz（99~205MB）
+ * 也就是说旧的映射让「超清母带」用户实际听的是 CD 级 —— 最高档从来没被请求过。
+ * 这里按「能拿多高就拿多高」处理：母带拿不到会沿降级链退到 atmos → flac → 320k。
+ *
+ * 无损（lossless）也走 master 是刻意的：同类第三方源没有「CD 无损」这个中间档，
+ * flac 档给的文件有时反而就是 24bit/44.1k，与其猜不如直接要最高再降级。
+ */
 const QUALITY_MAP = {
   standard: '128k',
   higher: '320k',
   exhigh: '320k',
-  lossless: 'flac',
-  hires: 'flac',
-  jymaster: 'flac'
+  lossless: 'master',
+  hires: 'master',
+  jymaster: 'master'
 };
 
-/** 音质降级链：从高到低 */
-const QUALITY_CASCADE = ['flac', '320k', '128k'];
+/** 音质降级链：从高到低（master/atmos 是 LX 脚本的高解析档，旧版脚本不认会自动跳过） */
+const QUALITY_CASCADE = ['master', 'atmos', 'flac', '320k', '128k'];
+
+/**
+ * 档位等级，用于「降级链按真实规格校验」。
+ * 键是 levelFromProbe()/归一化后的 level 键，与前端 playbackQualityRank 同序。
+ */
+const LEVEL_RANK = { standard: 1, exhigh: 2, lossless: 3, hires: 4, jymaster: 5 };
+
+/** 用户请求档位 → 本次解析要求达到的最低真实等级 */
+const WANTED_RANK = { standard: 1, higher: 2, exhigh: 2, lossless: 3, hires: 4, jymaster: 5 };
+
+/**
+ * 「某音源的某档位是假的」短时记忆：`source|lxQuality` → 时间戳。
+ *
+ * 起因：降级链按真实规格校验后，master/atmos 这种档位在某些源上恒定降级成
+ * standard，于是**每首歌都要白跑两轮**（实测 2.9s，之前 1s）。
+ * 只记「实测不到 lossless」的情况（说明该档位对该源根本没提供高解析资源），
+ * 5 分钟内直接跳过，避免重复探测。song 级差异不影响正确性：
+ * 记忆命中时只跳过该档位，其余档位照常尝试，最坏结果是少拿一次母带。
+ */
+const TIER_VERDICT_TTL = 5 * 60 * 1000;
+const badTierCache = new Map();
+
+function isBadTier(sourceKey, lxQuality) {
+  const hit = badTierCache.get(sourceKey + '|' + lxQuality);
+  if (!hit) return false;
+  if (Date.now() - hit > TIER_VERDICT_TTL) { badTierCache.delete(sourceKey + '|' + lxQuality); return false; }
+  return true;
+}
+
+function markBadTier(sourceKey, lxQuality) {
+  badTierCache.set(sourceKey + '|' + lxQuality, Date.now());
+  if (badTierCache.size > 200) {
+    const oldest = badTierCache.keys().next().value;
+    if (oldest !== undefined) badTierCache.delete(oldest);
+  }
+}
 
 /** 旧版脚本音源优先级（对齐 Bhands_Web 实测正确率排序） */
 const LX_SOURCE_PRIORITY = ['wy', 'kw', 'kg', 'tx', 'mg'];
@@ -874,22 +926,50 @@ async function resolveWithRunner(runner, p) {
   };
 
   const cascade = getQualityCascade(p.quality || '320k');
-  console.log('[LxMusic] 音质降级链:', cascade.join(' → '), '音源顺序:', order.join(' → '));
+  const wanted = WANTED_RANK[p.quality] || 3;
+  console.log('[LxMusic] 音质降级链:', cascade.join(' → '), '音源顺序:', order.join(' → '),
+    '目标等级:', wanted);
 
+  // 按**真实规格**逐档校验，而不是「拿到 url 就算成功」。
+  // 实测（2026-11-02）：请求 master 母带时后端会悄悄回一个 95kbps 的 mp3，
+  // 脚本照样报 quality:'master' —— 无脑接受反而比直接要 flac（16bit/44.1k）更差。
+  // 所以每拿到一个地址就探一次真实规格：达到目标等级立刻返回；
+  // 达不到就记下当前最好的一档继续往下降；全都不达标时返回最好的那个（有总比没有强）。
+  // 探测取不到证据（level 为空）时按 fail-open 接受，避免在判断不出规格的音源上死循环。
+  let best = null;
   for (const lxQuality of cascade) {
     for (const sourceKey of order) {
+      // 该源这一档刚被证实「给不出高解析」→ 直接跳过，省掉一次脚本调用 + 一次探测
+      if (isBadTier(sourceKey, lxQuality)) continue;
       try {
         const url = await runner.getMusicUrl(sourceKey, songInfo, lxQuality);
-        if (url) {
-          console.log('[LxMusic] 成功, 音源:', sourceKey, '音质:', lxQuality);
-          return { url: url, source: 'lx-' + sourceKey, quality: lxQuality };
+        if (!url) continue;
+        let probe = null;
+        try { probe = await probeAudio(url); } catch (e) { probe = null; }
+        const level = levelFromProbe(probe);
+        const rank = LEVEL_RANK[level] || 0;
+        if (!level || rank >= wanted) {
+          console.log('[LxMusic] 成功, 音源:', sourceKey, '音质:', lxQuality,
+            level ? '(实测 ' + level + ')' : '(规格未知)');
+          return { url: url, source: 'lx-' + sourceKey, quality: lxQuality, level: level || undefined };
         }
+        // 未达标：记录当前最佳，继续降级链
+        if (!best || rank > best.rank) {
+          best = { url: url, source: 'lx-' + sourceKey, quality: lxQuality, level: level, rank: rank };
+        }
+        // 连无损都不到 → 这一档对这个源是假的，记下来免得下一首再试
+        if (rank < LEVEL_RANK.lossless) markBadTier(sourceKey, lxQuality);
+        console.log('[LxMusic] 档位', lxQuality, '实测仅', level, '未达目标，继续降级');
       } catch (e) {
         // 忽略单个音源失败，继续下一个
       }
     }
   }
 
+  if (best) {
+    console.log('[LxMusic] 无档位达标，回落到实测最好的一档:', best.level, '(', best.source, ')');
+    return { url: best.url, source: best.source, quality: best.quality, level: best.level };
+  }
   return null;
 }
 

@@ -147,6 +147,58 @@ function flacDuration(buf) {
   return sr > 0 && total > 0 ? total / sr : null;
 }
 
+/**
+ * 从 FLAC 的 STREAMINFO 读真实规格（位深 / 采样率 / 声道数）。
+ *
+ * 为什么需要：第三方音源会**谎报档位** —— 实测请求 `master`（母带）时，
+ * 后端可能悄悄返回一个 95kbps 的 mp3，而脚本仍报告 `quality: 'master'`。
+ * 只信请求档位的话，UI 会显示「母带」而用户听的是一百多 kbps。
+ *
+ * 字节位置与 flacDuration 保持一致（都从 subarray(18) 起算）：
+ *   b[0..2] 高 20bit = 采样率，b[2] 低 4bit 起 = 声道-1(3bit) + 位深-1(5bit)
+ */
+function flacStreamInfo(buf) {
+  if (!buf || buf.length < 42) return null;
+  if (buf.toString('latin1', 0, 4) !== 'fLaC') return null;
+  const b = buf.subarray(18, 26);
+  if (b.length < 4) return null;
+  const sampleRate = (b[0] << 12) | (b[1] << 4) | (b[2] >> 4);
+  const channels = ((b[2] >> 1) & 0x07) + 1;
+  const bits = (((b[2] & 0x01) << 4) | (b[3] >> 4)) + 1;
+  if (!sampleRate || !bits) return null;
+  return { sampleRate, channels, bits };
+}
+
+/**
+ * 按**真实音频规格**判定档位键（与前端 playbackQualityLabel 的键同语义）。
+ *
+ * FLAC 看位深 + 采样率；有损容器（mp3/m4a/ogg）只能反推平均码率
+ * （总字节 × 8 ÷ 时长），也足够区分 128k / 320k 这两档。
+ * 取不到任何证据时返回 ''，调用方退回「按请求档位归一化」的老逻辑。
+ *
+ * @param {{kind?:string, durationSec?:number|null, totalBytes?:number, streamInfo?:{sampleRate:number,bits:number}|null}} probe
+ * @returns {'jymaster'|'hires'|'lossless'|'exhigh'|'standard'|''}
+ */
+function levelFromProbe(probe) {
+  if (!probe) return '';
+  const si = probe.streamInfo;
+  if (si && si.bits && si.sampleRate) {
+    // 24bit/192k 才算母带；24bit/96k 及其以上算高清臻音；
+    // 其余（含 24bit/44.1k）归无损 —— 不夸大
+    if (si.bits >= 24 && si.sampleRate >= 176400) return 'jymaster';
+    if (si.bits >= 24 && si.sampleRate >= 88200) return 'hires';
+    return 'lossless';
+  }
+  const sec = Number(probe.durationSec) || 0;
+  const bytes = Number(probe.totalBytes) || 0;
+  if (!sec || !bytes) return '';
+  const br = (bytes * 8) / sec;
+  if (br >= 900000) return 'lossless';
+  if (br >= 256000) return 'exhigh';
+  if (br >= 64000) return 'standard';
+  return '';
+}
+
 /** OGG：头部取采样率 + 尾部最后一页的 granule 位置 */
 function oggDuration(head, tail) {
   if (head.length < 40 || head.toString('latin1', 0, 4) !== 'OggS') return null;
@@ -188,14 +240,16 @@ function detectKind(head) {
  *  - unreachable 取不到数据（调用方放行）
  */
 async function probeAudio(upstreamUrl) {
-  if (!/^https?:\/\//i.test(upstreamUrl)) return { status: 'unreachable', kind: 'unknown', durationSec: null, totalBytes: 0 };
+  if (!/^https?:\/\//i.test(upstreamUrl)) return { status: 'unreachable', kind: 'unknown', durationSec: null, totalBytes: 0, streamInfo: null };
   const head = await fetchRange(upstreamUrl, 'bytes=0-' + (HEAD_BYTES - 1));
-  if (!head) return { status: 'unreachable', kind: 'unknown', durationSec: null, totalBytes: 0 };
+  if (!head) return { status: 'unreachable', kind: 'unknown', durationSec: null, totalBytes: 0, streamInfo: null };
   const kind = detectKind(head.buf);
-  if (kind === 'not-audio') return { status: 'not-audio', kind: 'not-audio', durationSec: null, totalBytes: head.total };
+  if (kind === 'not-audio') return { status: 'not-audio', kind: 'not-audio', durationSec: null, totalBytes: head.total, streamInfo: null };
 
   let durationSec = null;
+  let streamInfo = null;
   if (kind === 'flac') {
+    streamInfo = flacStreamInfo(head.buf);
     durationSec = flacDuration(head.buf);
   } else if (kind === 'ogg') {
     const tail = await fetchRange(upstreamUrl, 'bytes=-' + (8 * 1024));
@@ -211,9 +265,9 @@ async function probeAudio(upstreamUrl) {
   }
 
   if (durationSec != null && durationSec > 0) {
-    return { status: 'ok', kind: kind, durationSec: durationSec, totalBytes: head.total };
+    return { status: 'ok', kind: kind, durationSec: durationSec, totalBytes: head.total, streamInfo: streamInfo };
   }
-  return { status: 'audio', kind: kind, durationSec: null, totalBytes: head.total };
+  return { status: 'audio', kind: kind, durationSec: null, totalBytes: head.total, streamInfo: streamInfo };
 }
 
 /**
@@ -267,4 +321,4 @@ function acceptProbe(probe, expectedMs) {
   return isDurationPlausible(probe.durationSec, expectedMs);
 }
 
-module.exports = { probeAudio, acceptProbe, isDurationPlausible, isCandidateDurationPlausible };
+module.exports = { probeAudio, acceptProbe, isDurationPlausible, isCandidateDurationPlausible, levelFromProbe, flacStreamInfo };

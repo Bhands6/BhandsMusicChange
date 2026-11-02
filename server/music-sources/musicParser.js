@@ -10,7 +10,7 @@ const { parseFromUnblockMusic } = require('./unblockMusic');
 const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
 const { parseFromKugou, readKugouVipCredentials } = require('./kugou');
 const { tryGoMusicSwitch } = require('./goMusicSwitch');
-const { probeAudio, acceptProbe } = require('./durationProbe');
+const { probeAudio, acceptProbe, levelFromProbe } = require('./durationProbe');
 
 // ============================================================
 // 缓存配置
@@ -191,6 +191,11 @@ function normalizeSourceQuality(result, requestedQuality) {
   if (!result) return tierOfRequest(requestedQuality);
   const raw = String(result.quality || '').trim().toLowerCase();
   if (raw) {
+    // 高解析两档必须在 flac 之前判：LX 脚本的 'master'/'atmos' 是真·24bit 母带，
+    // 不能和 'flac' 一样归一成 'lossless'，否则前端音质按钮永远显示「SQ」，
+    // 用户看不出自己其实拿到了 24bit/192k（2026-11-02 实测：flac 16/44.1 vs master 24/192）。
+    if (raw === 'master' || raw === 'jymaster') return 'jymaster';
+    if (raw === 'hires' || raw === 'atmos') return 'hires';
     if (raw === 'flac' || raw === 'lossless' || raw === 'sq' || raw === '999') return 'lossless';
     if (raw === '320k' || raw === 'exhigh' || raw === 'hq' || raw === '320') return 'exhigh';
     if (raw === '128k' || raw === 'standard' || raw === 'std' || raw === '128') return 'standard';
@@ -578,11 +583,16 @@ async function parseMusic(params) {
     let pending = availableStrategies.length;
     let fallback = null;
 
-    function settleWith(result, strategyName) {
+    function settleWith(result, strategyName, probe) {
       if (settled) return;
       settled = true;
-      // 补上归一化档位键（前端音质按钮显示「实际解析档位」用），随结果一起进成功缓存
-      if (result && !result.level) result.level = normalizeSourceQuality(result, params.quality);
+      // 档位以**探测到的真实规格**为准（probe.streamInfo / 码率反推），
+      // 探测不出证据时才退回「按请求档位归一化」。
+      // 第三方源会谎报：实测请求 master 时后端可能回一个 95kbps 的 mp3，
+      // 脚本却照报 quality:'master'，只看请求档位就会把「母带」标在 128k 文件上。
+      if (result) {
+        result.level = levelFromProbe(probe) || normalizeSourceQuality(result, params.quality);
+      }
       const elapsed = Date.now() - startTime;
       console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms' +
         (result && result.level ? ', 档位: ' + result.level : ''));
@@ -640,7 +650,7 @@ async function parseMusic(params) {
         probeAudio(result.url).then(function (probe) {
           if (settled) return;
           if (acceptProbe(probe, expectedMs)) {
-            settleWith(result, strategy.name);
+            settleWith(result, strategy.name, probe);
             return;
           }
           const shim = isShimProbe(probe, expectedMs);
