@@ -195,12 +195,40 @@ const DEFAULT_MUSIC_SOURCES_CONFIG = {
  * 读取音源配置
  * @returns {Object}
  */
+let lxNoScriptWarned = false;
+
+/**
+ * lxMusic 没有脚本 → 直接从 enabledSources 里摘掉。
+ *
+ * 为什么必须这么做：策略的 canHandle 是
+ *   `enabledSources.includes('lxMusic') && listRunners().length > 0`
+ * 前半段为真、后半段为假时，策略会**静默**从候选列表消失，日志里只看到
+ * 「可用策略: gdmusic, goMusic」，完全看不出是「没有脚本」——
+ * 2026-11-02 我就因此误判成脚本本身不支持母带，白查一轮。
+ *
+ * 所以把它变成显式行为：没脚本就当没启用，并打一次警告说明原因。
+ * 用户导入脚本后会走 normal 流程重新开启（面板上点一下即可）。
+ */
+function stripLxMusicWithoutScripts(config) {
+  if (!config || !Array.isArray(config.enabledSources)) return config;
+  if (!config.enabledSources.includes('lxMusic')) return config;
+  const scripts = Array.isArray(config.lxMusicScripts) ? config.lxMusicScripts : [];
+  if (scripts.length > 0) return config;
+  config.enabledSources = config.enabledSources.filter(function (v) { return v !== 'lxMusic'; });
+  if (!lxNoScriptWarned) {
+    lxNoScriptWarned = true;
+    console.warn('[MusicSources] 配置启用了 lxMusic 但没有导入任何落雪脚本，已自动关闭该音源；' +
+      '导入脚本后可在音源设置里重新开启');
+  }
+  return config;
+}
+
 function readMusicSourcesConfig() {
   try {
     if (fs.existsSync(MUSIC_SOURCES_CONFIG_FILE)) {
       const raw = fs.readFileSync(MUSIC_SOURCES_CONFIG_FILE, 'utf8');
       const config = JSON.parse(raw);
-      return { ...DEFAULT_MUSIC_SOURCES_CONFIG, ...config };
+      return stripLxMusicWithoutScripts({ ...DEFAULT_MUSIC_SOURCES_CONFIG, ...config });
     }
   } catch (e) {
     console.warn('[MusicSources] 读取配置失败:', e.message);
@@ -6014,6 +6042,9 @@ const server = http.createServer(async (req, res) => {
         setActiveRunner(body.activeLxMusicApiId);
       }
 
+      // 面板若在「没有脚本」的状态下把 lxMusic 打开，这里直接摘掉，
+      // 与 readMusicSourcesConfig 的守卫保持一致（开启也无效，不如视为未开启）。
+      stripLxMusicWithoutScripts(newConfig);
       saveMusicSourcesConfig(newConfig);
       sendJSON(res, { success: true, config: newConfig });
     } catch (err) {
@@ -6109,6 +6140,10 @@ const server = http.createServer(async (req, res) => {
           setActiveRunner(config.activeLxMusicApiId);
         }
       }
+      // 删到没有脚本了 → 顺手把 lxMusic 从 enabledSources 摘掉，
+      // 否则磁盘上会留下「启用了却没有脚本」的状态（读取时虽会自动纠正，
+      // 但配置本身仍是不自洽的）。
+      stripLxMusicWithoutScripts(config);
       saveMusicSourcesConfig(config);
 
       sendJSON(res, { success: true });

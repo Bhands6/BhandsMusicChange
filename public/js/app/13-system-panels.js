@@ -529,6 +529,15 @@ function toggleMusicSource(source) {
   }
   var enabled = _musicSourcesConfig.enabledSources || [];
   var idx = enabled.indexOf(source);
+  if (idx < 0 && source === 'lxMusic') {
+    // 没有脚本时不允许打开：策略的 canHandle 需要 listRunners().length > 0，
+    // 打开也是静默无效（候选列表里根本没有它），不如直接拦住并说明原因。
+    var scripts = _musicSourcesConfig.lxMusicScripts || [];
+    if (!scripts.length) {
+      showToast('还没有导入落雪脚本，无法启用 LX Music 音源');
+      return;
+    }
+  }
   if (idx >= 0) {
     enabled.splice(idx, 1);
   } else {
