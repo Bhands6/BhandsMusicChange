@@ -8,8 +8,29 @@ const { app, BrowserWindow, ipcMain, shell, screen, session, globalShortcut, dia
 const net = require('net');
 const path = require('path');
 const fs = require('fs');
-const { execFile, spawn } = require('child_process');
+const { execFile, execFileSync, spawn } = require('child_process');
 const crypto = require('crypto');
+
+// ==================== Windows 控制台代码页修复 ====================
+/**
+ * 简中 Windows 控制台默认代码页是 936(GBK)，而 Node/Electron 往 stdout 写的是 UTF-8 字节，
+ * 中文会被按 GBK 解码成「鍏抽棴闊充箰」这类乱码（`[MusicParser] 解析成功` → `[MusicParser] 瑙ｆ瀽鎴愬姛`）。
+ *
+ * chcp.com 改的是**整个共享控制台**的代码页，不是当前进程的：
+ * 实测进程内 execFileSync('chcp.com',['65001']) 之后，同窗口再读 chcp 已返回 65001。
+ * 所以启动时调一次，本窗口后续所有日志（主进程 + 内嵌 server.js + 各音源服务）都不会再乱码。
+ *
+ * 放在所有本地模块 require 之前——那些模块里有顶层日志，晚了就还是乱码。
+ * 打包后双击启动没有控制台，chcp 会失败：静默吞掉，绝不能让启动流程挂掉。
+ */
+if (process.platform === 'win32') {
+  try {
+    execFileSync('chcp.com', ['65001'], { stdio: 'ignore', timeout: 3000 });
+  } catch (_) {
+    /* 无控制台（打包后直接运行）/ 非简中系统：忽略即可 */
+  }
+}
+
 const systemMemory = require('./system-memory'); // 内存管家：应用工作集压缩 + 系统级内存释放（移植自上游 Mineradio 2.2.0）
 const {
   LocalMusicLibrary,
