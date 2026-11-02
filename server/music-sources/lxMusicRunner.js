@@ -942,8 +942,9 @@ async function resolveWithRunner(runner, p) {
 
   const cascade = getQualityCascade(p.quality || '320k');
   const wanted = WANTED_RANK[p.quality] || 3;
-  console.log('[LxMusic] 音质降级链:', cascade.join(' → '), '音源顺序:', order.join(' → '),
-    '目标等级:', wanted);
+  const songTag = (p.name || '') + (p.artists ? ' - ' + (Array.isArray(p.artists) ? p.artists.join('/') : p.artists) : '');
+  console.log('[LxMusic]', songTag.trim() || p.id, '| 降级链:', cascade.join(' → '),
+    '| 音源:', order.join(' → '), '| 目标等级:', wanted);
 
   // 按**真实规格**逐档校验，而不是「拿到 url 就算成功」。
   // 实测（2026-11-02）：请求 master 母带时后端会悄悄回一个 95kbps 的 mp3，

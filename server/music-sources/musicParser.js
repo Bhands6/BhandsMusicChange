@@ -16,6 +16,20 @@ const { probeAudio, acceptProbe, levelFromProbe } = require('./durationProbe');
 // 缓存配置
 // ============================================================
 
+/**
+ * 日志用的歌曲摘要：`演员 - 薛之谦 (32507038)`。
+ * 只打 id 的话，日志里出现「开始解析歌曲 32507038」根本认不出是哪首，
+ * 排查「某首歌为什么只拿到试听」时得来回查 id。
+ */
+function songLabel(params) {
+  if (!params) return '';
+  const name = String(params.name || '').trim();
+  const artists = Array.isArray(params.artists) ? params.artists.filter(Boolean).join('/') : String(params.artists || '');
+  const head = [name, artists].filter(Boolean).join(' - ');
+  if (!head) return String(params.id || '');
+  return head + ' (' + params.id + ')';
+}
+
 /** 成功缓存时间：10 分钟（对齐 Bhands_Web）
  *  外站直链与网易 URL 都带时效 token，缓存过长会供出已过期死链；
  *  原 30 分钟偏长，播放失败重试依赖前端 fresh 绕过。 */
@@ -52,7 +66,7 @@ function getSuccessCacheKey(id, sources, quality) {
   return String(id) + '_' + String(quality || '') + '_' + (sources || []).sort().join(',');
 }
 
-function getSuccessCache(id, sources, quality) {
+function getSuccessCache(id, sources, quality, label) {
   const key = getSuccessCacheKey(id, sources, quality);
   const cached = successCache.get(key);
   if (!cached) return null;
@@ -71,7 +85,7 @@ function getSuccessCache(id, sources, quality) {
     return null;
   }
 
-  console.log('[MusicParser] 命中成功缓存, 歌曲:', id);
+  console.log('[MusicParser] 命中成功缓存, 歌曲:', label || id);
   return cached.data;
 }
 
@@ -542,7 +556,7 @@ async function parseMusic(params) {
   params.enabledSources = enabledSources;
 
   // 检查成功缓存（key 含音质：切音质后不会复用旧音质的结果）
-  const cached = getSuccessCache(params.id, enabledSources, params.quality);
+  const cached = getSuccessCache(params.id, enabledSources, params.quality, songLabel(params));
   if (cached) {
     return cached;
   }
@@ -568,8 +582,8 @@ async function parseMusic(params) {
   }
 
   console.log(
-    '[MusicParser] 开始解析歌曲 ' + params.id + ', 可用策略:',
-    availableStrategies.map(function (s) { return s.name; }).join(', ')
+    '[MusicParser] 开始解析:', songLabel(params), '· 目标档位:', params.quality || '默认',
+    '· 可用策略:', availableStrategies.map(function (s) { return s.name; }).join(', ')
   );
 
   // 竞速版（移植自 Bhands_Web）：全部策略并发启动，第一个「成功 + 通过时长/类型
