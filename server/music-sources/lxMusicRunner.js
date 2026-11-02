@@ -218,7 +218,15 @@ const WORKER_CODE = `
   }
   function pinnedLookup(addr) {
     return function (host, opts, cb) {
-      process.nextTick(function () { cb(null, addr.address, addr.family); });
+      process.nextTick(function () {
+        // Node 18+ 的 net 内部以 { all: true } 调 lookup，并要求返回数组形式
+        // （node:net 的 emitLookup 直接取 addresses[0].address）。
+        // 老式 (null, ip, family) 三元组会被当成数组取首字符 → 报
+        // "Invalid IP address: undefined"，沙盒里所有 request 全挂。
+        // 两种签名都要支持，别退回单一形式。
+        if (opts && opts.all) cb(null, [{ address: addr.address, family: addr.family }]);
+        else cb(null, addr.address, addr.family);
+      });
     };
   }
 
