@@ -73,6 +73,7 @@ async function refreshLoginStatus(force) {
     if (typeof syncSourceParseOrderVisibility === 'function') syncSourceParseOrderVisibility();
     if (loginStatus.loggedIn && !hasPlatformLogin(activeAccountProvider)) activeAccountProvider = 'netease';
     renderUserBtn();
+    scheduleNeteaseVipExpiryRefresh();   // 会员到期点可能变了 → 重排卡点刷新
     if (info && info.loggedIn) {
       homeDiscoverState.loaded = false;
       homeDiscoverState.loggedIn = true;
@@ -96,6 +97,83 @@ async function refreshLoginStatus(force) {
     return null;
   }
 }
+/* ============================================================
+ *  网易云会员到期自动刷新
+ *
+ *  背景：loginStatus 只在启动时拉一次（扫码登录后再补一次），之后永不刷新。
+ *  QQ 有 45 秒轮询兜着，网易云一直没有对应机制 —— 应用长时间不关时，
+ *  会员在运行期间过期根本不会被发现：
+ *    · 界面继续显示「网易云 VIP」；
+ *    · shouldPreferThirdPartyParse() 用 hasVip=true 走官方优先，
+ *      付费歌于是只能拿到 30 秒试听（2026-11-02 定位到《演员》）。
+ *  实测该账号 vip_info 的 associator/musicPackage 到期点是 2026-10-28，
+ *  而应用跨过了那一天没重启，症状对得上。
+ *
+ *  现在服务端 /api/login/status 会带 vipExpireAt（ms 时间戳，0=未知），据此：
+ *    ① 到期点 +1 分钟精确刷新一次（超过 6 小时不排，交给兜底轮询）；
+ *    ② 10 分钟兜底轮询：覆盖 vipExpireAt 为 0（永久包/上游失败）和系统休眠
+ *       导致的定时器漂移。
+ *  两者都走 refreshNeteaseVipState()，只合并会员字段 —— 刻意不复用
+ *  refreshLoginStatus()，那条路径会连带刷新歌单/首页/红心，10 分钟一次太重。
+ * ============================================================ */
+var neteaseVipExpireTimer = null;
+var neteaseVipPollTimer = null;
+var NETEASE_VIP_POLL_MS = 10 * 60 * 1000;
+var NETEASE_VIP_MAX_TIMEOUT_MS = 6 * 60 * 60 * 1000;
+
+function clearNeteaseVipExpireTimer() {
+  if (neteaseVipExpireTimer) {
+    clearTimeout(neteaseVipExpireTimer);
+    neteaseVipExpireTimer = null;
+  }
+}
+
+function scheduleNeteaseVipExpiryRefresh() {
+  clearNeteaseVipExpireTimer();
+  var at = Number(loginStatus && loginStatus.vipExpireAt) || 0;
+  if (!at) return;                                  // 没有可信到期点 → 只靠兜底轮询
+  var delay = at - Date.now() + 60000;              // 到期后 1 分钟，避开边界抖动
+  if (delay <= 0) return;                           // 已经过期：这次响应本身就按 none 返回了
+  if (delay > NETEASE_VIP_MAX_TIMEOUT_MS) return;   // 太远，交给兜底轮询
+  neteaseVipExpireTimer = setTimeout(function () {
+    neteaseVipExpireTimer = null;
+    refreshNeteaseVipState();
+  }, delay);
+}
+
+async function refreshNeteaseVipState() {
+  try {
+    var info = await apiJson('/api/login/status?t=' + Date.now());
+    if (!info) return;
+    // 只合并会员相关字段：不要整体替换 loginStatus，
+    // 免得把昵称/头像/歌单态等并发写入的字段盖回旧值。
+    loginStatus = Object.assign({}, loginStatus, {
+      loggedIn: info.loggedIn,
+      vipType: info.vipType,
+      vipLevel: info.vipLevel,
+      isVip: info.isVip,
+      isSvip: info.isSvip,
+      vipLabel: info.vipLabel,
+      vipExpireAt: info.vipExpireAt
+    });
+    renderUserBtn();
+    if (typeof syncSourceParseOrderVisibility === 'function') syncSourceParseOrderVisibility();
+    scheduleNeteaseVipExpiryRefresh();
+  } catch (e) {
+    /* 静默：轮询失败不要动现有会员态，等下一次 */
+  }
+}
+
+function startNeteaseLoginStatusAutoRefresh() {
+  if (neteaseVipPollTimer) clearInterval(neteaseVipPollTimer);
+  neteaseVipPollTimer = setInterval(refreshNeteaseVipState, NETEASE_VIP_POLL_MS);
+}
+
+// 模块加载即启动兜底轮询（不放在 18-session-boot 的启动段：
+// 那里已经有 QQ 的轮询，两处分散反而容易漏；这里和定时器定义放一起更好维护）。
+// setTimeout/setInterval 在脚本加载阶段注册没有副作用，第一次触发在 10 分钟后。
+startNeteaseLoginStatusAutoRefresh();
+
 function normalizeQQLoginStatus(info) {
   var fallback = { provider: 'qq', loggedIn: false, preview: false, nickname: 'QQ 音乐', userId: '', avatar: '', vipType: 0, stale: false, playbackKeyReady: false };
   if (!info || !info.loggedIn) return Object.assign({}, fallback, info || {}, {
@@ -649,6 +727,8 @@ async function doLogout() {
     }
   } catch (e) {}
   loginStatus = { loggedIn: false };
+  // 登出后立刻撤掉会员到期定时器，别让它拖到下一次轮询才恢复
+  clearNeteaseVipExpireTimer();
   if (!hasPlatformLogin('netease') || !hasPlatformLogin('qq')) dualAccountMode = false;
   activeAccountProvider = firstLoggedProvider();
   userPlaylists = qqPlaylists.slice();

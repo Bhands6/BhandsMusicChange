@@ -4427,6 +4427,31 @@ function vipLevelFromVipInfo(data) {
   if (isVipPackageActive(data.associator) || isVipPackageActive(data.musicPackage)) return 'vip';
   return 'none';
 }
+
+/**
+ * 取当前有效会员包里最晚的到期时间（毫秒时间戳），0 表示「算不出来」。
+ *
+ * 0 的三种情况都要当成「没有可信到期点」处理：
+ *   · 没有任何有效包（未开通 / 已全部过期）
+ *   · 包有效但 `expireTime <= 0` —— isVipPackageActive 把这种当作永久包放行，
+ *     但没有到期点就没法卡点刷新
+ *   · vip_info 拉取失败，走的是降级分支
+ *
+ * 前端拿这个值在到期点后刷新会员态，修「会员运行期间过期了，界面还显示 VIP」
+ * （2026-11-02：用户会员 10-28 到期，应用没重启，一整天都在按 VIP 走官方优先，
+ *  付费歌全变成 30 秒试听）。
+ */
+function vipExpireAtFromVipInfo(data) {
+  data = data || {};
+  const packs = [data.redplus, data.associator, data.musicPackage];
+  let latest = 0;
+  for (const pkg of packs) {
+    if (!isVipPackageActive(pkg)) continue;
+    const expire = Number(pkg.expireTime || 0) || 0;
+    if (expire > latest) latest = expire;
+  }
+  return latest;
+}
 async function resolveNeteaseVip(info) {
   if (!info || !info.loggedIn || !userCookie) return info;
   let data = null;
@@ -4454,15 +4479,18 @@ async function resolveNeteaseVip(info) {
     // 拉不到权威数据时，宁可降级也不能把普通黑胶标成 SVIP
     level = info.vipLevel === 'svip' ? 'vip' : (info.vipLevel || 'none');
   }
+  // 到期点只信权威数据：走降级分支时上游都没拉到，给 0 让前端靠兜底轮询
+  const vipExpireAt = hasPackageField ? vipExpireAtFromVipInfo(data) : 0;
   return Object.assign({}, info, {
     vipLevel: level,
     isVip: level !== 'none',
     isSvip: level === 'svip',
     vipLabel: level === 'svip' ? 'SVIP' : (level === 'vip' ? 'VIP' : '无VIP'),
+    vipExpireAt: vipExpireAt,
   });
 }
 async function getLoginInfo() {
-  if (!userCookie) return { loggedIn: false, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP' };
+  if (!userCookie) return { loggedIn: false, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP', vipExpireAt: 0 };
 
   // login_status 对二维码 cookie 的资料刷新通常更及时；失败时再降级到 user_account。
   try {
@@ -4481,10 +4509,10 @@ async function getLoginInfo() {
     const info = normalizeLoginInfo(body.profile, body.account, body);
     if (info.loggedIn) return await resolveNeteaseVip(info);
     if (isNeteaseAuthInvalidPayload(acc)) saveCookie('');
-    return { loggedIn: false, hasCookie: !!userCookie, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP' };
+    return { loggedIn: false, hasCookie: !!userCookie, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP', vipExpireAt: 0 };
   } catch (e) {
     console.warn('[Login] account check failed:', e.message);
-    return { loggedIn: false, hasCookie: !!userCookie, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP' };
+    return { loggedIn: false, hasCookie: !!userCookie, vipType: 0, vipLevel: 'none', isVip: false, isSvip: false, vipLabel: '无VIP', vipExpireAt: 0 };
   }
 }
 
