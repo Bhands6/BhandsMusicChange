@@ -64,7 +64,7 @@ const { once } = require('events'); // 事件转 Promise
 const { fileURLToPath } = require('url');  // URL 转文件路径
 const { analyzePodcastDjStream, analyzePodcastDjIntro } = require('./dj-analyzer');  // DJ 节拍分析器
 const { parseMusic, clearCacheForSong, clearAllCache, getCacheStats, listRunners } = require('./music-sources/musicParser');  // 多音源解析器
-const { initRunner, setActiveRunner, removeRunner, listRunners: listLxRunners } = require('./music-sources/lxMusicRunner');  // LX Music 脚本执行器
+const { initRunner, setActiveRunner, getActiveRunnerId, removeRunner, listRunners: listLxRunners } = require('./music-sources/lxMusicRunner');  // LX Music 脚本执行器
 const { resetServiceHealth: resetGoMusicServiceHealth, probeService: probeGoMusicService } = require('./music-sources/goMusicSwitch');  // go-music-api 换源服务健康记忆 / 探活
 const kugouService = require('./music-sources/kugouService');  // 内置酷狗 API 服务（扫码登录 / 会员音质）
 /* cuefield 自动混音：转场方案规划 + 反馈记录。
@@ -6068,8 +6068,14 @@ const server = http.createServer(async (req, res) => {
       const scriptId = 'lx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
       const scriptName = name || 'LX Music 脚本 ' + scriptId;
 
-      // 初始化执行器
-      const runner = await initRunner(scriptId, script, scriptName, true);
+      // 初始化执行器。
+      // ⚠️ 这里传 false（不强行激活）：导入一个新脚本就把当前能用的脚本顶掉，
+      // 是实打实踩过的坑 —— 用户导入一个后端已失效的脚本，原本正常的音源被替换，
+      // 表现为「突然拿不到无损/母带了」，而脚本本身能加载、初始化阶段根本发现不了
+      // （2026-11-02 用户实测）。
+      // initRunner 内部逻辑是 `activate || !_activeRunnerId`，传 false 恰好等于
+      // 「只有当前没有活跃脚本时才自动激活」，正是想要的行为。
+      const runner = await initRunner(scriptId, script, scriptName, false);
 
       if (runner) {
         // 保存到配置
@@ -6080,13 +6086,27 @@ const server = http.createServer(async (req, res) => {
           name: scriptName,
           script: script
         });
-        config.activeLxMusicApiId = scriptId;
+        // 仅在「没有活跃脚本」或「活跃脚本已被删」时才把新脚本设为活跃，
+        // 其余情况保持用户原来在用的那个。
+        const activeStillValid = config.activeLxMusicApiId
+          && config.lxMusicScripts.some(function (x) { return x.id === config.activeLxMusicApiId; });
+        let activated = false;
+        if (!activeStillValid) {
+          config.activeLxMusicApiId = scriptId;
+          setActiveRunner(scriptId);
+          activated = true;
+        } else if (getActiveRunnerId() !== config.activeLxMusicApiId) {
+          // 进程内的活跃指针与配置不一致（例如应用刚启动还没恢复），对齐一下
+          setActiveRunner(config.activeLxMusicApiId);
+        }
         saveMusicSourcesConfig(config);
 
         sendJSON(res, {
           success: true,
           id: scriptId,
           name: scriptName,
+          activated: activated,
+          activeId: config.activeLxMusicApiId,
           sources: runner.getAvailableSourceKeys()
         });
       } else {
