@@ -77,6 +77,21 @@ const WANTED_RANK = { standard: 1, higher: 2, exhigh: 2, lossless: 3, hires: 4, 
  * 5 分钟内直接跳过，避免重复探测。song 级差异不影响正确性：
  * 记忆命中时只跳过该档位，其余档位照常尝试，最坏结果是少拿一次母带。
  */
+/**
+ * 每个档位「最好能给到的等级」。用于提前收工：
+ * 降级链是从高到低遍历的，一旦手里最好的已经 >= 下一档的理论上限，
+ * 后面更低的档不可能更好，继续跑纯浪费（实测：目标 hires 时会把
+ * 320k/128k 也试一遍，单首 5.0s）。
+ */
+const TIER_MAX_RANK = { master: 5, atmos: 4, flac: 3, '320k': 2, '128k': 1 };
+
+/** 实测规格的可读文本，例如 '(24bit/96kHz)'；拿不到就返回空串 */
+function specText(probe) {
+  const si = probe && probe.streamInfo;
+  if (!si || !si.bits || !si.sampleRate) return '';
+  return '(' + si.bits + 'bit/' + (si.sampleRate / 1000) + 'kHz)';
+}
+
 const TIER_VERDICT_TTL = 5 * 60 * 1000;
 const badTierCache = new Map();
 
@@ -938,6 +953,11 @@ async function resolveWithRunner(runner, p) {
   // 探测取不到证据（level 为空）时按 fail-open 接受，避免在判断不出规格的音源上死循环。
   let best = null;
   for (const lxQuality of cascade) {
+    // 已拿到不差于该档理论上限的音频 → 后面更低的档不可能更好，收工
+    if (best && best.rank >= (TIER_MAX_RANK[lxQuality] || 0)) {
+      console.log('[LxMusic] 已有', best.level, '，跳过剩余低档位（起手', lxQuality, '）');
+      break;
+    }
     for (const sourceKey of order) {
       // 该源这一档刚被证实「给不出高解析」→ 直接跳过，省掉一次脚本调用 + 一次探测
       if (isBadTier(sourceKey, lxQuality)) continue;
@@ -950,16 +970,21 @@ async function resolveWithRunner(runner, p) {
         const rank = LEVEL_RANK[level] || 0;
         if (!level || rank >= wanted) {
           console.log('[LxMusic] 成功, 音源:', sourceKey, '音质:', lxQuality,
-            level ? '(实测 ' + level + ')' : '(规格未知)');
-          return { url: url, source: 'lx-' + sourceKey, quality: lxQuality, level: level || undefined };
+            level ? '(实测 ' + level + specText(probe) + ')' : '(规格未知)');
+          return {
+            url: url, source: 'lx-' + sourceKey, quality: lxQuality,
+            level: level || undefined,
+            streamInfo: (probe && probe.streamInfo) || undefined
+          };
         }
         // 未达标：记录当前最佳，继续降级链
         if (!best || rank > best.rank) {
-          best = { url: url, source: 'lx-' + sourceKey, quality: lxQuality, level: level, rank: rank };
+          best = { url: url, source: 'lx-' + sourceKey, quality: lxQuality, level: level, rank: rank,
+                   streamInfo: (probe && probe.streamInfo) || undefined };
         }
         // 连无损都不到 → 这一档对这个源是假的，记下来免得下一首再试
         if (rank < LEVEL_RANK.lossless) markBadTier(sourceKey, lxQuality);
-        console.log('[LxMusic] 档位', lxQuality, '实测仅', level, '未达目标，继续降级');
+        console.log('[LxMusic] 档位', lxQuality, '实测仅', level + specText(probe), '未达目标，继续降级');
       } catch (e) {
         // 忽略单个音源失败，继续下一个
       }
@@ -967,8 +992,11 @@ async function resolveWithRunner(runner, p) {
   }
 
   if (best) {
-    console.log('[LxMusic] 无档位达标，回落到实测最好的一档:', best.level, '(', best.source, ')');
-    return { url: best.url, source: best.source, quality: best.quality, level: best.level };
+    console.log('[LxMusic] 无档位达标，回落到实测最好的一档:', best.level,
+      best.streamInfo ? '(' + best.streamInfo.bits + 'bit/' + (best.streamInfo.sampleRate / 1000) + 'kHz)' : '',
+      '(', best.source, ')');
+    return { url: best.url, source: best.source, quality: best.quality, level: best.level,
+             streamInfo: best.streamInfo };
   }
   return null;
 }

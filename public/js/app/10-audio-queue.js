@@ -671,7 +671,8 @@ async function tryThirdPartyParse(song, quality, opts) {
         url: result.url,
         level: result.level || '',
         br: Number(result.br) || 0,
-        source: result.source || 'third-party'
+        source: result.source || 'third-party',
+        streamInfo: result.streamInfo || null
       };
     }
   } catch (e) {
@@ -694,7 +695,8 @@ function thirdPartyPlaybackData(hit) {
     source: 'third-party',
     thirdPartySource: hit.source || 'third-party',
     level: hit.level || '',
-    br: hit.br || 0
+    br: hit.br || 0,
+    streamInfo: hit.streamInfo || null
   };
 }
 async function tryAutoPlaybackFallback(song, data, idx, token, opts) {

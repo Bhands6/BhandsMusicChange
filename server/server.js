@@ -5748,7 +5748,9 @@ const server = http.createServer(async (req, res) => {
           // 归一化档位键（'lossless'/'exhigh'/'standard'，与官方源 d.level 同语义）：
           // 前端音质按钮在**非会员**时用它显示「实际解析出来的档位」
           level: result.level,
-          br: result.br
+          br: result.br,
+          // 实测规格（FLAC 才有）：{ bits, sampleRate, channels }，前端音质 tooltip 用
+          streamInfo: result.streamInfo || null
         });
       } else {
         sendJSON(res, { url: null, message: '所有音源均解析失败' }, 404);

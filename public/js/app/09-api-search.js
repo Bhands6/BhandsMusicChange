@@ -102,13 +102,23 @@ function playbackBitrateLabel(br) {
  *     归一成「高清臻音」（'极高' 会被显示成 '高清臻音'）。
  * @returns {string} 拿不到真实档位时返回 ''，调用方据此不下结论
  */
+/**
+ * 实测规格文本（服务端 probe 出的 FLAC STREAMINFO），例如 '24bit/96kHz'。
+ * 比码率更能说明问题：同为「无损」，16bit/44.1k 与 24bit/96k 差着一个档。
+ */
+function playbackFormatSpecText(data) {
+  var si = data && data.streamInfo;
+  if (!si || !si.bits || !si.sampleRate) return '';
+  return si.bits + 'bit/' + (si.sampleRate / 1000) + 'kHz';
+}
 function playbackResolvedQualityText(data) {
   data = data || {};
   var label = data.level ? playbackQualityLabel(data.level)
     : (data.quality ? String(data.quality) : '');
-  var br = playbackBitrateLabel(data.br);
-  if (label && br) return label + ' · ' + br;
-  return label || br;
+  // 有实测规格优先用它（比码率直观），拿不到才退回码率
+  var detail = playbackFormatSpecText(data) || playbackBitrateLabel(data.br);
+  if (label && detail) return label + ' · ' + detail;
+  return label || detail;
 }
 function savePlaybackQualityPreference() {
   try { localStorage.setItem(PLAYBACK_QUALITY_STORE_KEY, playbackQuality); } catch (e) {}
@@ -136,7 +146,11 @@ function noteResolvedPlaybackQuality(data) {
   }
   // 拿不到任何档位证据（本地曲目 / 服务端没回 level·br）→ 置空回退偏好，
   // 否则按钮会一直挂着上一首的档位
-  var next = level ? { level: level, br: br, source: data.thirdPartySource || data.source || '' } : null;
+  var next = level ? {
+    level: level, br: br,
+    source: data.thirdPartySource || data.source || '',
+    streamInfo: data.streamInfo || null
+  } : null;
   var prev = lastResolvedPlaybackQuality;
   if (!next && !prev) return;
   if (next && prev && prev.level === next.level && prev.br === next.br && prev.source === next.source) return;

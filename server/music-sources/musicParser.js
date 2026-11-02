@@ -592,6 +592,8 @@ async function parseMusic(params) {
       // 脚本却照报 quality:'master'，只看请求档位就会把「母带」标在 128k 文件上。
       if (result) {
         result.level = levelFromProbe(probe) || normalizeSourceQuality(result, params.quality);
+        // 带上真实规格（位深/采样率），接口透给前端后音质 tooltip 能显示「24bit/96kHz」
+        if (probe && probe.streamInfo) result.streamInfo = probe.streamInfo;
       }
       const elapsed = Date.now() - startTime;
       console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms' +
