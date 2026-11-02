@@ -878,13 +878,14 @@ var backgroundStarRiverUniforms = {
   uPointScale: uniforms.uPointScale,
   uParticleDim: uniforms.uParticleDim,
   uTintColor: uniforms.uTintColor,
+  uStarSizeMul: { value: 1.0 },
   uAlpha: { value: 0 }
 };
 
 var backgroundStarRiverVs = `
 precision highp float;
 attribute float aSeed, aLane, aDepthSeed;
-uniform float uTime, uBass, uTreble, uBeat, uEnergy, uPixel, uPointScale, uAlpha, uParticleDim;
+uniform float uTime, uBass, uTreble, uBeat, uEnergy, uPixel, uPointScale, uAlpha, uParticleDim, uStarSizeMul;
 uniform vec3 uTintColor;
 varying vec3 vColor;
 varying float vAlpha, vTwinkle;
@@ -919,7 +920,8 @@ void main(){
   vec4 mv = modelViewMatrix * vec4(pos, 1.0);
   float depthSize = 30.0 / max(0.65, -mv.z);
   float size = 1.10 + ridge * 2.40 + twinkle * 2.80 + uTreble * 0.80 + uBeat * 0.50;
-  gl_PointSize = clamp(size * depthSize * uPixel * uPointScale, 0.75, 5.60);
+  // uStarSizeMul：远离机位的预设（如音浪环阵 radius 11.6）补偿点尺寸，使星河观感与音域回响一致
+  gl_PointSize = clamp(size * depthSize * uPixel * uPointScale * uStarSizeMul, 0.75, 5.60 * uStarSizeMul);
   gl_Position = projectionMatrix * mv;
 }
 `;
@@ -964,11 +966,18 @@ function backgroundStarRiverTargetAlpha() {
   if (Number(fx.preset) === SKULL_PRESET_INDEX) return 0.38 * STAR_RIVER_BRIGHTNESS;
   if (typeof window !== 'undefined' && window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx)) return 0.28 * STAR_RIVER_BRIGHTNESS;
   if (typeof window !== 'undefined' && window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) return 0.28 * STAR_RIVER_BRIGHTNESS;
+  // 音频几何体预设族：机位比其他预设远，密度观感靠 uStarSizeMul 补，这里与音域回响取同一基准
+  if (typeof isAudioFxPreset === 'function' && isAudioFxPreset(fx)) return 0.28 * STAR_RIVER_BRIGHTNESS;
   return 0.34 * STAR_RIVER_BRIGHTNESS;
 }
 
 function updateBackgroundStarRiverState(dt, immediate) {
   if (!backgroundStarRiverParticles || !backgroundStarRiverUniforms) return;
+  // 音频几何体预设的机位普遍更远（环阵 11.6 / 隧道 14.5 / 球壳 11.0，基准是 6.6），
+  // 星点 -mv.z 因此偏大、屏幕上偏小，按机位距离成比例补回来
+  var audioFxActive = typeof isAudioFxPreset === 'function' && isAudioFxPreset(fx);
+  var camR = (typeof orbit !== 'undefined' && orbit && Number.isFinite(Number(orbit.radius))) ? Number(orbit.radius) : 6.6;
+  backgroundStarRiverUniforms.uStarSizeMul.value = audioFxActive ? clampRange((camR / 6.6) * 0.82, 1.0, 2.0) : 1.0;
   var target = backgroundStarRiverTargetAlpha();
   if (immediate) {
     backgroundStarRiverUniforms.uAlpha.value = target;

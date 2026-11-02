@@ -1270,10 +1270,13 @@ function animate() {
   tickGestureRotation(dt);
   var skullPresetActive = fx && fx.preset === SKULL_PRESET_INDEX;
   var workshopPresetActive = !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
-  particles.visible = !skullPresetActive && !workshopPresetActive;
-  if (bloomParticles) bloomParticles.visible = !skullPresetActive && !workshopPresetActive && fx.bloom && fx.bloomStrength > 0.01;
-  if (floatGroup) floatGroup.visible = !skullPresetActive && !workshopPresetActive;
-  if (backCoverGroup) backCoverGroup.visible = !skullPresetActive && !workshopPresetActive;
+  // 音频几何体预设族用 visible 让位：不能压 uParticleDim，否则背景星河（共用该 uniform）会一起被黑掉
+  var ringPresetActive = isAudioFxPreset(fx);
+  var mainLayerOff = skullPresetActive || workshopPresetActive || ringPresetActive;
+  particles.visible = !mainLayerOff;
+  if (bloomParticles) bloomParticles.visible = !mainLayerOff && fx.bloom && fx.bloomStrength > 0.01;
+  if (floatGroup) floatGroup.visible = !mainLayerOff;
+  if (backCoverGroup) backCoverGroup.visible = !mainLayerOff;
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
   var targetRotX = orbit.centerLocked ? 0 : (headParallax.active ? -headParallax.y * 0.35 : 0) + gestureRotation.x;
   particles.rotation.y += (targetRotY - particles.rotation.y) * 0.055;
@@ -1309,6 +1312,36 @@ function animate() {
       audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
     });
   }
+  // 音浪环阵（预设18）：三层环形柱阵，独立于主粒子层
+  if (window.MineradioAudioRing) {
+    MineradioAudioRing.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+  // 音浪隧道（预设19）
+  if (window.MineradioAudioTunnel) {
+    MineradioAudioTunnel.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+  // 声波球壳（预设20）
+  if (window.MineradioAudioOrb) {
+    MineradioAudioOrb.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+  // 音轨缎带 / 轨道环 / 双螺旋（预设21-23）已移除
   updateSkullParticleLayer(dt);
   updateStageLyrics3D(dt);
   syncDesktopOverlayState();

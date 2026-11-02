@@ -264,6 +264,19 @@ function coverParticleGridForResolution(v) {
   return grid % 2 ? grid : grid + 1;
 }
 
+// 音频几何体预设族（音浪环阵 / 音浪隧道 / 声波球壳）
+// 这些预设都自带独立的 InstancedMesh 层，主粒子层需要让位，星河与侧架要按机位距离补偿
+function isAudioFxPreset(presetOrFx) {
+  if (typeof window === 'undefined') return false;
+  var fxObj = (presetOrFx && typeof presetOrFx === 'object') ? presetOrFx : fx;
+  if (!fxObj) return false;
+  var list = [window.MineradioAudioRing, window.MineradioAudioTunnel, window.MineradioAudioOrb];
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && typeof list[i].isActive === 'function' && list[i].isActive(fxObj)) return true;
+  }
+  return false;
+}
+
 // ↓ 原属 14-account.js
 function bindModalBackdropClose() {
   [

@@ -126,24 +126,39 @@ var shelfVisibility = 0;  // 0..1, 侧栏自动隐藏的整体透明度系数
 function isPortraitShelfViewport() {
   return innerHeight > innerWidth * 1.08;
 }
+// 相机机位距离系数：侧架基准坐标按 radius 6.6 标定，机位拉远时需等比外推
+// 目前只对音浪环阵（预设18，机位 11.6）启用，避免影响其他预设既有观感
+function shelfCameraDistanceScale() {
+  if (typeof window === 'undefined') return 1;
+  if (typeof fx === 'undefined' || !fx) return 1;
+  if (typeof isAudioFxPreset !== 'function' || !isAudioFxPreset(fx)) return 1;
+  var base = 6.6;
+  // 用运行时 radius（会话内会平滑插值到目标机位），切换预设时侧架跟着滑出去而不是跳变
+  var r = (typeof orbit !== 'undefined' && orbit && Number.isFinite(Number(orbit.radius))) ? Number(orbit.radius) : base;
+  return clampRange(r / base, 1.0, 2.40);
+}
 function shelfLayoutProfile() {
   var portrait = isPortraitShelfViewport();
   var narrow = !portrait && innerWidth < 980;
   var skullShelf = shouldUseSkullSafeShelfCamera();
   var detailScale = portrait ? clampRange(innerWidth / 820, 0.70, 0.86) : (narrow ? 0.92 : 1.04);
   var shelfCtl = shelfSettings();
+  // 侧架的 sideX / sideZ 基准值（3.18 / 0.86）是按默认机位 radius 6.6 调出来的世界坐标，
+  // 相机拉远时同一坐标会落到画面中间（音浪环阵机位 11.6 就出现这个问题），按距离等比外推。
+  // 只在环阵预设生效，不动其他预设已调好的观感；骷髅侧架有独立分支，乘 1。
+  var camK = skullShelf ? 1 : shelfCameraDistanceScale();
   return {
     portrait: portrait,
     narrow: narrow,
-    sideX: (skullShelf ? (portrait ? 0.22 : (narrow ? 0.46 : 0.76)) : (portrait ? 1.56 : (narrow ? 2.48 : 3.18))) + shelfCtl.x,
+    sideX: ((skullShelf ? (portrait ? 0.22 : (narrow ? 0.46 : 0.76)) : (portrait ? 1.56 : (narrow ? 2.48 : 3.18))) + shelfCtl.x) * camK,
     sideY: (skullShelf ? (portrait ? -0.22 : (narrow ? -0.30 : -0.34)) : 0) + shelfCtl.y,
-    sideXStep: skullShelf ? (portrait ? 0.018 : 0.034) : (portrait ? 0.018 : 0.040),
-    sideYStep: skullShelf ? (portrait ? 0.46 : 0.62) : (portrait ? 0.52 : 0.68),
-    sideZ: (skullShelf ? (portrait ? 0.86 : 0.92) : (portrait ? 0.78 : 0.86)) + shelfCtl.z,
-    sideZStep: skullShelf ? (portrait ? 0.108 : 0.158) : (portrait ? 0.118 : 0.170),
-    sideEntryX: skullShelf ? (portrait ? 0.30 : 0.50) : (portrait ? 0.38 : 0.82),
-    sideDetailShift: skullShelf ? (portrait ? 0.00 : 0.00) : (portrait ? 0.38 : 0.82),
-    sideScale: (skullShelf ? (portrait ? 0.84 : (narrow ? 1.04 : 1.22)) : (portrait ? 0.70 : (narrow ? 0.86 : 1))) * shelfCtl.size,
+    sideXStep: (skullShelf ? (portrait ? 0.018 : 0.034) : (portrait ? 0.018 : 0.040)) * camK,
+    sideYStep: (skullShelf ? (portrait ? 0.46 : 0.62) : (portrait ? 0.52 : 0.68)) * camK,
+    sideZ: ((skullShelf ? (portrait ? 0.86 : 0.92) : (portrait ? 0.78 : 0.86)) + shelfCtl.z) * camK,
+    sideZStep: (skullShelf ? (portrait ? 0.108 : 0.158) : (portrait ? 0.118 : 0.170)) * camK,
+    sideEntryX: (skullShelf ? (portrait ? 0.30 : 0.50) : (portrait ? 0.38 : 0.82)) * camK,
+    sideDetailShift: (skullShelf ? (portrait ? 0.00 : 0.00) : (portrait ? 0.38 : 0.82)) * camK,
+    sideScale: (skullShelf ? (portrait ? 0.84 : (narrow ? 1.04 : 1.22)) : (portrait ? 0.70 : (narrow ? 0.86 : 1))) * shelfCtl.size * camK,
     sideRotY: (skullShelf ? (portrait ? -0.085 : -0.190) : 0) + shelfCtl.angle,
     sideRotX: skullShelf ? (portrait ? 0.018 : 0.030) : 0,
     stageX: shelfCtl.x,

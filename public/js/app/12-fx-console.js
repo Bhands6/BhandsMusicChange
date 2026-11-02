@@ -317,6 +317,10 @@ var presetMeta = [
 if (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_META) {
   for (var wfi = 0; wfi < WebFxPresets.PRESET_META.length; wfi++) presetMeta.push(WebFxPresets.PRESET_META[wfi]);
 }
+// 预设18 音浪环阵（须在 Web 移植段之后 push，索引才对得上）
+presetMeta.push({ name: '音浪环阵', nameHtml: '音浪环阵 <span class="pc-name-en">Audio Ring</span>', desc: '三层柱阵 · 声浪外扩' });
+presetMeta.push({ name: '音浪回廊', nameHtml: '音浪回廊 <span class="pc-name-en">Audio Colonnade</span>', desc: '纵向环栈 · 穿行感' });
+presetMeta.push({ name: '声波球壳', nameHtml: '声波球壳 <span class="pc-name-en">Pulse Orb</span>', desc: '经纬尖刺 · 呼吸' });
 var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 5-2 8 0s5 2 8 0M3 10c3-2 5-2 8 0s5 2 8 0M3 18c3-2 5-2 8 0s5 2 8 0"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
@@ -331,7 +335,10 @@ var presetIcons = [
 if (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_ICONS) {
   for (var wfic = 0; wfic < WebFxPresets.PRESET_ICONS.length; wfic++) presetIcons.push(WebFxPresets.PRESET_ICONS[wfic]);
 }
-var presetDisplayOrder = [0, 6, 7, 8, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><ellipse cx="12" cy="14" rx="9" ry="3.4"/><ellipse cx="12" cy="12" rx="5.6" ry="2.1"/><ellipse cx="12" cy="10.4" rx="2.4" ry="0.9"/><path d="M12 6.4v2.6"/></svg>');
+presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.6" y="2.6" width="18.8" height="18.8" rx="3"/><rect x="6.6" y="6.6" width="10.8" height="10.8" rx="2"/><rect x="10.1" y="10.1" width="3.8" height="3.8" rx="1"/></svg>');
+presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5.6"/><path d="M12 2.4v3.1M12 18.5v3.1M2.4 12h3.1M18.5 12h3.1M5.2 5.2l2.2 2.2M16.6 16.6l2.2 2.2M18.8 5.2l-2.2 2.2M7.4 16.6l-2.2 2.2"/></svg>');
+var presetDisplayOrder = [0, 6, 7, 8, 18, 19, 20, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 // presetMeta 已就绪：校准头部兜底的预设索引上限（启动恢复读取端使用），新增预设时只需维护 presetMeta 本身
 VISUAL_PRESET_INDEX_MAX = presetMeta.length - 1;
 var lyricColorPresets = [
@@ -1462,6 +1469,9 @@ function setPreset(p, opts) {
   // 音域回响两预设的清场/预热钩子（对齐上游 preset-grid onPresetChange）
   if (changed) {
     if (window.MineradioSonicTopography) MineradioSonicTopography.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioAudioRing) MineradioAudioRing.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioAudioTunnel) MineradioAudioTunnel.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioAudioOrb) MineradioAudioOrb.onPresetChange(prev, p, { scene: scene, fx: fx });
     if (window.MineradioSonicWorkshop) MineradioSonicWorkshop.onPresetChange(prev, p, { scene: scene, fx: fx });
   }
   if (changed && prev === SKULL_PRESET_INDEX && p !== SKULL_PRESET_INDEX) clearSkullPresetResidue();
@@ -1501,6 +1511,9 @@ function setPreset(p, opts) {
     else if (p === 3) { orbit.userRadius = 8.0; orbit.userPhi = 0.05; orbit.userTheta = 0.0; orbit.baselineRadius = 8.0; orbit.baselinePhi = 0.05; }
     else if (p === 4) { orbit.userRadius = 6.5; orbit.userPhi = 0.04; orbit.userTheta = 0.0; orbit.baselineRadius = 6.5; orbit.baselinePhi = 0.04; }
     else if (p === 6) { orbit.userRadius = 7.4; orbit.userPhi = 0.10; orbit.userTheta = 0.18; orbit.baselineRadius = 7.4; orbit.baselinePhi = 0.10; }
+    else if (p === 18) { orbit.userRadius = 11.6; orbit.userPhi = 0.42; orbit.userTheta = 0.0; orbit.baselineRadius = 11.6; orbit.baselinePhi = 0.42; }
+    else if (p === 19) { orbit.userRadius = 14.5; orbit.userPhi = 0.03; orbit.userTheta = 0.0; orbit.baselineRadius = 14.5; orbit.baselinePhi = 0.03; }
+    else if (p === 20) { orbit.userRadius = 11.0; orbit.userPhi = 0.15; orbit.userTheta = 0.0; orbit.baselineRadius = 11.0; orbit.baselinePhi = 0.15; }
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
     if (webCam) orbit.baselineTheta = 0.0;
