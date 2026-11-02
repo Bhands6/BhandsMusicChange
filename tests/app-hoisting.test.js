@@ -34,8 +34,13 @@ test('分析结果不是空集（防「分析器坏了 → 没漏项 → 假绿�
       name + ' 应该在「必须前置」集合里；不在说明分析器没正常工作（need 共 ' + result.need.length + ' 个）');
   }
   assert.ok(result.need.length >= 30, '必须前置的声明只有 ' + result.need.length + ' 个，明显偏少，分析器可能没跑对');
-  assert.equal(result.need.length, result.inPrelude,
-    'prelude 承载 ' + result.inPrelude + ' 个，但分析认为必须前置 ' + result.need.length + ' 个');
+  // prelude 除了「加载期必须前置」的声明，还可能放**跨 script 的运行时助手**——
+  // 比如 isAudioFxPreset（03-particles/08-shelf 都调它，但都不在加载期调用）。
+  // check-app-hoisting.js 自己就把这类归为 extra 并注明「留着无害，只是白搬」，
+  // 所以这里要求的是「必须前置的一个都不能少，且 prelude 里不留无人认领的条目」：
+  assert.equal(result.inPrelude, result.need.length + result.extra.length,
+    'prelude 承载 ' + result.inPrelude + ' 个，必须前置 ' + result.need.length +
+    ' 个 + 运行时助手 ' + result.extra.length + ' 个（' + result.extra.join(',') + '）');
 });
 
 test('index.html 第一个 js/app 脚本必须是 00-prelude.js', () => {

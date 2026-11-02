@@ -290,12 +290,20 @@ function toggleQualityPanel(e) {
   var wrap = document.getElementById('quality-control');
   if (!wrap) return;
   if (wrap.classList.contains('open')) { closeQualityPanel(); return; }
+  updatePlaybackQualityUi();   // 与 mouseenter 同理：展开前重算可用档位
   wrap.classList.add('open');
 }
 function bindQualityControl() {
   var wrap = document.getElementById('quality-control');
   if (wrap) {
-    wrap.addEventListener('mouseenter', function(){ wrap.classList.add('open'); });
+    wrap.addEventListener('mouseenter', function(){
+      // 每次展开都重算一次档位列表：可用档位依赖「第三方源是否启用」
+      // （_musicSourcesConfig 是异步拉取的），若只在启动算一次，超清母带/高清臻音
+      // 会一直藏着（2026-11-02 用户反馈「面板里没有高档音质」）。
+      // 放在展开时重算而不是配置加载完回调里：后者会引入加载期跨 script 依赖。
+      updatePlaybackQualityUi();
+      wrap.classList.add('open');
+    });
     // 鼠标移出才收：260ms 缓冲防手抖。closeQualityPanel 会同时失焦 ——
     // 点过选项后焦点留在按钮上，:focus-within 会顶住面板，这里就收不掉了。
     wrap.addEventListener('mouseleave', function(){

@@ -20,7 +20,8 @@
     "16-idle-toast-libs.js",
     "17-shell.js",
     "18-session-boot.js",
-    "19-splash-video.js"
+    "19-splash-video.js",
+    "20-window-gesture.js"
   ],
   "itemHashes": {
     "01a6dbedb98557b5": 1,
@@ -336,8 +337,8 @@
     "c1c3f87375ca074d": 1,
     "48a1ff44b4982a58": 1,
     "8c4c3fec68388024": 1,
-    "7aad29fbf5ce6c96": 1,
-    "a6ed5c6f8377a1c0": 1,
+    "5d8cf406e2e4b72f": 1,
+    "437fd961b1be2d22": 1,
     "494bc49882c5cd11": 1,
     "d660b009d7ff164d": 1,
     "f31cacd1ec28cb38": 1,
@@ -501,9 +502,15 @@
     "8cebce80c279c693": 1,
     "b0dd316dea0460f1": 1,
     "69155c38cef68dc5": 1,
+    "e471fee5b816a040": 1,
+    "3db7601405362dec": 1,
+    "4d714d1a272fbfa6": 1,
     "963327b076c1f0ac": 1,
     "ae1406074e69e7d8": 1,
-    "355460f9153b8540": 1,
+    "b2867956df99c2a5": 1,
+    "488e84a752c376a0": 1,
+    "924616ca3a44f0b2": 1,
+    "b81e558c9a7f20e0": 1,
     "d9518798f1ba4eff": 1,
     "71960c822261fb92": 1,
     "0c6afd8b8932cb8b": 1,
@@ -528,6 +535,11 @@
     "ba750170f5e0a3b2": 1,
     "e34c2744bcd10ea9": 1,
     "51d1a14db6470847": 1,
+    "1336b4dbdff1df23": 1,
+    "95d9bcb4a3e326c3": 1,
+    "89f82dc012b9dfa8": 1,
+    "7320e0518972b669": 1,
+    "04d6952f3e89cb62": 1,
     "6341eb32317de620": 1,
     "7bc3ca17f1c77788": 1,
     "6c20204ac77b54ab": 1,
@@ -680,8 +692,9 @@
     "bb76dd1443737a3d": 1,
     "d927732495248a48": 1,
     "48d43e1c74a26e76": 1,
-    "d30758fba35d8ff6": 1,
-    "80ef5964c190e02d": 1
+    "6546905360594fae": 1,
+    "80ef5964c190e02d": 1,
+    "45427bee99c5c04a": 1
   },
   "fnHashes": {
     "df3bba245031d0b3": 1,
@@ -694,6 +707,7 @@
     "54c586071ac01699": 1,
     "9f5eaed1efcad616": 1,
     "3cebc85b45f77972": 1,
+    "aea13fee59a8ebee": 1,
     "4f12f38c9546661c": 1,
     "1751cb458cea7cc8": 1,
     "5c9827df2ca851af": 1,
@@ -1171,6 +1185,7 @@
     "8f3ce6e6b5ba6d2e": 1,
     "f1591c6ed8cba657": 1,
     "12ce838bb2798fb0": 1,
+    "3bc1e87d5ccdda65": 1,
     "eb9ab8853edf04fb": 1,
     "17ed1e1707d22795": 1,
     "75b58848fa74a3bb": 1,
@@ -1225,9 +1240,11 @@
     "4de8fa7709d1a06e": 1,
     "7618ca0b8fba5e7e": 1,
     "09d981e07e6942c7": 1,
+    "0837f64759d165df": 1,
     "dcca1ec2f41269a5": 1,
     "6ce5ece5512fca80": 1,
     "5d24047b7746471f": 1,
+    "981d37aaffa163f3": 1,
     "be4826e542c8d6b1": 1,
     "a941a1ad21895827": 1,
     "6f1a45e34efe718d": 1,
@@ -1713,6 +1730,10 @@
     "2970b5cc47e348fc": 1,
     "8b0c9ed464becf9d": 1,
     "6fa5dc80a453ece9": 1,
+    "cb901faa362d8d4a": 1,
+    "87e9eabed5bcb2fd": 1,
+    "8c6d1c213f4de9bc": 1,
+    "746697654a2b2f77": 1,
     "e370f8de5a87ca25": 1,
     "68529d4f2d845e27": 1,
     "611939bb18a641db": 1,
@@ -1957,6 +1978,8 @@
     "d8396012a57cf3fd": 1,
     "b0584ed7d4c5dfa6": 1,
     "f4d301994a2127a4": 1,
+    "8767983ddb581fb1": 1,
+    "8502b736df884f54": 1,
     "63dd7a29211aaadd": 1,
     "5faf215a6223f4ae": 1,
     "7a8ba549d85fe472": 1,
@@ -1965,10 +1988,15 @@
     "ed87a3f79247f73f": 1,
     "2cd7fca496acca94": 1,
     "111cc6b87df033c5": 1,
+    "11d94542b1d05811": 1,
+    "18dd9b459052d8b3": 1,
     "902d53b0eb3b1335": 1,
     "0749c65cff5c0e12": 1,
     "97a3d3734e1191e0": 1,
     "d1c71ac6fafdd5ec": 1,
+    "7c2803899a3b850a": 1,
+    "145955ead4bdde00": 1,
+    "770a4cf8fd98857e": 1,
     "94781da5e8ba1ca1": 1,
     "6442f94e697b3374": 1,
     "cfccc595f4f6734b": 1,
@@ -2179,6 +2207,7 @@
       "4f093cd6a1f62598": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
+      "124be9d845ecf95c": false,
       "c8bd364596932752": false,
       "03f3c73d4274ebba": false,
       "79b7c839245f5cde": false,
@@ -2378,7 +2407,8 @@
       "fda7e807ca701bea": false,
       "40aae9d97b64df31": false,
       "bb76dd1443737a3d": false,
-      "48d43e1c74a26e76": false
+      "48d43e1c74a26e76": false,
+      "45427bee99c5c04a": false
     },
     "PLAYLIST_PANEL_BATCH_SIZE": {
       "27d291a3ac4c0281": true,
@@ -2471,7 +2501,8 @@
       "e8fe42e5152913de": false,
       "c3140d7818a29449": false,
       "1e715e8799ac5da7": false,
-      "48d43e1c74a26e76": false
+      "48d43e1c74a26e76": false,
+      "45427bee99c5c04a": false
     },
     "isFinite": {
       "ad8e7e444431d99a": false,
@@ -3375,7 +3406,7 @@
       "59402ec31f8fea93": true,
       "867516aff57e0bf7": true,
       "8444ffb7ac4d1508": true,
-      "7aad29fbf5ce6c96": true,
+      "5d8cf406e2e4b72f": true,
       "5624be9892e126d8": true,
       "61787d62eeccee3f": true,
       "3fde340b99fc0191": true,
@@ -3719,11 +3750,15 @@
     },
     "setInterval": {
       "6d453bf124fb12de": false,
+      "04d6952f3e89cb62": false,
       "1702c1ba967dd80a": false,
       "d10ce8ebab34c6cb": false
     },
     "presetMeta": {
       "69155c38cef68dc5": true,
+      "e471fee5b816a040": true,
+      "3db7601405362dec": true,
+      "4d714d1a272fbfa6": true,
       "d9518798f1ba4eff": true,
       "11a52bbbe5123731": true,
       "ed7fe9ee51fbe9a5": true,
@@ -3739,6 +3774,9 @@
     },
     "presetIcons": {
       "ae1406074e69e7d8": true,
+      "b2867956df99c2a5": true,
+      "488e84a752c376a0": true,
+      "924616ca3a44f0b2": true,
       "61787d62eeccee3f": true
     },
     "wfic": {
@@ -3816,7 +3854,9 @@
       "61787d62eeccee3f": true
     },
     "_musicSourcesConfig": {
-      "51d1a14db6470847": true
+      "51d1a14db6470847": true,
+      "124be9d845ecf95c": true,
+      "11cba9b9bdd3d372": true
     },
     "_musicSourcesLoaded": {
       "51d1a14db6470847": true
@@ -3918,6 +3958,23 @@
     "updateKugouLoginStatusText": {
       "51d1a14db6470847": false,
       "8fa6722530af6bd5": false
+    },
+    "NETEASE_VIP_POLL_MS": {
+      "04d6952f3e89cb62": true
+    },
+    "clearInterval": {
+      "04d6952f3e89cb62": false,
+      "d10ce8ebab34c6cb": false,
+      "40aae9d97b64df31": false
+    },
+    "neteaseVipPollTimer": {
+      "04d6952f3e89cb62": true
+    },
+    "refreshNeteaseVipState": {
+      "04d6952f3e89cb62": false
+    },
+    "startNeteaseLoginStatusAutoRefresh": {
+      "04d6952f3e89cb62": false
     },
     "handleVisualGuideSurfaceClick": {
       "bbdba4f3cb2eff4b": false
@@ -4050,6 +4107,27 @@
       "40aae9d97b64df31": false
     },
     "Error": {
+      "5624be9892e126d8": false,
+      "3fde340b99fc0191": false,
+      "9503d2715a8b28b2": false,
+      "40aae9d97b64df31": false,
+      "48d43e1c74a26e76": false
+    },
+    "MineradioAudioOrb": {
+      "5624be9892e126d8": false,
+      "3fde340b99fc0191": false,
+      "9503d2715a8b28b2": false,
+      "40aae9d97b64df31": false,
+      "48d43e1c74a26e76": false
+    },
+    "MineradioAudioRing": {
+      "5624be9892e126d8": false,
+      "3fde340b99fc0191": false,
+      "9503d2715a8b28b2": false,
+      "40aae9d97b64df31": false,
+      "48d43e1c74a26e76": false
+    },
+    "MineradioAudioTunnel": {
       "5624be9892e126d8": false,
       "3fde340b99fc0191": false,
       "9503d2715a8b28b2": false,
@@ -4440,6 +4518,11 @@
       "5e0ecd1d084d10f6": true,
       "9503d2715a8b28b2": true,
       "40aae9d97b64df31": true
+    },
+    "isAudioFxPreset": {
+      "5624be9892e126d8": false,
+      "40aae9d97b64df31": false,
+      "48d43e1c74a26e76": false
     },
     "isBottomControlsSuppressedForShelf": {
       "5624be9892e126d8": false,
@@ -4984,6 +5067,10 @@
       "40aae9d97b64df31": false
     },
     "setShelfPinnedOpen": {
+      "5624be9892e126d8": false,
+      "40aae9d97b64df31": false
+    },
+    "shelfCameraDistanceScale": {
       "5624be9892e126d8": false,
       "40aae9d97b64df31": false
     },
@@ -5716,11 +5803,19 @@
       "124be9d845ecf95c": false,
       "11cba9b9bdd3d372": false
     },
+    "hasThirdPartySourceEnabled": {
+      "124be9d845ecf95c": false,
+      "11cba9b9bdd3d372": false
+    },
     "lastResolvedPlaybackQuality": {
       "124be9d845ecf95c": true,
       "11cba9b9bdd3d372": true
     },
     "playbackBitrateLabel": {
+      "124be9d845ecf95c": false,
+      "11cba9b9bdd3d372": false
+    },
+    "playbackFormatSpecText": {
       "124be9d845ecf95c": false,
       "11cba9b9bdd3d372": false
     },
@@ -6116,6 +6211,9 @@
     "tickShelfHoverCue": {
       "5e0ecd1d084d10f6": false
     },
+    "NETEASE_VIP_MAX_TIMEOUT_MS": {
+      "11cba9b9bdd3d372": true
+    },
     "activeAccountProvider": {
       "11cba9b9bdd3d372": true
     },
@@ -6123,6 +6221,9 @@
       "11cba9b9bdd3d372": false
     },
     "avatarSrc": {
+      "11cba9b9bdd3d372": false
+    },
+    "clearNeteaseVipExpireTimer": {
       "11cba9b9bdd3d372": false
     },
     "clearUserBtnInlineLayout": {
@@ -6201,6 +6302,9 @@
     "myPodcastItems": {
       "11cba9b9bdd3d372": true
     },
+    "neteaseVipExpireTimer": {
+      "11cba9b9bdd3d372": true
+    },
     "normalizeQQLoginStatus": {
       "11cba9b9bdd3d372": false
     },
@@ -6272,16 +6376,15 @@
       "fda7e807ca701bea": false,
       "40aae9d97b64df31": false
     },
+    "scheduleNeteaseVipExpiryRefresh": {
+      "11cba9b9bdd3d372": false
+    },
     "syncLikeStatusForSongs": {
       "11cba9b9bdd3d372": false
     },
     "updateLikeButtons": {
       "11cba9b9bdd3d372": false,
       "1e715e8799ac5da7": false
-    },
-    "clearInterval": {
-      "d10ce8ebab34c6cb": false,
-      "40aae9d97b64df31": false
     },
     "qqLoginAutoRefreshTimer": {
       "d10ce8ebab34c6cb": true

@@ -25,7 +25,7 @@ const src = readAppSource();
 const NOTICE_FNS = [
   'normalizePlaybackQuality', 'playbackQualityLabel', 'playbackQualityRank',
   'playbackQualityWasDowngraded', 'isSvipOnlyQuality', 'playbackBitrateLabel',
-  'playbackResolvedQualityText', 'platformStatus', 'providerVipType', 'providerVipLevel',
+  'playbackResolvedQualityText', 'playbackFormatSpecText', 'platformStatus', 'providerVipType', 'providerVipLevel',
   'hasProviderVip', 'hasProviderSvip',
 ];
 const FNS_SRC = NOTICE_FNS.map((n) => extractFunction(src, n)).join('\n\n');

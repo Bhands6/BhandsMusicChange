@@ -47,6 +47,7 @@ function makePreparseRunner() {
       return ({ jymaster: '超清母带', hires: '高清臻音', lossless: '无损', exhigh: '极高', standard: '标准' })[level] || level || '';
     }
     function playbackBitrateLabel(br) { br = Number(br) || 0; return br > 0 ? Math.round(br / 1000) + ' kbps' : ''; }
+    ${extractFunction(src, 'playbackFormatSpecText')}
     ${extractFunction(src, 'playbackResolvedQualityText')}
     ${extractFunction(src, 'notifyPreparsedSourceNotice')}
     return notifyPreparsedSourceNotice;
@@ -104,9 +105,10 @@ function callSites() {
 }
 const lineOf = (needle) => src.slice(0, src.indexOf(needle)).split('\n').length;
 
-test('[2] 共 4 个调用点，且静默的只有启动预解析那 2 个', () => {
+test('[2] 共 5 个调用点，且静默的只有启动预解析那 2 个', () => {
   const sites = callSites();
-  assert.equal(sites.length, 4, '实际 ' + JSON.stringify(sites));
+  // 5 个 = 第三方优先 / 官方优先失败后 / 官方试听补全（2026-11-02 新增） / 静默×2
+  assert.equal(sites.length, 5, '实际 ' + JSON.stringify(sites));
   const quiet = sites.filter((s) => s.silent);
   assert.equal(quiet.length, 2, '静默的应只有 resolveSongSourceQuietly 里那 2 个，实际 ' + JSON.stringify(quiet));
   const officialFirstLine = lineOf('// 官方优先（VIP + 未触发降级）');
