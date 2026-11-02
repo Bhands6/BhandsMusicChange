@@ -7,7 +7,7 @@
 
 const { parseFromGDMusic } = require('./gdmusic');
 const { parseFromUnblockMusic } = require('./unblockMusic');
-const { parseFromLxMusic, listRunners } = require('./lxMusicRunner');
+const { parseFromLxMusic, listRunners, getActiveRunnerId } = require('./lxMusicRunner');
 const { parseFromKugou, readKugouVipCredentials } = require('./kugou');
 const { tryGoMusicSwitch } = require('./goMusicSwitch');
 const { probeAudio, acceptProbe, levelFromProbe } = require('./durationProbe');
@@ -548,6 +548,14 @@ async function parseMusic(params) {
   // 同一份配置出现两个默认值，改动很容易只改一处（2026-09-23 对齐）；
   // 同日起 unblockMusic 从默认值摘掉（实测恒返回酷我试听垫片，见 server.js 注释）。
   const enabledSources = params.enabledSources || ['gdmusic', 'goMusic'];
+  // 缓存维度必须带上「当前用的是哪个 LX 脚本」。
+  // 否则切换脚本后仍命中上一个脚本的成功结果（10 分钟）—— 用全都要放几首歌、
+  // 切回星海，拿到的还是全都要那条无损链接，表现为「切回星海也没有超清母带」
+  // （2026-11-02 用户反馈）。脚本能力差很多，不能共用一份缓存。
+  const activeScriptId = params.lxMusicScriptId
+    || (typeof getActiveRunnerId === 'function' ? getActiveRunnerId() : null)
+    || '';
+  const cacheSources = activeScriptId ? enabledSources.concat(['lx:' + activeScriptId]) : enabledSources;
   // ⚠️ 必须写回 params：各策略的 canHandle(params) 读的是 params.enabledSources，
   // 不写回的话「调用方没传 enabledSources」会直接抛
   // TypeError: Cannot read properties of undefined (reading 'includes')。
@@ -556,7 +564,7 @@ async function parseMusic(params) {
   params.enabledSources = enabledSources;
 
   // 检查成功缓存（key 含音质：切音质后不会复用旧音质的结果）
-  const cached = getSuccessCache(params.id, enabledSources, params.quality, songLabel(params));
+  const cached = getSuccessCache(params.id, cacheSources, params.quality, songLabel(params));
   if (cached) {
     return cached;
   }
@@ -612,7 +620,7 @@ async function parseMusic(params) {
       const elapsed = Date.now() - startTime;
       console.log('[MusicParser] 解析成功! 策略: ' + strategyName + ', 耗时: ' + elapsed + 'ms' +
         (result && result.level ? ', 档位: ' + result.level : ''));
-      setSuccessCache(params.id, result, enabledSources, params.quality);
+      setSuccessCache(params.id, result, cacheSources, params.quality);
       resolve(result);
     }
     function settleFallback() {

@@ -76,6 +76,11 @@ const WANTED_RANK = { standard: 1, higher: 2, exhigh: 2, lossless: 3, hires: 4, 
  * 只记「实测不到 lossless」的情况（说明该档位对该源根本没提供高解析资源），
  * 5 分钟内直接跳过，避免重复探测。song 级差异不影响正确性：
  * 记忆命中时只跳过该档位，其余档位照常尝试，最坏结果是少拿一次母带。
+ *
+ * ⚠️ key 必须带**脚本标识**。不同脚本能力差很多（星海 wy|master 能出 24bit/192k，
+ * 全都要 同一档只给 ~128k mp3）。此前 key 只有 `source|档位`，于是用全都要放几首歌
+ * 后再切回星海，master/atmos 会被判为「假档位」继续跳过 5 分钟 —— 表现为
+ * 「切换音源后拿不到超清母带了」（2026-11-02 用户反馈）。
  */
 /**
  * 每个档位「最好能给到的等级」。用于提前收工：
@@ -95,15 +100,20 @@ function specText(probe) {
 const TIER_VERDICT_TTL = 5 * 60 * 1000;
 const badTierCache = new Map();
 
-function isBadTier(sourceKey, lxQuality) {
-  const hit = badTierCache.get(sourceKey + '|' + lxQuality);
+function badTierKey(runnerKey, sourceKey, lxQuality) {
+  return String(runnerKey || '') + '|' + sourceKey + '|' + lxQuality;
+}
+
+function isBadTier(runnerKey, sourceKey, lxQuality) {
+  const key = badTierKey(runnerKey, sourceKey, lxQuality);
+  const hit = badTierCache.get(key);
   if (!hit) return false;
-  if (Date.now() - hit > TIER_VERDICT_TTL) { badTierCache.delete(sourceKey + '|' + lxQuality); return false; }
+  if (Date.now() - hit > TIER_VERDICT_TTL) { badTierCache.delete(key); return false; }
   return true;
 }
 
-function markBadTier(sourceKey, lxQuality) {
-  badTierCache.set(sourceKey + '|' + lxQuality, Date.now());
+function markBadTier(runnerKey, sourceKey, lxQuality) {
+  badTierCache.set(badTierKey(runnerKey, sourceKey, lxQuality), Date.now());
   if (badTierCache.size > 200) {
     const oldest = badTierCache.keys().next().value;
     if (oldest !== undefined) badTierCache.delete(oldest);
@@ -841,8 +851,16 @@ async function initRunner(scriptId, scriptContent, scriptName, activate) {
  * @param {string} scriptId
  * @returns {boolean}
  */
+/** 当前活跃脚本 id；没有则 null。音乐解析缓存要按它区分，否则换脚本会命中旧结果。 */
+function getActiveRunnerId() {
+  return _activeRunnerId || null;
+}
+
 function setActiveRunner(scriptId) {
   if (_runners[scriptId]) {
+    // 换脚本就把档位记忆清空：key 里虽有脚本标识，但清一次更直观，
+    // 也顺手丢掉已删除脚本留下的垃圾条目。
+    if (_activeRunnerId !== scriptId) badTierCache.clear();
     _activeRunnerId = scriptId;
     return true;
   }
@@ -952,6 +970,8 @@ async function resolveWithRunner(runner, p) {
   // 所以每拿到一个地址就探一次真实规格：达到目标等级立刻返回；
   // 达不到就记下当前最好的一档继续往下降；全都不达标时返回最好的那个（有总比没有强）。
   // 探测取不到证据（level 为空）时按 fail-open 接受，避免在判断不出规格的音源上死循环。
+  // 档位记忆按脚本隔离：换脚本后互相不影响（见 badTierCache 注释）
+  const runnerKey = runner._id || runner._name || 'active';
   let best = null;
   for (const lxQuality of cascade) {
     // 已拿到不差于该档理论上限的音频 → 后面更低的档不可能更好，收工
@@ -961,7 +981,7 @@ async function resolveWithRunner(runner, p) {
     }
     for (const sourceKey of order) {
       // 该源这一档刚被证实「给不出高解析」→ 直接跳过，省掉一次脚本调用 + 一次探测
-      if (isBadTier(sourceKey, lxQuality)) continue;
+      if (isBadTier(runnerKey, sourceKey, lxQuality)) continue;
       try {
         const url = await runner.getMusicUrl(sourceKey, songInfo, lxQuality);
         if (!url) continue;
@@ -984,7 +1004,7 @@ async function resolveWithRunner(runner, p) {
                    streamInfo: (probe && probe.streamInfo) || undefined };
         }
         // 连无损都不到 → 这一档对这个源是假的，记下来免得下一首再试
-        if (rank < LEVEL_RANK.lossless) markBadTier(sourceKey, lxQuality);
+        if (rank < LEVEL_RANK.lossless) markBadTier(runnerKey, sourceKey, lxQuality);
         console.log('[LxMusic] 档位', lxQuality, '实测仅', level + specText(probe), '未达目标，继续降级');
       } catch (e) {
         // 忽略单个音源失败，继续下一个
@@ -1043,6 +1063,7 @@ async function parseFromLxMusic(params) {
 
 module.exports = {
   LxMusicRunner,
+  getActiveRunnerId,
   SOURCE_NAMES,
   QUALITY_MAP,
   MAX_SCRIPTS,
