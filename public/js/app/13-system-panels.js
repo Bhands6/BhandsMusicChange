@@ -423,6 +423,9 @@ async function loadMusicSourcesConfig() {
       _musicSourcesConfig = await resp.json();
       _musicSourcesLoaded = true;
       syncMusicSourcesUI();
+      // 音质面板的档位列表依赖「第三方源是否启用」（启用时超清母带/高清臻音也可选），
+      // 配置是异步拉取的，加载完必须重刷一次，否则面板停在启动时的保守值。
+      if (typeof updatePlaybackQualityUi === 'function') updatePlaybackQualityUi();
     }
   } catch (e) {
     console.warn('[MusicSources] 加载配置失败:', e);

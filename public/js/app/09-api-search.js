@@ -159,14 +159,25 @@ function noteResolvedPlaybackQuality(data) {
 }
 
 /**
+ * 第三方音源是否有启用（配置由 13-system-panels.js 的 loadMusicSourcesConfig 异步拉取）。
+ * 配置还没到时返回 false，等配置加载完会再刷一次音质面板。
+ */
+function hasThirdPartySourceEnabled() {
+  var cfg = (typeof _musicSourcesConfig !== 'undefined') ? _musicSourcesConfig : null;
+  return !!(cfg && Array.isArray(cfg.enabledSources) && cfg.enabledSources.length);
+}
+
+/**
  * 当前账号实际「存在」的音质档位（从高到低）。音质面板只列这些，其余隐藏。
- * 依据：网易云官方源的档位门槛 —— 超清母带要 SVIP；高清臻音要 VIP；
- * 无会员时官方上限只有 320kbps（极高），但**第三方源**能给无损
- * （`gdQualityOf`/`qualityOf` 把 lossless/hires/jymaster 都映射成 '999' 无损），
- * 所以无会员保留「无损」这一档。
+ * 依据分两套：
+ *  · 网易云官方源的门槛 —— 超清母带要 SVIP、高清臻音要 VIP，无会员官方只有 320kbps；
+ *  · **第三方源**（lxMusic/gdmusic 等）不看这套门槛，实测能给到 24bit/192k 母带。
+ * 所以只要有第三方源启用，就列出全部 5 档 —— 否则面板里根本没有高档位按钮，
+ * 用户即使能拿到母带也无从选择（2026-11-02 用户反馈「这里没显示高档音质」）。
+ * 选了拿不到时会如实降级并在按钮 tooltip 里显示实测档位，不会谎报。
  */
 function availableQualityTiers() {
-  var tiers = hasProviderSvip('netease', loginStatus)
+  var tiers = (hasThirdPartySourceEnabled() || hasProviderSvip('netease', loginStatus))
     ? ['jymaster', 'hires', 'lossless', 'exhigh', 'standard']
     : (hasProviderVip('netease', loginStatus)
       ? ['hires', 'lossless', 'exhigh', 'standard']
