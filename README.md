@@ -4,7 +4,7 @@
   <sub style="color: #888; font-size: 0.4em;">沉浸式音乐播放器 · 粒子视觉 · 3D 歌单架 · 多音源解析</sub>
 </h1>
 
-BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一个完整的现场：多音源解析兜住曲库，22 种视觉预设随节拍实时生长，3D 歌词舞台与歌单架让界面本身成为演出的一部分。
+BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一个完整的现场：多音源解析兜住曲库，24 种视觉预设随节拍实时生长，3D 歌词舞台与歌单架让界面本身成为演出的一部分。
 
 本项目基于开源项目 [Mineradio](https://github.com/XxHuberrr/Mineradio) 二次开发。
 
@@ -33,7 +33,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 ## 🌌 视觉效果
 
-播放态共 22 个视觉预设，右键唤出「视觉控制台」即可切换、搜索与收藏；效果由 GLSL 粒子着色器与 InstancedMesh 几何体实时驱动，随音乐节拍与频谱联动：
+播放态共 24 个视觉预设，右键唤出「视觉控制台」即可切换、搜索与收藏；效果由 GLSL 粒子着色器与 InstancedMesh 几何体实时驱动，随音乐节拍与频谱联动：
 
 | | | |
 |:---:|:---:|:---:|
@@ -44,7 +44,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 | ![](docs/screenshots/14-sonic.png)<br>**声波地形** | ![](docs/screenshots/15-spiral.jpg)<br>**螺旋星云** | ![](docs/screenshots/16-jelly.jpg)<br>**水母花** |
 | ![](docs/screenshots/17-rose.jpg)<br>**玫瑰** | ![](docs/screenshots/18-heart.jpg)<br>**心跳** | ![](docs/screenshots/19-rain.png)<br>**字符雨** |
 | ![](docs/screenshots/20-audio-ring.jpg)<br>**音浪环阵** | ![](docs/screenshots/21-audio-colonnade.jpg)<br>**音浪回廊** | ![](docs/screenshots/22-pulse-orb.jpg)<br>**声波球壳** |
-| ![](docs/screenshots/23-rose-bloom.jpg)<br>**玫瑰花瓣** | | |
+| ![](docs/screenshots/23-rose-bloom.jpg)<br>**玫瑰花瓣** | ![](docs/screenshots/24-butterfly-swarm.jpg)<br>**蓝光蝶群** | ![](docs/screenshots/25-fish-school.jpg)<br>**深海鱼群** |
 
 ### 几何体预设族（18–20）
 
@@ -60,9 +60,13 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 **玫瑰花瓣（Rose Petals，预设 21）**也在这一族里，但玩的是「飘落」：约 1400 片**参数化花瓣曲面**（宽度 sin 包络 + 杯状凹陷 + 尖端外卷 + 中脉隆起，剪影天然是花瓣，不是长方体）从画面上方纷落，旋转、摇曳、落地循环；深红 → 玫红 → 粉随机分布，远处花瓣压暗做景深。低频让花瓣落得更快、整场呼吸，鼓点踢一脚尺寸与亮度，高频驱动瓣尖颤动。
 
+**蓝光蝶群（Butterfly Swarm，预设 22）**是「背上对镜头」的发光小蝶：56 只低模实体蝴蝶（4 翅面 + 身体 + 头，12 三角）铺满全屏，扑翅全 GPU——翅膀在画面平面内「收拢 ↔ 展开」（18% ↔ 100%），翅缘随展开度泛白光；多彩随机配色 + 加色混合自发光，背景是几何体家族同款星野。个体按参考稿 wander 算法慢速自由飞舞，开场先组成一只大蝴蝶再散开。
+
+**深海鱼群（Fish School，预设 23）**自带一整片**满屏水下光柱水景**：光柱摇曳、水面亮面、底部焦散与光柱内尘埃由一块机位跟随的 shader 背景绘制；30 条程序化小鱼（纺锤体 + 分叉扇尾 + 背/臀/胸鳍，眼睛与鳃盖由着色器点出）按 boids 规则群游——邻域对齐 + 聚合 + 分离、个体 wander、软墙推回，远小暗慢、近大亮快；鱼身在光柱内被照亮、游出光柱压暗，低频加快摆尾与游速，鼓点像一声惊扰把鱼群炸开再聚拢。
+
 ## 立即下载
 
-**当前版本：`v2.2.7`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
+**当前版本：`v2.3.0`** → [点击下载最新版](https://github.com/Bhands6/BhandsMusicChange/releases/latest)
 
 在 Release 页面认准对应平台的文件名：
 
@@ -327,6 +331,9 @@ BhandsMusicChange/
 │   │   ├── audio-ring-preset.js      # 预设 18 音浪环阵 Audio Ring（三层环形柱阵）
 │   │   ├── audio-tunnel-preset.js    # 预设 19 音浪回廊 Audio Colonnade（z 轴环栈隧道）
 │   │   ├── audio-orb-preset.js       # 预设 20 声波球壳 Pulse Orb（经纬球面尖刺）
+│   │   ├── audio-rose-preset.js      # 预设 21 玫瑰花瓣 Rose Petals（参数化花瓣曲面飘落）
+│   │   ├── audio-butterfly-preset.js # 预设 22 蓝光蝶群 Butterfly Swarm（GPU 扑翅自发光蝶群）
+│   │   ├── audio-fish-school-preset.js # 预设 23 深海鱼群 Fish School（水下光柱背景 + boids 鱼群）
 │   │   ├── sonic-topography-preset.js # 预设 7 音域回响（作者 Ajin，移植自上游）
 │   │   ├── sonic-workshop-preset.js  # 预设 8 音域回响（Wallpaper Engine 桥接）
 │   │   ├── fx-console-workspace.js   # 视觉控制台面板注册表
