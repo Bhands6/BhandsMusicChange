@@ -1247,15 +1247,18 @@ function animate() {
   var ringPresetActive = isAudioFxPreset(fx);
   var presetNumForBand = fx ? Number(fx.preset) : NaN;
   var backdropBandActive = presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20;
-  // 背景带模式：主粒子层压暗到 0.55 当远景（0.82 是 sonic 系的值）
+  // 背景带模式：主粒子层亮度对齐音域回响（0.82）——用户要的就是音域回响那种星空观感
   var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58
-    : (sonicPresetActiveEarly ? 0.82 : (backdropBandActive ? 0.55 : 1));
+    : (sonicPresetActiveEarly || backdropBandActive ? 0.82 : 1);
   // 封面粒子避光：关闭时悬浮层展开不再压低背景粒子
   var shelfDimTarget = fx && fx.coverBackdropAdapt === false ? skullBackdropDim : (shouldDimWallpaperForShelf() ? 0.48 : skullBackdropDim);
   var shelfDimEase = shelfDimTarget < uniforms.uParticleDim.value ? 0.18 : 0.10;
   uniforms.uParticleDim.value += (shelfDimTarget - uniforms.uParticleDim.value) * Math.min(1, shelfDimEase * Math.max(1, dt * 60));
-  // 背景星河带形态开关平滑推进：0=普通盘面，1=音域回响式星河带（shader 内钉 uEff=5）
-  uniforms.uBackdropBand.value += ((backdropBandActive ? 1 : 0) - uniforms.uBackdropBand.value) * Math.min(1, 0.10 * Math.max(1, dt * 60));
+  // 背景星河带：主粒子 shader 直接按音域回响（preset 7）渲染——desktop 位置分支、
+  // Web 分支、片元精灵样式全部对齐，背景就是第一张图那种星空。
+  // 只能整值赋不能 lerp：18→7 渐变会扫过 16/15/14… 中间分支闪烁。
+  // 形态切换的视觉过渡交给 uAlpha/uParticleDim 渐变 + 转场脉冲掩饰。
+  uniforms.uPreset.value = backdropBandActive ? 7 : presetNumForBand;
   // 背景星河透明度推进（fx.backgroundStarRiver 门控，见 backgroundStarRiverTargetAlpha）
   updateBackgroundStarRiverState(dt);
 
@@ -1288,6 +1291,13 @@ function animate() {
   if (bloomParticles) bloomParticles.visible = !audioFxFullOff && fx.bloom && fx.bloomStrength > 0.01;
   if (floatGroup) floatGroup.visible = !audioFxFullOff;
   if (backCoverGroup) backCoverGroup.visible = !audioFxFullOff;
+  // 背景星河带的盘随几何体机位放大：音域回响机位(6.6)在星河盘「内部」→ 四面八方粒子 = 星空；
+  // 几何体机位（环阵 11.6 / 隧道 14.5 / 球壳 11.0）在盘「外部」→ 从外面侧看 = 密集粒子堆（实测踩过）。
+  // 按机位半径等比放大盘，让相机始终处在与音域回响相同的相对位置，观感即第一张图的背景星空。
+  var bandCamR = (orbit && Number.isFinite(Number(orbit.radius))) ? Number(orbit.radius) : 6.6;
+  var bandScaleTarget = backdropBandActive ? clampRange((bandCamR / 6.6) * 0.98, 1.0, 2.4) : 1.0;
+  var bandScaleNow = particles.scale.x;
+  particles.scale.setScalar(bandScaleNow + (bandScaleTarget - bandScaleNow) * Math.min(1, 0.06 * Math.max(1, dt * 60)));
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
   var targetRotX = orbit.centerLocked ? 0 : (headParallax.active ? -headParallax.y * 0.35 : 0) + gestureRotation.x;
   particles.rotation.y += (targetRotY - particles.rotation.y) * 0.055;

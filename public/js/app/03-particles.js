@@ -172,7 +172,6 @@ var uniforms = {
   uPixel:      { value: renderer.getPixelRatio() },
   uAlpha:      { value: 0 },          // 整体粒子透明度 (启动 fade-in)
   uParticleDim:{ value: 1 },          // 覆盖层打开时只压低粒子背景, 不影响 3D 卡片
-  uBackdropBand:{ value: 0 },         // 背景星河带模式（音浪环阵/回廊/球壳）：主粒子层复用音域回响(uEff5)的星河盘形态
   uFloatAlpha: { value: 0 },          // 空场/浮空粒子透明度
   uLoading:    { value: 0 },          // 加载动画混合度 0..1 (1 = 完全聚成圆环)
   // Web 移植特效（预设 9–17）
@@ -195,7 +194,6 @@ var vs = `
 precision highp float;
 uniform float uTime, uBass, uMid, uTreble, uBeat, uEnergy, uBurstAmt;
 uniform float uPreset, uIntensity, uDepth, uPointScale, uSpeed, uTwist;
-uniform float uBackdropBand;
 uniform float uVinylSpin;
 uniform float uColorBoost, uScatter, uCoverRes, uBgFade;
 uniform float uHasCover, uHasDepth, uEdgeEnabled, uAiBoost;
@@ -324,12 +322,12 @@ void main(){
   float maxRippleAmp = 0.0;
   float rippleZ = 0.0;
   // Web 移植：桌面 9–17 映射到 Web 分支索引 6–14；6–8 走壁纸底
+  // （背景星河带模式不在这里处理：JS 侧直接把 uPreset 指到 7，desktop/Web/片元全部分支
+  //   都按音域回响渲染——只钉 uEff 不够，desktop 位置分支按 uPreset 判定，
+  //   preset 18~20 不匹配任何 desktop 分支会落到默认封面网格分布 = 密集粒子海，实测踩过）
   float uEff = uPreset;
   if (uPreset > 8.5) uEff = uPreset - 3.0;
   else if (uPreset > 5.5) uEff = 5.0;
-  // 背景星河带模式（环阵/回廊/球壳）：钉到音域回响的 uEff=5 分支。
-  // 不钉的话 preset 18~20 → uEff 15~17 会落进 desktop 老的字符雨分支，背景变成文字雨（实测踩过）。
-  if (uBackdropBand > 0.5) uEff = 5.0;
   float galaxyStar = 1.0;
   float galaxyTwinkle = 0.5;
   float galaxyCore = 1.0;
@@ -570,13 +568,6 @@ void main(){
 
   // ---- Web 移植 9 预设分支（uEff = 6..14）----
 ${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_BRANCHES : ''}
-
-  // 背景星河带（环阵/回廊/球壳）：这几台机位（radius 8.8~14.5）比音域回响（6.6）远，
-  // 同一星河盘会铺满视野变成满屏刺林（实测）。压扁 + 下移，回到「地平线一条斜带」的观感；
-  // 用 uBackdropBand(0~1) 渐变，切预设时带/盘形态平滑过渡不硬切。
-  if (uBackdropBand > 0.01) {
-    pos = mix(pos, vec3(pos.x * 0.70, pos.y * 0.26 - 2.2, pos.z * 0.70), uBackdropBand);
-  }
 
   // ====================================================
   //  鼠标交互 (仅 SILK)
