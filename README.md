@@ -44,7 +44,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 | ![](docs/screenshots/14-sonic.png)<br>**声波地形** | ![](docs/screenshots/15-spiral.jpg)<br>**螺旋星云** | ![](docs/screenshots/16-jelly.jpg)<br>**水母花** |
 | ![](docs/screenshots/17-rose.jpg)<br>**玫瑰** | ![](docs/screenshots/18-heart.jpg)<br>**心跳** | ![](docs/screenshots/19-rain.png)<br>**字符雨** |
 | ![](docs/screenshots/20-audio-ring.jpg)<br>**音浪环阵** | ![](docs/screenshots/21-audio-colonnade.jpg)<br>**音浪回廊** | ![](docs/screenshots/22-pulse-orb.jpg)<br>**声波球壳** |
-| ![](docs/screenshots/23-rose-bloom.jpg)<br>**玫瑰绽放** | | |
+| ![](docs/screenshots/23-rose-bloom.jpg)<br>**玫瑰花瓣** | | |
 
 ### 几何体预设族（18–20）
 
@@ -58,7 +58,7 @@ BhandsMusic 是一款沉浸式桌面音乐播放器，把「听歌」做成一�
 
 三者共用一套几何体管线（机位、点尺寸补偿、透明度淡入淡出都对齐音域回响），切换时不会有突兀的镜头跳动。
 
-**玫瑰绽放（Rose Bloom，预设 21）**也在这一族里：约 2.6 万根实体小柱组成整枝玫瑰——8 圈花瓣按「内层直立包心、外层翻过水平线下垂」排布，加花萼、微 S 形花茎和三片叶子。每根柱子都是一个小均衡器：绕花传播的行波驱动柱高，低频整朵鼓起、鼓点张开、外缘细颤；顶面亮、侧面暗的着色口径与音域回响一致。
+**玫瑰花瓣（Rose Petals，预设 21）**也在这一族里，但玩的是「飘落」：约 1400 片**参数化花瓣曲面**（宽度 sin 包络 + 杯状凹陷 + 尖端外卷 + 中脉隆起，剪影天然是花瓣，不是长方体）从画面上方纷落，旋转、摇曳、落地循环；深红 → 玫红 → 粉随机分布，远处花瓣压暗做景深。低频让花瓣落得更快、整场呼吸，鼓点踢一脚尺寸与亮度，高频驱动瓣尖颤动。
 
 ## 立即下载
 

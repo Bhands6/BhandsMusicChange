@@ -321,7 +321,7 @@ if (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_META) {
 presetMeta.push({ name: '音浪环阵', nameHtml: '音浪环阵 <span class="pc-name-en">Audio Ring</span>', desc: '三层柱阵 · 声浪外扩' });
 presetMeta.push({ name: '音浪回廊', nameHtml: '音浪回廊 <span class="pc-name-en">Audio Colonnade</span>', desc: '纵向环栈 · 穿行感' });
 presetMeta.push({ name: '声波球壳', nameHtml: '声波球壳 <span class="pc-name-en">Pulse Orb</span>', desc: '经纬尖刺 · 呼吸' });
-presetMeta.push({ name: '玫瑰绽放', nameHtml: '玫瑰绽放 <span class="pc-name-en">Rose Bloom</span>', desc: '实体花瓣 · 鼓点翻开' });
+presetMeta.push({ name: '玫瑰花瓣', nameHtml: '玫瑰花瓣 <span class="pc-name-en">Rose Petals</span>', desc: '花瓣飘落 · 纷飞' });
 var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 5-2 8 0s5 2 8 0M3 10c3-2 5-2 8 0s5 2 8 0M3 18c3-2 5-2 8 0s5 2 8 0"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
@@ -1517,7 +1517,7 @@ function setPreset(p, opts) {
     else if (p === 18) { orbit.userRadius = 11.6; orbit.userPhi = 0.42; orbit.userTheta = 0.0; orbit.baselineRadius = 11.6; orbit.baselinePhi = 0.42; }
     else if (p === 19) { orbit.userRadius = 14.5; orbit.userPhi = 0.03; orbit.userTheta = 0.0; orbit.baselineRadius = 14.5; orbit.baselinePhi = 0.03; }
     else if (p === 20) { orbit.userRadius = 11.0; orbit.userPhi = 0.15; orbit.userTheta = 0.0; orbit.baselineRadius = 11.0; orbit.baselinePhi = 0.15; }
-    else if (p === 21) { orbit.userRadius = 9.0; orbit.userPhi = 0.62; orbit.userTheta = 0.0; orbit.baselineRadius = 9.0; orbit.baselinePhi = 0.62; }
+    else if (p === 21) { orbit.userRadius = 8.8; orbit.userPhi = 0.30; orbit.userTheta = 0.0; orbit.baselineRadius = 8.8; orbit.baselinePhi = 0.30; }
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
     if (webCam) orbit.baselineTheta = 0.0;
