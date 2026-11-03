@@ -320,7 +320,8 @@
         vx: Math.cos(dir) * lerp(40, 70, rnd(i * 9.1)) * K,
         vy: Math.sin(dir) * lerp(20, 40, rnd(i * 4.1)) * K,
         t: 0,
-        angle: rnd(i * 13.7) * Math.PI * 2,
+        angle: 0,                                   // tilt 俯仰（flip+tilt 口径，初始下方积分首帧收敛）
+        flip: 1,
         len: spLen,
         widK: sp.wid * lerp(0.92, 1.08, rnd(i * 6.7)),   // 体型体宽系数
         maxS: (0.62 + depth * 1.05) * 60 * K,            // 参考稿 speed：px/frame → units/s
@@ -548,15 +549,18 @@
       a.x = Math.max(-hx, Math.min(hx, a.x));
       a.y = Math.max(-hy, Math.min(hy, a.y));
 
-      // 朝向：头平滑转向速度方向（3D 版沿用 dt*3.4，替代参考稿的瞬间翻转）
+      // 朝向（参考稿 flip+tilt 口径）：rotation.z 只做 ±0.6 限幅俯仰，左右由
+      // scale.x 镜像承担——直接转 atan2(vy,vx) 会让向左游的鱼转 180° 肚皮朝上
       var spd = Math.hypot(a.vx, a.vy);
       if (spd > 0.05 * K) {
-        var ta = Math.atan2(a.vy, a.vx);
+        var ta = Math.atan2(a.vy, Math.abs(a.vx));
         var df = ta - a.angle;
         while (df > Math.PI) df -= Math.PI * 2;
         while (df < -Math.PI) df += Math.PI * 2;
         a.angle += df * Math.min(1, dt * 3.4);
+        a.angle = Math.max(-0.6, Math.min(0.6, a.angle));
       }
+      a.flip = a.vx < 0 ? -1 : 1;   // 参考稿 flip 口径：vx 变号瞬间镜像
     }
   }
 
@@ -611,8 +615,10 @@
     for (var i = 0; i < state.fishes.length; i++) {
       var f = state.fishes[i];
       dummy.position.set(f.x, f.y, f.z);
-      dummy.rotation.set(0, 0, f.angle);   // 侧视贴屏，头朝速度方向
-      dummy.scale.setScalar(f.len);
+      // 参考稿组合：rotate(tilt) → scale(flip,1)——tilt 符号随镜像翻转，头始终朝速度方向且背鳍朝上
+      var tilt = f.flip < 0 ? -f.angle : f.angle;
+      dummy.rotation.set(0, 0, tilt);
+      dummy.scale.set(f.flip * f.len, f.len, f.len);
       dummy.updateMatrix();
       state.mesh.setMatrixAt(i, dummy.matrix);
     }
