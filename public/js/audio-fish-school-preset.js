@@ -52,7 +52,7 @@
     time: 0,
     fishes: [],
     dummy: null,
-    litArr: null,
+    litArr: null,   // 已废弃（属性数超 r128 上限），占位防旧引用
     scratchV: null,
     scratchDir: null,
     smooth: { bass: 0, mid: 0, treble: 0, beat: 0, energy: 0 }
@@ -134,7 +134,7 @@
 
   // ---------- 鱼体几何（沿用程序化鱼：全长≈1，头在 +x） ----------
   function buildFishUnit() {
-    var pos = [], bodyU = [], sideY = [], fin = [], idx = [];
+    var pos = [], bodyU = [], sideFin = [], idx = [];
     var N = 36;
     function profile(u) {
       var shape = Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(u, 0.76))), 0.78);
@@ -145,8 +145,7 @@
     function vx(u, sy, fu, f) {
       pos.push(0.47 - u * 0.88, sy, 0);
       bodyU.push(fu);
-      sideY.push(sy >= 0 ? 1 : -1);
-      fin.push(f);
+      sideFin.push(sy >= 0 ? 1 : -1, f);
     }
     var topBase = 0;
     for (var i = 0; i <= N; i++) {
@@ -164,31 +163,30 @@
     }
     var tX = 0.47 - 0.88, tip1 = -0.68 + 0.13, tip2 = -0.68 - 0.045;
     var fBase = pos.length / 3;
-    pos.push(tX, 0, 0); bodyU.push(1.0); sideY.push(1); fin.push(1);
-    pos.push(tip1, 0.25, 0); bodyU.push(1.25); sideY.push(1); fin.push(1);
-    pos.push(tip2, 0.62, 0); bodyU.push(1.3); sideY.push(1); fin.push(1);
+    pos.push(tX, 0, 0); bodyU.push(1.0); sideFin.push(1, 1);
+    pos.push(tip1, 0.25, 0); bodyU.push(1.25); sideFin.push(1, 1);
+    pos.push(tip2, 0.62, 0); bodyU.push(1.3); sideFin.push(1, 1);
     idx.push(fBase, fBase + 1, fBase + 2);
-    pos.push(tX, 0, 0); bodyU.push(1.0); sideY.push(-1); fin.push(1);
-    pos.push(tip1, -0.25, 0); bodyU.push(1.25); sideY.push(-1); fin.push(1);
-    pos.push(tip2, -0.62, 0); bodyU.push(1.3); sideY.push(-1); fin.push(1);
+    pos.push(tX, 0, 0); bodyU.push(1.0); sideFin.push(-1, 1);
+    pos.push(tip1, -0.25, 0); bodyU.push(1.25); sideFin.push(-1, 1);
+    pos.push(tip2, -0.62, 0); bodyU.push(1.3); sideFin.push(-1, 1);
     idx.push(fBase + 3, fBase + 5, fBase + 4);
     var dX = 0.47 - 0.47 * 0.88, dW = profile(0.47);
     var dBase = pos.length / 3;
-    pos.push(dX + 0.13, dW * 0.6, 0); bodyU.push(0.42); sideY.push(1); fin.push(1);
-    pos.push(dX - 0.01, dW + 0.30, 0); bodyU.push(0.5); sideY.push(1); fin.push(1);
-    pos.push(dX - 0.34, dW * 0.2, 0); bodyU.push(0.6); sideY.push(1); fin.push(1);
+    pos.push(dX + 0.13, dW * 0.6, 0); bodyU.push(0.42); sideFin.push(1, 1);
+    pos.push(dX - 0.01, dW + 0.30, 0); bodyU.push(0.5); sideFin.push(1, 1);
+    pos.push(dX - 0.34, dW * 0.2, 0); bodyU.push(0.6); sideFin.push(1, 1);
     idx.push(dBase, dBase + 1, dBase + 2);
     var aX = 0.47 - 0.68 * 0.88, aW = profile(0.68);
     var aBase = pos.length / 3;
-    pos.push(aX + 0.02, -aW * 0.7, 0); bodyU.push(0.66); sideY.push(-1); fin.push(1);
-    pos.push(aX - 0.13, -aW - 0.16, 0); bodyU.push(0.72); sideY.push(-1); fin.push(1);
-    pos.push(aX - 0.29, -aW * 0.24, 0); bodyU.push(0.78); sideY.push(-1); fin.push(1);
+    pos.push(aX + 0.02, -aW * 0.7, 0); bodyU.push(0.66); sideFin.push(-1, 1);
+    pos.push(aX - 0.13, -aW - 0.16, 0); bodyU.push(0.72); sideFin.push(-1, 1);
+    pos.push(aX - 0.29, -aW * 0.24, 0); bodyU.push(0.78); sideFin.push(-1, 1);
     idx.push(aBase, aBase + 2, aBase + 1);
     return {
       position: new Float32Array(pos),
       bodyU: new Float32Array(bodyU),
-      sideY: new Float32Array(sideY),
-      fin: new Float32Array(fin),
+      sideFin: new Float32Array(sideFin),
       index: new Uint16Array(idx)
     };
   }
@@ -198,16 +196,15 @@
       'precision highp float;',
       'uniform float uTime;',
       'uniform float uBendAmp;',
+      'uniform float uAspect;',
       'attribute float aBodyU;',
-      'attribute float aSideY;',
-      'attribute float aFin;',
+      'attribute vec2 aSideFin;',   // x: 背侧(+1)/腹侧(-1)，y: 鳍(1)
       'attribute float aPhase;',
       'attribute float aFlapSpeed;',
       'attribute float aWidK;',
       'attribute vec3 aTint0;',
       'attribute vec3 aTint1;',
       'attribute vec3 aTint2;',
-      'attribute float aLit;',   // 每帧 CPU 投影算的光柱受光度
       'varying float vU;',
       'varying float vSideY;',
       'varying float vFin;',
@@ -223,11 +220,18 @@
       '  p.y += bend;',
       '  vec4 wp = modelMatrix * instanceMatrix * vec4(p, 1.0);',
       '  gl_Position = projectionMatrix * viewMatrix * wp;',
+      // 受光（逐顶点）：裁剪空间 → 屏幕uv → 与背景 shader 同一条光柱公式（含 sway）。
+      // 2026-11-03：改为内置计算——独立 aLit 实例属性会把活动属性顶到 r128 上限
+      // （Too many attributes (aLit)，program 创建失败 → 鱼整群不渲染，实测踩坑）。
+      '  vec2 suv = clamp(gl_Position.xy / max(gl_Position.w, 0.0001) * 0.5 + 0.5, 0.0, 1.0);',
+      '  float sway = sin(uTime * 0.13) * 0.025 * (1.0 - suv.y);',
+      '  float spread = 0.14 + 0.50 * (1.0 - suv.y) * (1.0 - suv.y);',
+      '  float pxN = abs((suv.x - 0.5) * uAspect - sway);',
+      '  vLit = 1.0 - smoothstep(spread * 0.12, spread, pxN);',
       '  vU = clamp(aBodyU, 0.0, 1.0);',
-      '  vSideY = aSideY;',
-      '  vFin = aFin;',
+      '  vSideY = aSideFin.x;',
+      '  vFin = aSideFin.y;',
       '  vT0 = aTint0; vT1 = aTint1; vT2 = aTint2;',
-      '  vLit = aLit;',
       '}'
     ].join('\n');
   }
@@ -281,7 +285,7 @@
         t: 0,
         angle: rnd(i * 13.7) * Math.PI * 2,
         len: spLen,
-        widK: lerp(0.88, 1.12, rnd(i * 6.7)) / 0.27,
+        widK: lerp(0.88, 1.12, rnd(i * 6.7)),       // 体宽系数（profile 半高≈0.5，保持鱼形比例）
         r: spLen * 0.55,                            // 参考稿 r = size*s*0.5 口径
         phase: rnd(i * 15.1) * Math.PI * 2,
         flap: 6.2 + rnd(i * 8.3) * 1.8              // 参考稿侧身鱼 sin(t*7) 口径
@@ -321,14 +325,14 @@
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(unit.position, 3));
     geo.setAttribute('aBodyU', new THREE.BufferAttribute(unit.bodyU, 1));
-    geo.setAttribute('aSideY', new THREE.BufferAttribute(unit.sideY, 1));
-    geo.setAttribute('aFin', new THREE.BufferAttribute(unit.fin, 1));
+    geo.setAttribute('aSideFin', new THREE.BufferAttribute(unit.sideFin, 2));
     geo.setIndex(new THREE.BufferAttribute(unit.index, 1));
 
     var mat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
         uBendAmp: { value: 0.07 },
+        uAspect: { value: 1.78 },
         uBeat: { value: 0 },
         uOpacity: { value: 0 }
       },
@@ -350,7 +354,6 @@
     var phaseArr = new Float32Array(COUNT);
     var flapArr = new Float32Array(COUNT);
     var widArr = new Float32Array(COUNT);
-    var litArr = new Float32Array(COUNT);
 
     initFishes();
     state.dummy = new THREE.Object3D();
@@ -367,7 +370,6 @@
       phaseArr[i] = f.phase;
       flapArr[i] = f.flap;
       widArr[i] = f.widK;
-      litArr[i] = 1;
     }
     geo.setAttribute('aTint0', new THREE.InstancedBufferAttribute(t0Arr, 3));
     geo.setAttribute('aTint1', new THREE.InstancedBufferAttribute(t1Arr, 3));
@@ -375,15 +377,12 @@
     geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phaseArr, 1));
     geo.setAttribute('aFlapSpeed', new THREE.InstancedBufferAttribute(flapArr, 1));
     geo.setAttribute('aWidK', new THREE.InstancedBufferAttribute(widArr, 1));
-    geo.setAttribute('aLit', new THREE.InstancedBufferAttribute(litArr, 1));
     mesh.instanceMatrix.needsUpdate = true;
 
     state.bgMesh = bgMesh;
     state.bgMat = bgMat;
     state.mesh = mesh;
     state.mat = mat;
-    state.litArr = litArr;
-    state.scratchV = new THREE.Vector3();
     state.scratchDir = new THREE.Vector3();
     state.root = new THREE.Group();
     state.root.name = 'audio-fish-school-root';
@@ -410,7 +409,6 @@
     state.bgMat = null;
     state.mesh = null;
     state.mat = null;
-    state.litArr = null;
     state.initialized = false;
     state.opacity = 0;
   }
@@ -532,30 +530,6 @@
     state.bgMesh.scale.set(w, h, 1);
   }
 
-  /** 每帧把鱼投影到屏幕算受光度（光柱内亮 / 光柱外压暗；含光柱 sway 同步） */
-  function updateLit(camera, time) {
-    var aspect = camera.aspect || 1.78;
-    for (var i = 0; i < state.fishes.length; i++) {
-      var f = state.fishes[i];
-      state.scratchV.set(f.x, f.y, f.z).project(camera);
-      var uX = state.scratchV.x * 0.5 + 0.5;
-      var uY = state.scratchV.y * 0.5 + 0.5;
-      if (state.scratchV.z > 1 || uX < -0.2 || uX > 1.2 || uY < -0.2 || uY > 1.2) {
-        state.litArr[i] = 0.25;   // 屏外/机位后方：按光柱外最暗处理
-        continue;
-      }
-      uX = Math.min(1, Math.max(0, uX));
-      uY = Math.min(1, Math.max(0, uY));
-      // 与背景 shader 同一条公式（含 sway）
-      var sway = Math.sin(time * 0.13) * 0.025 * (1 - uY);
-      var spread = 0.14 + 0.50 * (1 - uY) * (1 - uY);
-      var pxN = Math.abs((uX - 0.5) * aspect - sway);
-      var lit = 1 - smooth(spread * 0.12, spread, pxN);
-      state.litArr[i] = lit;
-    }
-    state.mesh.geometry.attributes.aLit.needsUpdate = true;
-  }
-
   function update(dt, ctx) {
     ctx = ctx || {};
     var fx = ctx.fx || {};
@@ -582,7 +556,7 @@
 
     if (camera) {
       placeBackdrop(camera);
-      updateLit(camera, state.time);
+      state.mat.uniforms.uAspect.value = camera.aspect || 1.78;
     }
 
     var u = state.mat.uniforms;
