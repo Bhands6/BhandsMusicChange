@@ -1328,6 +1328,8 @@ function animate() {
       scene: scene,
       fx: fx,
       time: uniforms.uTime.value,
+      // 隧道的拖拽旋转依赖这个参数（预设内 rotation.y/x 取自它），漏传 = 永远拖不动
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
       audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
     });
   }

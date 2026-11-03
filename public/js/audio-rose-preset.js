@@ -351,6 +351,12 @@
     }
     state.mesh.instanceMatrix.needsUpdate = true;
 
+    // 跟随宿主拖拽旋转：与 ring/orb 同口径（particles.rotation 由鼠标拖拽/头部视差驱动）。
+    // 缺了这两行整个花瓣场对鼠标完全无响应（2026-11-03 用户反馈「玫瑰花瓣拖不动」）。
+    var hostRot = ctx.visualRotation;
+    state.root.rotation.y = hostRot && Number.isFinite(Number(hostRot.y)) ? Number(hostRot.y) * 0.35 : 0;
+    state.root.rotation.x = hostRot && Number.isFinite(Number(hostRot.x)) ? Number(hostRot.x) * 0.35 : 0;
+
     state.root.visible = state.opacity > 0.02;
   }
 

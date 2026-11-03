@@ -257,6 +257,11 @@
     // 隧道绕自身轴缓慢旋转，强化"正在穿行"的感觉
     state.spin += dt * lerp(0.04, 0.22, clamp01((fx.speed || 1) / 2));
     state.root.rotation.z = state.spin;
+    // 跟随宿主拖拽旋转：与 ring/orb 同口径。缺了它隧道对鼠标完全无响应
+    // （2026-11-03 用户反馈「音浪回廊拖不动」）。
+    var hostRot = ctx.visualRotation;
+    state.root.rotation.y = hostRot && Number.isFinite(Number(hostRot.y)) ? Number(hostRot.y) * 0.35 : 0;
+    state.root.rotation.x = hostRot && Number.isFinite(Number(hostRot.x)) ? Number(hostRot.x) * 0.35 : 0;
 
     var u = state.barsMat.uniforms;
     u.uTime.value = state.time;

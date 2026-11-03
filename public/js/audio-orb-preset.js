@@ -260,8 +260,9 @@
     state.pulse *= Math.pow(0.02, Math.max(0.001, dt));
 
     state.spin += dt * lerp(0.06, 0.30, clamp01((fx.speed || 1) / 2));
-    state.root.rotation.y = state.spin;
     var rot = ctx.visualRotation;
+    state.root.rotation.y = state.spin +
+      (rot && Number.isFinite(Number(rot.y)) ? Number(rot.y) * 0.45 : 0);
     if (rot && Number.isFinite(Number(rot.x))) state.root.rotation.x = Number(rot.x) * 0.45;
 
     var u = state.shellMat.uniforms;

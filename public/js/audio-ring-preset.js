@@ -502,7 +502,8 @@
     var speed = lerp(0.02, 0.16, clamp01((fx.speed || 1) / 2));
     state.yaw += dt * speed;
     var rot = ctx.visualRotation;
-    state.root.rotation.y = state.yaw;
+    state.root.rotation.y = state.yaw +
+      (rot && Number.isFinite(Number(rot.y)) ? Number(rot.y) * 0.35 : 0);
     state.root.rotation.x = rot && Number.isFinite(Number(rot.x)) ? Number(rot.x) * 0.35 : 0;
     // 入场时轻微"长出来"，避免硬切
     state.root.scale.setScalar(0.88 + 0.12 * state.opacity);
