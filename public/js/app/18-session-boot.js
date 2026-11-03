@@ -1242,11 +1242,20 @@ function animate() {
     uniforms.uJellyAura.value = Math.min(dbSize.y * 0.25, maxPointSize);
   }
   var sonicPresetActiveEarly = !!(window.MineradioSonicTopography && MineradioSonicTopography.isActive(fx)) || !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
-  var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58 : (sonicPresetActiveEarly ? 0.82 : 1);
+  // 背景星河带判定（仅音浪环阵18/音浪回廊19/声波球壳20，2026-11-03 用户指定）。
+  // 必须定义在 dim 使用之前：var 提升陷阱——定义放后面时 dim 行读到 undefined，dim 恒 1（实测踩过）。
+  var ringPresetActive = isAudioFxPreset(fx);
+  var presetNumForBand = fx ? Number(fx.preset) : NaN;
+  var backdropBandActive = presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20;
+  // 背景带模式：主粒子层压暗到 0.55 当远景（0.82 是 sonic 系的值）
+  var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58
+    : (sonicPresetActiveEarly ? 0.82 : (backdropBandActive ? 0.55 : 1));
   // 封面粒子避光：关闭时悬浮层展开不再压低背景粒子
   var shelfDimTarget = fx && fx.coverBackdropAdapt === false ? skullBackdropDim : (shouldDimWallpaperForShelf() ? 0.48 : skullBackdropDim);
   var shelfDimEase = shelfDimTarget < uniforms.uParticleDim.value ? 0.18 : 0.10;
   uniforms.uParticleDim.value += (shelfDimTarget - uniforms.uParticleDim.value) * Math.min(1, shelfDimEase * Math.max(1, dt * 60));
+  // 背景星河带形态开关平滑推进：0=普通盘面，1=音域回响式星河带（shader 内钉 uEff=5）
+  uniforms.uBackdropBand.value += ((backdropBandActive ? 1 : 0) - uniforms.uBackdropBand.value) * Math.min(1, 0.10 * Math.max(1, dt * 60));
   // 背景星河透明度推进（fx.backgroundStarRiver 门控，见 backgroundStarRiverTargetAlpha）
   updateBackgroundStarRiverState(dt);
 
@@ -1270,13 +1279,15 @@ function animate() {
   tickGestureRotation(dt);
   var skullPresetActive = fx && fx.preset === SKULL_PRESET_INDEX;
   var workshopPresetActive = !!(window.MineradioSonicWorkshop && MineradioSonicWorkshop.isActive(fx));
-  // 音频几何体预设族用 visible 让位：不能压 uParticleDim，否则背景星河（共用该 uniform）会一起被黑掉
-  var ringPresetActive = isAudioFxPreset(fx);
-  var mainLayerOff = skullPresetActive || workshopPresetActive || ringPresetActive;
+  // ringPresetActive / backdropBandActive 已在上方 dim 处定义（顺序原因见彼处注释）。
+  // 主粒子层：骷髅/工坊整层隐藏；玫瑰花瓣(21) 与其他预设保持整层让位；
+  // 18/19/20 转为背景星河带（visible + uBackdropBand=1 + dim 0.55）。
+  var audioFxFullOff = skullPresetActive || workshopPresetActive || ringPresetActive;   // 泛光/浮空/背面层仍整族让位
+  var mainLayerOff = skullPresetActive || workshopPresetActive || (ringPresetActive && !backdropBandActive);
   particles.visible = !mainLayerOff;
-  if (bloomParticles) bloomParticles.visible = !mainLayerOff && fx.bloom && fx.bloomStrength > 0.01;
-  if (floatGroup) floatGroup.visible = !mainLayerOff;
-  if (backCoverGroup) backCoverGroup.visible = !mainLayerOff;
+  if (bloomParticles) bloomParticles.visible = !audioFxFullOff && fx.bloom && fx.bloomStrength > 0.01;
+  if (floatGroup) floatGroup.visible = !audioFxFullOff;
+  if (backCoverGroup) backCoverGroup.visible = !audioFxFullOff;
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
   var targetRotX = orbit.centerLocked ? 0 : (headParallax.active ? -headParallax.y * 0.35 : 0) + gestureRotation.x;
   particles.rotation.y += (targetRotY - particles.rotation.y) * 0.055;
