@@ -268,11 +268,49 @@ async function main() {
 
   console.log('[fetch-go-music-api] 目标平台: ' + key + ' → ' + target.asset);
 
-  if (!force && fs.existsSync(outFile)) {
-    const size = fs.statSync(outFile).size;
-    console.log('[fetch-go-music-api] 已存在，跳过下载: ' + outFile + ' (' + (size / 1048576).toFixed(1) + ' MB)');
-    console.log('[fetch-go-music-api] 如需强制更新请加 --force');
-    return;
+  // 旁路记录「这个二进制是从哪个压缩包解出来的」：
+  // 脚本里的 target.sha256 是**压缩包**的哈希，不能直接和二进制比对，
+  // 所以解包时把来源哈希写进 sidecar，下次用它判断缓存是否可复用（同时能识别换架构）。
+  const sourceShaFile = outFile + '.source-sha256';
+
+  if (fs.existsSync(outFile)) {
+    // 避免 prebuild 每次都重新拉 30MB —— 网络被墙时这正是「构建卡死在下载」的根源。
+    // 2026-11-03：此前只判断「存在即跳过」，prebuild 又带 --force，等于每次强制重下。
+    let cachedSource = '';
+    try {
+      cachedSource = fs.readFileSync(sourceShaFile, 'utf8').trim();
+    } catch (e) {}
+    if (cachedSource && cachedSource === target.sha256) {
+      if (!force) {
+        console.log('[fetch-go-music-api] 已存在且来源校验通过，跳过下载: ' + outFile);
+        return;
+      }
+      console.log('[fetch-go-music-api] 已存在文件校验通过，但指定了 --force，仍重新下载');
+    } else if (!cachedSource) {
+      console.log('[fetch-go-music-api] 已有二进制但缺少来源记录（旧版本留下的），需要重新下载');
+    } else {
+      console.log('[fetch-go-music-api] 已存在文件来源不匹配（' + cachedSource.slice(0, 16) + '…），需要重新下载');
+    }
+  } else if (force) {
+    console.log('[fetch-go-music-api] --force：本地无缓存，正常下载');
+  }
+
+  // 按架构的本地缓存：arm64 / x64 交替构建时，另一架构的二进制不会被覆盖丢失，
+  // 第二次起直接复用，不再联网（30MB 的下载在墙内经常断流，这是构建卡死的主因）。
+  const cacheBin = path.join(OUT_DIR, '.cache', key + '-' + target.out);
+  const cacheSha = cacheBin + '.source-sha256';
+  if (!force) {
+    try {
+      const cachedSha = fs.readFileSync(cacheSha, 'utf8').trim();
+      if (cachedSha === target.sha256 && fs.existsSync(cacheBin)) {
+        fs.mkdirSync(OUT_DIR, { recursive: true });
+        fs.copyFileSync(cacheBin, outFile);
+        fs.chmodSync(outFile, target.mode);
+        fs.writeFileSync(sourceShaFile, target.sha256 + '\n', 'utf8');
+        console.log('[fetch-go-music-api] 命中本地架构缓存，无需联网: ' + cacheBin);
+        return;
+      }
+    } catch (e) {}
   }
 
   const expected = (await resolveExpectedSha256(target.asset)) || target.sha256;
@@ -294,6 +332,16 @@ async function main() {
   fs.writeFileSync(outFile, binary, { mode: target.mode });
   // writeFileSync 的 mode 只在新建文件时生效；显式再设一次，保证覆盖场景下也有可执行位
   fs.chmodSync(outFile, target.mode);
+  // 记录来源压缩包哈希，供下次构建判断缓存可复用（见上面的 sourceShaFile）
+  try {
+    fs.writeFileSync(sourceShaFile, target.sha256 + '\n', 'utf8');
+  } catch (e) {}
+  // 同时留一份按架构的缓存，供另一架构构建后切回来时复用
+  try {
+    fs.mkdirSync(path.dirname(cacheBin), { recursive: true });
+    fs.copyFileSync(outFile, cacheBin);
+    fs.writeFileSync(cacheSha, target.sha256 + '\n', 'utf8');
+  } catch (e) {}
   console.log('[fetch-go-music-api] 已写入 ' + outFile + ' (' + (binary.length / 1048576).toFixed(1) + ' MB)');
 }
 
