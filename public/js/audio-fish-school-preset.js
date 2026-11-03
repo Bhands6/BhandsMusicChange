@@ -16,15 +16,13 @@
   var INDEX = 23;
 
   // ---------- 参考稿口径常量（px → 世界单位换算 K = 13.9 units / 1920px） ----------
-  var COUNT = 22;            // 参考稿 12+6+4 = 22 条
+  var COUNT = 30;            // 参考稿路径绘鱼 30 条
   var K = 0.00724;
   var SPAN_X = 6.2;          // 参考稿出生域 x∈(0,W) → ±半屏宽
   var SPAN_Y = 3.6;
   var NEIGHBOR_R = 150 * K;  // boids 邻域（align+cohesion）
   var EDGE_MARGIN = 70 * K;  // 软墙边距
   var EDGE_HARD = 30 * K;    // 硬边界外扩（参考稿 ±30px 钳制）
-  var SPD_MIN = 30 * K;      // 速度钳制下限
-  var SPD_MAX = 90 * K;      // 速度钳制上限
   var SCARE_R = 260 * K;     // beat 惊散半径（参考稿点击 260px）
   var SCARE_K = 180 * K;     // 惊散冲量峰值（参考稿 (R-d)/R*180）
   var BG_DIST = 14;          // 背景 quad 距机位的距离（机位跟随，满屏覆盖与距离无关）
@@ -37,6 +35,12 @@
     ['#9cc9e8', '#426d98', '#e1f2ff'],
     ['#e87960', '#8d3028', '#ffc1a1'],
     ['#e8c1a0', '#9f7055', '#fff0d9']
+  ];
+  // 三种体型（参考稿 SPECIES 口径：slender 细长 / deep 深身 / longfin 长鳍）
+  var SPECIES = [
+    { lenK: [0.80, 1.10], wid: 0.90 },
+    { lenK: [0.62, 0.88], wid: 1.20 },
+    { lenK: [0.70, 1.00], wid: 1.03 }
   ];
 
   var state = {
@@ -132,57 +136,72 @@
     ].join('\n');
   }
 
-  // ---------- 鱼体几何（沿用程序化鱼：全长≈1，头在 +x） ----------
+  // ---------- 鱼体几何（程序化鱼：全长≈0.88+尾鳍，头在 +x；2026-11-03 对齐参考稿
+  // 「纯路径绘鱼」口径：纺锤形+肩部隆起+尾柄收细、分叉尾鳍两片、背/臀/胸鳍、眼+鳃由片元着色器画） ----------
   function buildFishUnit() {
     var pos = [], bodyU = [], sideFin = [], idx = [];
-    var N = 36;
-    function profile(u) {
-      var shape = Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(u, 0.76))), 0.78);
-      var shoulder = 0.08 * Math.exp(-Math.pow((u - 0.18) / 0.16, 2));
-      var peduncle = 1 - 0.68 * Math.pow(Math.max(0, (u - 0.73) / 0.27), 1.35);
-      return (0.018 + shape * 0.49 + shoulder * 0.25) * peduncle;
+    var N = 40;
+    function sstep(e0, e1, x) {
+      var t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
     }
-    function vx(u, sy, fu, f) {
-      pos.push(0.47 - u * 0.88, sy, 0);
-      bodyU.push(fu);
+    // 身体半高：峰值 ≈0.22（体长:体高 ≈ 2:1）+ 肩部隆起，尾柄收窄到 ≈0.01
+    function profile(u) {
+      var shape = Math.pow(Math.max(0, Math.sin(Math.PI * Math.pow(u, 0.85))), 0.9);
+      var shoulder = 0.028 * Math.exp(-Math.pow((u - 0.24) / 0.15, 2));
+      var taper = 1 - 0.72 * sstep(0.55, 1.0, u);
+      return (0.022 + 0.185 * shape + shoulder) * taper;
+    }
+    function vx(u, y, sy, f) {
+      pos.push(0.47 - u * 0.88, y, 0);
+      bodyU.push(u);
       sideFin.push(sy >= 0 ? 1 : -1, f);
     }
+    // 身体三角带（上轮廓 → 下轮廓）
     var topBase = 0;
     for (var i = 0; i <= N; i++) {
       var u = i / N, w = profile(u);
-      vx(u, w, u, 0);
+      vx(u, w, 1, 0);
     }
     var botBase = pos.length / 3;
     for (var i2 = 0; i2 <= N; i2++) {
       var u2 = i2 / N, w2 = profile(u2);
-      vx(u2, -w2, u2, 0);
+      vx(u2, -w2, -1, 0);
     }
     for (var k = 0; k < N; k++) {
       idx.push(topBase + k, botBase + k, topBase + k + 1);
       idx.push(topBase + k + 1, botBase + k, botBase + k + 1);
     }
-    var tX = 0.47 - 0.88, tip1 = -0.68 + 0.13, tip2 = -0.68 - 0.045;
+    // 分叉尾鳍（四点扇形：尾柄A→上叉尖B→叉底M→下叉尖D，两个三角拼出实心扇+
+    // 外缘 V 型缺口——双三角窄瓣会读成两根尖刺，实测踩坑；aBodyU>1 摆幅放大）
+    var tB = 0.47 - 0.88;   // -0.41 尾柄端
     var fBase = pos.length / 3;
-    pos.push(tX, 0, 0); bodyU.push(1.0); sideFin.push(1, 1);
-    pos.push(tip1, 0.25, 0); bodyU.push(1.25); sideFin.push(1, 1);
-    pos.push(tip2, 0.62, 0); bodyU.push(1.3); sideFin.push(1, 1);
+    pos.push(tB + 0.02, 0.0, 0); bodyU.push(1.0); sideFin.push(1, 1);
+    pos.push(-0.62, 0.26, 0); bodyU.push(1.4); sideFin.push(1, 1);
+    pos.push(-0.55, 0.0, 0); bodyU.push(1.2); sideFin.push(1, 1);
     idx.push(fBase, fBase + 1, fBase + 2);
-    pos.push(tX, 0, 0); bodyU.push(1.0); sideFin.push(-1, 1);
-    pos.push(tip1, -0.25, 0); bodyU.push(1.25); sideFin.push(-1, 1);
-    pos.push(tip2, -0.62, 0); bodyU.push(1.3); sideFin.push(-1, 1);
-    idx.push(fBase + 3, fBase + 5, fBase + 4);
-    var dX = 0.47 - 0.47 * 0.88, dW = profile(0.47);
+    pos.push(tB + 0.02, 0.0, 0); bodyU.push(1.0); sideFin.push(-1, 1);
+    pos.push(-0.55, 0.0, 0); bodyU.push(1.2); sideFin.push(-1, 1);
+    pos.push(-0.62, -0.26, 0); bodyU.push(1.4); sideFin.push(-1, 1);
+    idx.push(fBase + 3, fBase + 4, fBase + 5);
+    // 背鳍（贴背小三角）
     var dBase = pos.length / 3;
-    pos.push(dX + 0.13, dW * 0.6, 0); bodyU.push(0.42); sideFin.push(1, 1);
-    pos.push(dX - 0.01, dW + 0.30, 0); bodyU.push(0.5); sideFin.push(1, 1);
-    pos.push(dX - 0.34, dW * 0.2, 0); bodyU.push(0.6); sideFin.push(1, 1);
+    pos.push(0.10, 0.19, 0); bodyU.push(0.42); sideFin.push(1, 1);
+    pos.push(-0.04, 0.31, 0); bodyU.push(0.52); sideFin.push(1, 1);
+    pos.push(-0.17, 0.12, 0); bodyU.push(0.62); sideFin.push(1, 1);
     idx.push(dBase, dBase + 1, dBase + 2);
-    var aX = 0.47 - 0.68 * 0.88, aW = profile(0.68);
+    // 臀鳍（腹侧小三角）
     var aBase = pos.length / 3;
-    pos.push(aX + 0.02, -aW * 0.7, 0); bodyU.push(0.66); sideFin.push(-1, 1);
-    pos.push(aX - 0.13, -aW - 0.16, 0); bodyU.push(0.72); sideFin.push(-1, 1);
-    pos.push(aX - 0.29, -aW * 0.24, 0); bodyU.push(0.78); sideFin.push(-1, 1);
+    pos.push(-0.08, -0.14, 0); bodyU.push(0.62); sideFin.push(-1, 1);
+    pos.push(-0.20, -0.255, 0); bodyU.push(0.72); sideFin.push(-1, 1);
+    pos.push(-0.26, -0.07, 0); bodyU.push(0.80); sideFin.push(-1, 1);
     idx.push(aBase, aBase + 2, aBase + 1);
+    // 胸鳍（腹侧头部小三角，随身体摆动）
+    var pBase = pos.length / 3;
+    pos.push(0.02, -0.03, 0); bodyU.push(0.30); sideFin.push(-1, 1);
+    pos.push(-0.14, -0.21, 0); bodyU.push(0.38); sideFin.push(-1, 1);
+    pos.push(-0.16, -0.04, 0); bodyU.push(0.46); sideFin.push(-1, 1);
+    idx.push(pBase, pBase + 2, pBase + 1);
     return {
       position: new Float32Array(pos),
       bodyU: new Float32Array(bodyU),
@@ -212,9 +231,11 @@
       'varying vec3 vT1;',
       'varying vec3 vT2;',
       'varying float vLit;',
+      'varying float vLy;',   // 鱼体局部 y（体宽单位，眼睛/鳃盖定位用）
       'void main(){',
       // 参考稿切片摆尾口径：bend = sin(time*flap + phase - u*3.25) * amp * u²（尾鳍 u>1 摆更大）
       '  vec3 p = position;',
+      '  vLy = position.y;',
       '  p.y *= aWidK;',
       '  float bend = sin(uTime * aFlapSpeed + aPhase - aBodyU * 3.25) * uBendAmp * aBodyU * aBodyU;',
       '  p.y += bend;',
@@ -246,6 +267,7 @@
       'varying float vFin;',
       'varying vec3 vT0; varying vec3 vT1; varying vec3 vT2;',
       'varying float vLit;',
+      'varying float vLy;',
       'void main(){',
       // 五段渐变：暗-主-亮-主-暗
       '  vec3 c;',
@@ -255,8 +277,19 @@
       '  else c = mix(vT1, vT0, (vU - 0.72) / 0.28);',
       '  c *= 1.0 + vSideY * 0.16;',
       '  c *= mix(1.0, 0.86, vFin);',
-      // 受光：光柱内全亮，光柱外压暗到 0.25（参考稿 br = 0.25+0.75*lit）
-      '  c *= mix(0.25, 1.0, vLit);',
+      // 鳃盖弧线（参考稿 gill 口径：头部一条竖向浅弧）
+      '  float gill = smoothstep(0.045, 0.0, abs(vU - 0.155)) * (1.0 - vFin);',
+      '  c *= 1.0 - gill * 0.22;',
+      // 眼睛（瞳孔 + 高光点；参考稿 eye ≈ 2.7% 体长，头背侧）
+      '  vec2 dEye = vec2((vU - 0.085) * 0.88, vLy - 0.052);',
+      '  float dE = length(dEye);',
+      '  float eye = (1.0 - smoothstep(0.014, 0.022, dE)) * (1.0 - vFin);',
+      '  c = mix(c, vec3(0.015, 0.035, 0.06), eye);',
+      '  vec2 dHi = vec2((vU - 0.078) * 0.88, vLy - 0.059);',
+      '  float hi = (1.0 - smoothstep(0.004, 0.008, length(dHi))) * (1.0 - vFin);',
+      '  c = mix(c, vec3(0.85, 0.92, 1.0), hi * 0.85);',
+      // 受光：光柱内全亮，光柱外压暗到 0.32（0.25 实测过暗，暗处鱼几乎看不见）
+      '  c *= mix(0.32, 1.0, vLit);',
       // 光柱内的柔和提亮（参考稿 lighter 叠加口径，随 lit² 收口防过曝）
       '  c += c * vLit * vLit * 0.20;',
       // 鼓点闪光
@@ -266,26 +299,31 @@
     ].join('\n');
   }
 
-  /** 初始化鱼群（参考稿 makeFish：出生域、初速、个体相位/体型随机 + depth 层次） */
+  /** 初始化鱼群（参考稿 makeFish 口径：len=(26+depth*44)*lenK 近大远小、
+   *  alpha=0.48+depth*0.5 深处更透明、speed=0.62+depth*1.05 深处更慢） */
   function initFishes() {
     state.fishes = [];
     for (var i = 0; i < COUNT; i++) {
       var depth = rnd(i * 17.3);
       var pal = PALETTES[Math.floor(rnd(i * 7.7) * PALETTES.length) % PALETTES.length];
+      var sp = SPECIES[Math.floor(rnd(i * 11.1) * SPECIES.length) % SPECIES.length];
       var dir = rnd(i * 19.9) * Math.PI * 2;
-      var spLen = lerp(0.55, 0.95, rnd(i * 5.3));   // 世界单位全长 ≈ 76~131px
+      var lenPx = (26 + depth * 44) * lerp(sp.lenK[0], sp.lenK[1], rnd(i * 5.3));
+      var spLen = lenPx * K;                        // 世界单位全长 ≈ 18~88px
       var t0 = hex2rgb(pal[1]), t1 = hex2rgb(pal[0]), t2 = hex2rgb(pal[2]);
-      var dim = 0.55 + depth * 0.45;                // depth 层次（受光另外由 lit 驱动）
+      var dim = 0.48 + depth * 0.52;                // 参考稿 alpha 口径（受光另外由 lit 驱动）
       var f = {
         x: (rnd(i * 3.3) - 0.5) * SPAN_X * 1.9,
         y: (rnd(i * 2.7) - 0.5) * SPAN_Y * 1.5,
         z: (depth - 0.5) * 1.0,                     // 贴屏 depth 层（分离只在 XY 做）
+        depth: depth,
         vx: Math.cos(dir) * lerp(40, 70, rnd(i * 9.1)) * K,
         vy: Math.sin(dir) * lerp(20, 40, rnd(i * 4.1)) * K,
         t: 0,
         angle: rnd(i * 13.7) * Math.PI * 2,
         len: spLen,
-        widK: lerp(0.88, 1.12, rnd(i * 6.7)),       // 体宽系数（profile 半高≈0.5，保持鱼形比例）
+        widK: sp.wid * lerp(0.92, 1.08, rnd(i * 6.7)),   // 体型体宽系数
+        maxS: (0.62 + depth * 1.05) * 60 * K,            // 参考稿 speed：px/frame → units/s
         r: spLen * 0.55,                            // 参考稿 r = size*s*0.5 口径
         phase: rnd(i * 15.1) * Math.PI * 2,
         flap: 6.2 + rnd(i * 8.3) * 1.8              // 参考稿侧身鱼 sin(t*7) 口径
@@ -295,6 +333,8 @@
       f.t2 = [t2[0] * dim, t2[1] * dim, t2[2] * dim];
       state.fishes.push(f);
     }
+    // 按 depth 升序 = 远→近绘制顺序（参考稿 sorted 绘制口径；数组序即实例槽位序）
+    state.fishes.sort(function (a, b) { return a.depth - b.depth; });
   }
 
   function ensureLayer(scene) {
@@ -494,9 +534,9 @@
       a.vx += fxF * dt;
       a.vy += fyF * dt;
 
-      // 速度平滑钳制（参考稿 target = sp + (clamp(sp,30,90) - sp) * min(1, dt*0.8)）
+      // 速度平滑钳制（每条鱼上限 = maxS×(1+bass×0.5)，下限 = maxS×0.45；深处更慢）
       var sp = Math.hypot(a.vx, a.vy) || 0.0001;
-      var target = Math.min(SPD_MAX * maxScale, Math.max(SPD_MIN, sp));
+      var target = Math.min(a.maxS * maxScale, Math.max(a.maxS * 0.45, sp));
       target = sp + (target - sp) * Math.min(1, dt * 0.8);
       var scl = target / sp;
       a.vx *= scl; a.vy *= scl;
