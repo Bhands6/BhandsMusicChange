@@ -1,21 +1,33 @@
-//  audio-fish-school-preset.js — 预设 23 深海鱼群 Fish School
-//  移植自用户提供的参考稿「水下光影 · The School」：
-//  · 鱼群绕一个缓慢漂移的虚拟中心群游（向心力 0.00052）+ 个体 wander + 局部分离力
-//  · 速度上限 maxS=0.62+depth*1.05、阻尼 0.966、头始终平滑转向速度方向（dt*3.4）
-//  · 身体正弦波动：bend(u)=sin(phase-u*3.25)*amp*u²（越靠尾摆幅越大），GPU 顶点位移
-//  · 7 色板 × 3 体型 → 个体色/长/宽随机；depth 层次（远小暗慢、近大亮快）
-//  · 音频：bass 提升摆尾幅度与游速、beat 扩大分离半径（鼓点鱼群炸开再聚拢）
-//  · 3D 姿态：鱼身侧视贴屏（身体在 XY 平面），头朝速度方向；z 仅作 depth 层
+//  audio-fish-school-preset.js — 预设 23 深海鱼群 Fish School（水下光束版）
+//  按用户提供的参考稿《水下光束 · 鱼群》重做（2026-11-03 用户拍板：重做预设 23 /
+//  程序化鱼体 / 完整水下背景）：
+//  · 全屏水下光柱背景 shader：光柱摇曳 + 水面亮面 + 底部焦散 + 尘埃 + 暗角，
+//    逐行移植参考稿 FS；做成挂机位跟随的满屏 quad（depthTest 关，renderOrder 最先）
+//  · boids 群游：150px 邻域 alignment+cohesion、2.2r 分离、个体 wander、
+//    软墙推回 + 硬边界、速度平滑钳制 30~90 px/s（×K 换算世界单位）——参考稿逐式移植
+//  · 受光：鱼按屏幕投影算 lit（光柱内亮 / 光柱外压暗到 0.25），lit 高加 additive 提亮
+//  · 音频：bass 提升游速上限与摆尾幅度；beat 按「点击惊散」口径从群质心注入径向冲量
+//  · 鱼体沿用程序化几何（用户选定）：正弦波动 u² 摆尾 + 三色板 5 段渐变 + 背亮腹暗
+//  注意：v1 的 integrate() 用了未声明的 ax/ay（strict 模式每帧 ReferenceError，
+//  会打断整条 animate 渲染循环）——本版全部局部变量显式声明，bug 随重写消除。
 (function (global) {
   'use strict';
 
   var INDEX = 23;
 
-  var COUNT = 36;            // 鱼数量（参考稿口径；贴屏 2D 观感下 36 只分布最舒展）
-  var SPAN_X = 6.2;          // 活动域半宽/半高（软边界推回）
+  // ---------- 参考稿口径常量（px → 世界单位换算 K = 13.9 units / 1920px） ----------
+  var COUNT = 22;            // 参考稿 12+6+4 = 22 条
+  var K = 0.00724;
+  var SPAN_X = 6.2;          // 参考稿出生域 x∈(0,W) → ±半屏宽
   var SPAN_Y = 3.6;
-  var SEP_R = 1.0;           // 分离半径（>鱼体长，防穿模叠堆）
-  var K = 0.00724;           // px → 世界单位换算（视野宽度 13.9 units / 1920px）
+  var NEIGHBOR_R = 150 * K;  // boids 邻域（align+cohesion）
+  var EDGE_MARGIN = 70 * K;  // 软墙边距
+  var EDGE_HARD = 30 * K;    // 硬边界外扩（参考稿 ±30px 钳制）
+  var SPD_MIN = 30 * K;      // 速度钳制下限
+  var SPD_MAX = 90 * K;      // 速度钳制上限
+  var SCARE_R = 260 * K;     // beat 惊散半径（参考稿点击 260px）
+  var SCARE_K = 180 * K;     // 惊散冲量峰值（参考稿 (R-d)/R*180）
+  var BG_DIST = 14;          // 背景 quad 距机位的距离（机位跟随，满屏覆盖与距离无关）
 
   var PALETTES = [
     ['#f5a33a', '#a94a19', '#ffe0a0'],
@@ -26,38 +38,101 @@
     ['#e87960', '#8d3028', '#ffc1a1'],
     ['#e8c1a0', '#9f7055', '#fff0d9']
   ];
-  var SPECIES = [
-    { body: 0.25, lenK: [0.78, 1.08] },
-    { body: 0.33, lenK: [0.62, 0.88] },
-    { body: 0.29, lenK: [0.66, 0.96] }
-  ];
 
   var state = {
     root: null,
+    bgMesh: null,
+    bgMat: null,
     mesh: null,
     mat: null,
     scene: null,
+    camera: null,
     opacity: 0,
     initialized: false,
     time: 0,
-    schoolPhase: 0,
     fishes: [],
     dummy: null,
+    litArr: null,
+    scratchV: null,
+    scratchDir: null,
     smooth: { bass: 0, mid: 0, treble: 0, beat: 0, energy: 0 }
   };
 
   function clamp01(v) { return Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0)); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function rnd(i) { var x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+  function smooth(e0, e1, x) {
+    var t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+    return t * t * (3 - 2 * t);
+  }
   function hex2rgb(h) {
     return [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
   }
 
-  /**
-   * 鱼体几何（模型单位，全长 ≈ 1）：照抄参考稿 profile 公式——
-   * shape=sin(πu^0.76)^0.78 包络 + 肩部隆起 + 尾柄收窄；头在 +x（u=0），尾在 -x（u=1）。
-   * 属性：aBodyU（波动驱动，尾鳍>1）、aSideY（+1 背侧亮 / -1 腹侧暗）、aFin（鳍半透明）。
-   */
+  // ---------- 水下光柱背景 shader（参考稿 FS 逐行移植，gl_FragCoord → vUv） ----------
+  function buildWaterFS() {
+    return [
+      'precision highp float;',
+      'uniform float uTime;',
+      'uniform float uAspect;',
+      'uniform float uOpacity;',
+      'varying vec2 vUv;',
+      'float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}',
+      'float noise(vec2 p){',
+      '  vec2 i=floor(p); vec2 f=fract(p); f=f*f*(3.0-2.0*f);',
+      '  return mix(mix(hash(i),hash(i+vec2(1.0,0.0)),f.x),mix(hash(i+vec2(0.0,1.0)),hash(i+vec2(1.0,1.0)),f.x),f.y);',
+      '}',
+      'float fbm(vec2 p){float v=0.0;float a=0.5;for(int i=0;i<4;i++){v+=a*noise(p);p*=2.02;a*=0.5;}return v;}',
+      'float caustic(vec2 uv,float t){',
+      '  vec2 p=mod(uv*6.2831853,6.2831853)-250.0;',
+      '  vec2 i=p; float c=1.0; float inten=0.005;',
+      '  for(int n=0;n<5;n++){',
+      '    float tt=t*(1.0-(3.5/float(n+1)));',
+      '    i=p+vec2(cos(tt-i.x)+sin(tt+i.y),sin(tt-i.y)+cos(tt+i.x));',
+      '    c+=1.0/length(vec2(p.x/(sin(i.x+tt)/inten),p.y/(cos(i.y+tt)/inten)));',
+      '  }',
+      '  c/=5.0; c=1.17-pow(c,1.4);',
+      '  return pow(abs(c),8.0);',
+      '}',
+      'void main(){',
+      '  vec2 uv=vUv;',
+      '  float asp=uAspect;',
+      '  vec2 p=vec2((uv.x-0.5)*asp,uv.y-0.5);',
+      '  float t=uTime;',
+      '  vec3 col=mix(vec3(0.008,0.03,0.05),vec3(0.0,0.09,0.13),uv.y);',
+      // 光柱（含横向 sway，鱼体受光用同一条公式）
+      '  float sway=sin(t*0.13)*0.025*(1.0-uv.y);',
+      '  float spread=0.14+0.50*(1.0-uv.y)*(1.0-uv.y);',
+      '  float shaft=1.0-smoothstep(spread*0.12,spread,abs(p.x-sway));',
+      '  float rays=smoothstep(0.30,0.85,fbm(vec2(p.x*9.0+t*0.05,p.y*0.6-t*0.08)));',
+      '  float fine=0.5+0.5*sin(p.x*70.0+fbm(vec2(p.x*4.0,t*0.1))*8.0);',
+      '  float beam=shaft*(0.35+0.65*rays)*(0.7+0.3*fine);',
+      '  beam*=smoothstep(0.0,0.9,uv.y)*0.95;',
+      '  col+=vec3(0.50,0.85,1.0)*beam*0.85;',
+      // 水面亮面
+      '  float surf=smoothstep(0.80,0.97,uv.y)*(1.0-smoothstep(0.12,0.46,abs(p.x)));',
+      '  float ripple=0.5+0.5*sin(p.x*38.0+fbm(vec2(p.x*6.0,t*0.4))*9.0+t*1.5);',
+      '  col+=vec3(0.7,0.95,1.0)*surf*(0.4+0.45*ripple);',
+      // 底部焦散
+      '  float floorM=1.0-smoothstep(0.0,0.30,uv.y);',
+      '  float cz=caustic(vec2(p.x*0.9+0.5,p.y*0.9)*0.9,t*0.35);',
+      '  col+=vec3(0.55,0.9,1.0)*cz*floorM*0.6*(0.6+0.4*fbm(p*3.0+t*0.1));',
+      // 尘埃（光柱内可见）
+      '  vec2 g=uv*vec2(asp,1.0)*vec2(40.0,26.0)+vec2(0.0,-t*0.6);',
+      '  vec2 id=floor(g); vec2 f=fract(g)-0.5;',
+      '  float h=hash(id);',
+      '  vec2 off=(vec2(hash(id+3.1),hash(id+7.7))-0.5)*0.6;',
+      '  float dust=(1.0-smoothstep(0.0,0.08,length(f-off)))*step(0.93,h);',
+      '  col+=vec3(0.8,0.95,1.0)*dust*shaft*0.7;',
+      // 暗角（减弱）
+      '  vec2 q=p*vec2(0.8,1.0);',
+      '  col*=1.0-0.45*dot(q,q);',
+      '  gl_FragColor=vec4(col,uOpacity);',
+      '}'
+    ].join('\n');
+  }
+
+  // ---------- 鱼体几何（沿用程序化鱼：全长≈1，头在 +x） ----------
   function buildFishUnit() {
     var pos = [], bodyU = [], sideY = [], fin = [], idx = [];
     var N = 36;
@@ -73,7 +148,6 @@
       sideY.push(sy >= 0 ? 1 : -1);
       fin.push(f);
     }
-    // 身体三角带（上轮廓 → 下轮廓）
     var topBase = 0;
     for (var i = 0; i <= N; i++) {
       var u = i / N, w = profile(u);
@@ -88,20 +162,16 @@
       idx.push(topBase + k, botBase + k, topBase + k + 1);
       idx.push(topBase + k + 1, botBase + k, botBase + k + 1);
     }
-    // 分叉尾鳍（尾柄点 u=1，两片叉尾三角，aBodyU>1 让摆幅更大）
-    var tX = 0.47 - 0.88, tip1 = -0.68 + 0.13, tip2 = -0.68 - 0.045, tip3 = -0.68 + 0.025;
+    var tX = 0.47 - 0.88, tip1 = -0.68 + 0.13, tip2 = -0.68 - 0.045;
     var fBase = pos.length / 3;
-    // 上叉
     pos.push(tX, 0, 0); bodyU.push(1.0); sideY.push(1); fin.push(1);
     pos.push(tip1, 0.25, 0); bodyU.push(1.25); sideY.push(1); fin.push(1);
     pos.push(tip2, 0.62, 0); bodyU.push(1.3); sideY.push(1); fin.push(1);
     idx.push(fBase, fBase + 1, fBase + 2);
-    // 下叉
     pos.push(tX, 0, 0); bodyU.push(1.0); sideY.push(-1); fin.push(1);
     pos.push(tip1, -0.25, 0); bodyU.push(1.25); sideY.push(-1); fin.push(1);
     pos.push(tip2, -0.62, 0); bodyU.push(1.3); sideY.push(-1); fin.push(1);
     idx.push(fBase + 3, fBase + 5, fBase + 4);
-    // 背鳍（+y 侧，世界向上）与臀鳍（-y 侧）
     var dX = 0.47 - 0.47 * 0.88, dW = profile(0.47);
     var dBase = pos.length / 3;
     pos.push(dX + 0.13, dW * 0.6, 0); bodyU.push(0.42); sideY.push(1); fin.push(1);
@@ -123,28 +193,30 @@
     };
   }
 
-  function buildFishVertexShader() {
+  function buildFishVS() {
     return [
       'precision highp float;',
       'uniform float uTime;',
-      'uniform float uBendAmp;',   // 摆尾幅度（bass 驱动）
+      'uniform float uBendAmp;',
       'attribute float aBodyU;',
       'attribute float aSideY;',
       'attribute float aFin;',
       'attribute float aPhase;',
       'attribute float aFlapSpeed;',
       'attribute float aWidK;',
-      'attribute vec3 aTint0;',   // 暗色（尾/背缘）
-      'attribute vec3 aTint1;',   // 主色
-      'attribute vec3 aTint2;',   // 亮腹色
+      'attribute vec3 aTint0;',
+      'attribute vec3 aTint1;',
+      'attribute vec3 aTint2;',
+      'attribute float aLit;',   // 每帧 CPU 投影算的光柱受光度
       'varying float vU;',
       'varying float vSideY;',
       'varying float vFin;',
       'varying vec3 vT0;',
       'varying vec3 vT1;',
       'varying vec3 vT2;',
+      'varying float vLit;',
       'void main(){',
-      // 身体波动（参考稿 bend：sin(phase - u*3.25) * amp * u²，u>1 的尾鳍摆幅更大）
+      // 参考稿切片摆尾口径：bend = sin(time*flap + phase - u*3.25) * amp * u²（尾鳍 u>1 摆更大）
       '  vec3 p = position;',
       '  p.y *= aWidK;',
       '  float bend = sin(uTime * aFlapSpeed + aPhase - aBodyU * 3.25) * uBendAmp * aBodyU * aBodyU;',
@@ -155,11 +227,12 @@
       '  vSideY = aSideY;',
       '  vFin = aFin;',
       '  vT0 = aTint0; vT1 = aTint1; vT2 = aTint2;',
+      '  vLit = aLit;',
       '}'
     ].join('\n');
   }
 
-  function buildFishFragmentShader() {
+  function buildFishFS() {
     return [
       'precision highp float;',
       'uniform float uBeat;',
@@ -168,55 +241,55 @@
       'varying float vSideY;',
       'varying float vFin;',
       'varying vec3 vT0; varying vec3 vT1; varying vec3 vT2;',
+      'varying float vLit;',
       'void main(){',
-      // 参考稿身体五段渐变：暗-主-亮-主-暗
+      // 五段渐变：暗-主-亮-主-暗
       '  vec3 c;',
       '  if (vU < 0.22) c = mix(vT0, vT1, vU / 0.22);',
       '  else if (vU < 0.49) c = mix(vT1, vT2, (vU - 0.22) / 0.27);',
       '  else if (vU < 0.72) c = mix(vT2, vT1, (vU - 0.49) / 0.23);',
       '  else c = mix(vT1, vT0, (vU - 0.72) / 0.28);',
-      // 背亮腹暗（参考稿 shade 上下渐变）；鳍略暗
       '  c *= 1.0 + vSideY * 0.16;',
       '  c *= mix(1.0, 0.86, vFin);',
-      // 鼓点闪光（减半防过曝：银白板 + 中心重叠区容易推到全白）
+      // 受光：光柱内全亮，光柱外压暗到 0.25（参考稿 br = 0.25+0.75*lit）
+      '  c *= mix(0.25, 1.0, vLit);',
+      // 光柱内的柔和提亮（参考稿 lighter 叠加口径，随 lit² 收口防过曝）
+      '  c += c * vLit * vLit * 0.20;',
+      // 鼓点闪光
       '  c += c * uBeat * 0.16;',
       '  gl_FragColor = vec4(c * uOpacity, 1.0);',
       '}'
     ].join('\n');
   }
 
-  /** 初始化鱼群状态（参考稿 makeFish：depth 层次 + 色板/体型随机） */
+  /** 初始化鱼群（参考稿 makeFish：出生域、初速、个体相位/体型随机 + depth 层次） */
   function initFishes() {
     state.fishes = [];
     for (var i = 0; i < COUNT; i++) {
       var depth = rnd(i * 17.3);
       var pal = PALETTES[Math.floor(rnd(i * 7.7) * PALETTES.length) % PALETTES.length];
-      var sp = SPECIES[Math.floor(rnd(i * 11.1) * SPECIES.length) % SPECIES.length];
-      var spLen = lerp(sp.lenK[0], sp.lenK[1], rnd(i * 5.3));
+      var dir = rnd(i * 19.9) * Math.PI * 2;
+      var spLen = lerp(0.55, 0.95, rnd(i * 5.3));   // 世界单位全长 ≈ 76~131px
       var t0 = hex2rgb(pal[1]), t1 = hex2rgb(pal[0]), t2 = hex2rgb(pal[2]);
-      var dim = 0.45 + depth * 0.55;   // depth 层次：远暗近亮
-      state.fishes.push({
-        // 初始即全屏均匀铺开（切入立见分散鱼群；强阻尼下从收缩到力学平衡要数分钟）
-        x: (rnd(i * 3.3) - 0.5) * SPAN_X * 1.7,
-        y: (rnd(i * 2.7) - 0.5) * SPAN_Y * 1.7,
-        z: (depth - 0.5) * 1.0,   // 压扁到贴屏平面附近（3D 深度投影必然重叠，参考稿是纯 2D）
-        vx: (rnd(i * 9.1) - 0.5) * 1.2 * K,
-        vy: (rnd(i * 4.1) - 0.5) * 0.6 * K,
-        ix: 0, iy: 0,
+      var dim = 0.55 + depth * 0.45;                // depth 层次（受光另外由 lit 驱动）
+      var f = {
+        x: (rnd(i * 3.3) - 0.5) * SPAN_X * 1.9,
+        y: (rnd(i * 2.7) - 0.5) * SPAN_Y * 1.5,
+        z: (depth - 0.5) * 1.0,                     // 贴屏 depth 层（分离只在 XY 做）
+        vx: Math.cos(dir) * lerp(40, 70, rnd(i * 9.1)) * K,
+        vy: Math.sin(dir) * lerp(20, 40, rnd(i * 4.1)) * K,
+        t: 0,
         angle: rnd(i * 13.7) * Math.PI * 2,
-        len: (0.45 + depth * 0.5) * spLen,          // 世界单位全长（屏宽 3~7%）
-        widK: sp.body * lerp(0.88, 1.12, rnd(i * 6.7)) / 0.27,
-        depth: depth,
-        speed: (0.62 + depth * 1.05) * K,           // units/frame
-        swim: 1.1 + rnd(i * 8.3) * 1.3,
+        len: spLen,
+        widK: lerp(0.88, 1.12, rnd(i * 6.7)) / 0.27,
+        r: spLen * 0.55,                            // 参考稿 r = size*s*0.5 口径
         phase: rnd(i * 15.1) * Math.PI * 2,
-        wp: rnd(i * 2.9) * Math.PI * 2,
-        ws: 0.16 + rnd(i * 12.3) * 0.34
-      });
-      var f = state.fishes[state.fishes.length - 1];
+        flap: 6.2 + rnd(i * 8.3) * 1.8              // 参考稿侧身鱼 sin(t*7) 口径
+      };
       f.t0 = [t0[0] * dim, t0[1] * dim, t0[2] * dim];
       f.t1 = [t1[0] * dim, t1[1] * dim, t1[2] * dim];
       f.t2 = [t2[0] * dim, t2[1] * dim, t2[2] * dim];
+      state.fishes.push(f);
     }
   }
 
@@ -224,6 +297,26 @@
     if (state.initialized) return;
     state.scene = scene;
 
+    // 背景满屏 quad：PlaneGeometry 2×2，每帧按 fov/aspect 摆到机位前方
+    var bgGeo = new THREE.PlaneGeometry(2, 2);
+    var bgMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime: { value: 0 },
+        uAspect: { value: 1.78 },
+        uOpacity: { value: 0 }
+      },
+      vertexShader: 'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
+      fragmentShader: buildWaterFS(),
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    var bgMesh = new THREE.Mesh(bgGeo, bgMat);
+    bgMesh.frustumCulled = false;
+    bgMesh.renderOrder = -10;   // 透明队列里最先画，鱼与后续元素都叠在水景之上
+
+    // 鱼群 InstancedMesh
     var unit = buildFishUnit();
     var geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(unit.position, 3));
@@ -235,12 +328,12 @@
     var mat = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uBendAmp: { value: 0.026 },
+        uBendAmp: { value: 0.07 },
         uBeat: { value: 0 },
         uOpacity: { value: 0 }
       },
-      vertexShader: buildFishVertexShader(),
-      fragmentShader: buildFishFragmentShader(),
+      vertexShader: buildFishVS(),
+      fragmentShader: buildFishFS(),
       side: THREE.DoubleSide,
       transparent: true,
       depthWrite: true,
@@ -249,6 +342,7 @@
 
     var mesh = new THREE.InstancedMesh(geo, mat, COUNT);
     mesh.frustumCulled = false;
+    mesh.renderOrder = 0;
 
     var t0Arr = new Float32Array(COUNT * 3);
     var t1Arr = new Float32Array(COUNT * 3);
@@ -256,6 +350,7 @@
     var phaseArr = new Float32Array(COUNT);
     var flapArr = new Float32Array(COUNT);
     var widArr = new Float32Array(COUNT);
+    var litArr = new Float32Array(COUNT);
 
     initFishes();
     state.dummy = new THREE.Object3D();
@@ -270,8 +365,9 @@
       t1Arr[i * 3] = f.t1[0]; t1Arr[i * 3 + 1] = f.t1[1]; t1Arr[i * 3 + 2] = f.t1[2];
       t2Arr[i * 3] = f.t2[0]; t2Arr[i * 3 + 1] = f.t2[1]; t2Arr[i * 3 + 2] = f.t2[2];
       phaseArr[i] = f.phase;
-      flapArr[i] = 3.3 + (f.swim - 1.1) * 1.0;   // 参考稿 flap 频率 2.2+swim
+      flapArr[i] = f.flap;
       widArr[i] = f.widK;
+      litArr[i] = 1;
     }
     geo.setAttribute('aTint0', new THREE.InstancedBufferAttribute(t0Arr, 3));
     geo.setAttribute('aTint1', new THREE.InstancedBufferAttribute(t1Arr, 3));
@@ -279,12 +375,19 @@
     geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phaseArr, 1));
     geo.setAttribute('aFlapSpeed', new THREE.InstancedBufferAttribute(flapArr, 1));
     geo.setAttribute('aWidK', new THREE.InstancedBufferAttribute(widArr, 1));
+    geo.setAttribute('aLit', new THREE.InstancedBufferAttribute(litArr, 1));
     mesh.instanceMatrix.needsUpdate = true;
 
+    state.bgMesh = bgMesh;
+    state.bgMat = bgMat;
     state.mesh = mesh;
     state.mat = mat;
+    state.litArr = litArr;
+    state.scratchV = new THREE.Vector3();
+    state.scratchDir = new THREE.Vector3();
     state.root = new THREE.Group();
     state.root.name = 'audio-fish-school-root';
+    state.root.add(bgMesh);
     state.root.add(mesh);
     state.root.visible = false;
     scene.add(state.root);
@@ -294,13 +397,20 @@
   function clearLayer() {
     if (!state.root) return;
     if (state.scene) state.scene.remove(state.root);
+    if (state.bgMesh) {
+      state.bgMesh.geometry.dispose();
+      state.bgMat.dispose();
+    }
     if (state.mesh) {
       state.mesh.geometry.dispose();
-      state.mesh.material.dispose();
+      state.mat.dispose();
     }
     state.root = null;
+    state.bgMesh = null;
+    state.bgMat = null;
     state.mesh = null;
     state.mat = null;
+    state.litArr = null;
     state.initialized = false;
     state.opacity = 0;
   }
@@ -318,78 +428,132 @@
   }
 
   /**
-   * 鱼群积分（参考稿 updateFish 逐行移植，px→世界单位换算）：
-   * 群中心向心力 + wander + 局部分离 + 软边界 + 速度上限 + 朝向跟随。
-   * 分离只在 XY 平面做（z 是 depth 层，独立不推挤）。
+   * boids 群游（参考稿 step() 逐式移植，px→世界单位 ×K）：
+   * 150px 邻域 align+cohesion、2.2r 分离、个体 wander、软墙推回 + 硬边界钳制、
+   * 速度平滑钳制（30~90 px/s）；无阻尼——参考稿靠速度钳制收敛。
+   * beat 惊散：替代参考稿的点击交互，从群质心按「点击冲量」公式注入径向速度。
    */
   function integrate(dt, audio) {
-    state.schoolPhase += dt * 0.16;
-    var ph = state.schoolPhase;
-    // 群中心缓慢漂移（参考稿：绕光柱中心 ±W*0.17/±H*0.16 → 世界 ±2.4/±2.2）
-    var cx = Math.sin(ph * 0.85) * 2.36 + Math.sin(ph * 0.33 + 1.4) * 1.11;
-    var cy = Math.cos(ph * 0.66) * 2.13;
-    var sepR = SEP_R * (1 + audio.beat * 0.8);       // 鼓点：分离半径炸大
-    var step = Math.min(dt * 60, 2.5);
-    var damp = Math.pow(0.978, step);   // 参考稿 0.966 偏黏：分离冲量推不动鱼、群会塌缩
-    var dampI = Math.pow(0.94, step);
-    var m = 0.48;                                     // 软边界（参考稿 66px）
+    var fishes = state.fishes;
+    // 群质心（惊散 epicenter）
+    var cx = 0, cy = 0;
+    for (var c = 0; c < fishes.length; c++) { cx += fishes[c].x; cy += fishes[c].y; }
+    cx /= fishes.length; cy /= fishes.length;
 
-    for (var i = 0; i < state.fishes.length; i++) {
-      var f = state.fishes[i];
-      // 巡游圈软墙（替代参考稿的全局向心力——全局向心会把鱼群压成一团，
-      // 分离力是局部的顶不住；改为只在鱼游出巡游圈时拉回，圈内完全自由+分离防叠）
-      var dcx = cx - f.x, dcy = cy - f.y;
-      var dc = Math.hypot(dcx, dcy);
-      var CRUISE_R = 4.5;
-      if (dc > CRUISE_R) {
-        // 拉力系数取小：稳态速度落在 maxS 量级即被限速平滑接管（过大会过冲震荡）
-        var pull = (dc - CRUISE_R) * 0.0004;
-        ax += dcx / dc * pull; ay += dcy / dc * pull;
-      }
-      // 个体 wander（参考稿原式，绝对力 ×K）
-      f.wp += f.ws * dt;
-      ax += Math.sin(f.wp * 1.13 + f.phase) * 0.032 * K;
-      ay += Math.cos(f.wp * 0.87 + f.phase * 1.3) * 0.026 * K;
-      // 局部分离（O(n²)；XY 平面；贴屏 2D 口径下分离充分作用）
-      for (var j = 0; j < state.fishes.length; j++) {
-        if (j === i) continue;
-        var g = state.fishes[j];
-        var dx = f.x - g.x, dy = f.y - g.y, d2 = dx * dx + dy * dy, R = sepR;
-        if (d2 < R * R && d2 > 0.0001) {
-          var d = Math.sqrt(d2), p = (1 - d / R) * 0.25 * K;
-          ax += dx / d * p; ay += dy / d * p;
+    var sepRBoost = 1 + audio.beat * 0.8;   // 鼓点分离半径炸大（炸开再聚拢）
+    var maxScale = 1 + audio.bass * 0.5;    // bass 提升游速上限
+
+    for (var i = 0; i < fishes.length; i++) {
+      var a = fishes[i];
+      var sepX = 0, sepY = 0, alignX = 0, alignY = 0, cohX = 0, cohY = 0, n = 0;
+      var sepR = a.r * 2.2 * sepRBoost;
+      for (var j = 0; j < fishes.length; j++) {
+        if (i === j) continue;
+        var b = fishes[j];
+        var dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 < NEIGHBOR_R * NEIGHBOR_R) {
+          n++;
+          alignX += b.vx; alignY += b.vy;
+          cohX += b.x; cohY += b.y;
+          if (d2 < sepR * sepR) { sepX -= dx; sepY -= dy; }
         }
       }
-      // impulse 衰减 + 注入（参考稿保留衰减；本项目用鼓点注入「惊散」脉冲）
-      f.ix *= dampI; f.iy *= dampI;
-      if (audio.beat > 0.6 && f.beatKick !== true) {
-        var ka = rnd(i * 31.7 + Math.floor(state.time * 2)) * Math.PI * 2;
-        f.ix += Math.cos(ka) * 0.02 * K;
-        f.iy += Math.sin(ka) * 0.02 * K;
-        f.beatKick = true;
-      } else if (audio.beat <= 0.6) {
-        f.beatKick = false;
+      var fxF = 0, fyF = 0;
+      if (n) {
+        fxF += (alignX / n - a.vx) * 0.04 + (cohX / n - a.x) * 0.004;
+        fyF += (alignY / n - a.vy) * 0.04 + (cohY / n - a.y) * 0.004;
       }
-      ax += f.ix; ay += f.iy;
-      // 软边界
-      if (f.x < -m) ax += (-m - f.x) * 0.0024; if (f.x > m) ax -= (f.x - m) * 0.0024;
-      if (f.y < -m) ay += (-m - f.y) * 0.0024; if (f.y > m) ay -= (f.y - m) * 0.0024;
-      // 积分 + 阻尼 + 速度上限
-      f.vx += ax * step; f.vy += ay * step;
-      f.vx *= damp; f.vy *= damp;
-      var sp2 = Math.hypot(f.vx, f.vy), maxS = f.speed * (1 + audio.bass * 0.5);
-      if (sp2 > maxS) { f.vx = f.vx / sp2 * maxS; f.vy = f.vy / sp2 * maxS; }
-      f.x += f.vx * step; f.y += f.vy * step;
-      // 朝向：头平滑转向速度方向（参考稿 dt*3.4）
-      var spd = Math.hypot(f.vx, f.vy);
+      fxF += sepX * 0.06;
+      fyF += sepY * 0.06;
+
+      // 个体 wander（参考稿原式）
+      a.t += dt;
+      fxF += Math.cos(a.t * 0.4 + a.phase) * 10 * K;
+      fyF += Math.sin(a.t * 0.6 + a.phase) * 6 * K;
+
+      // 软墙推回（参考稿 m=70px，力 (m-x)*0.8）
+      var m = EDGE_MARGIN;
+      if (a.x < -m) fxF += (-m - a.x) * 0.8 * K;
+      if (a.x > m) fxF -= (a.x - m) * 0.8 * K;
+      if (a.y < -m) fyF += (-m - a.y) * 0.8 * K;
+      if (a.y > m) fyF -= (a.y - m) * 0.8 * K;
+
+      // beat 惊散（参考稿点击冲量：(R-d)/R * 180）
+      if (audio.beat > 0.6 && a.beatKick !== true) {
+        var sdx = a.x - cx, sdy = a.y - cy;
+        var sd = Math.hypot(sdx, sdy);
+        if (sd < SCARE_R && sd > 0.001) {
+          var kk = (SCARE_R - sd) / SCARE_R * SCARE_K;
+          a.vx += sdx / sd * kk;
+          a.vy += sdy / sd * kk;
+        }
+        a.beatKick = true;
+      } else if (audio.beat <= 0.6) {
+        a.beatKick = false;
+      }
+
+      // 积分（参考稿无阻尼）
+      a.vx += fxF * dt;
+      a.vy += fyF * dt;
+
+      // 速度平滑钳制（参考稿 target = sp + (clamp(sp,30,90) - sp) * min(1, dt*0.8)）
+      var sp = Math.hypot(a.vx, a.vy) || 0.0001;
+      var target = Math.min(SPD_MAX * maxScale, Math.max(SPD_MIN, sp));
+      target = sp + (target - sp) * Math.min(1, dt * 0.8);
+      var scl = target / sp;
+      a.vx *= scl; a.vy *= scl;
+
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      // 硬边界（参考稿 ±30px 钳制）
+      var hx = SPAN_X + EDGE_HARD, hy = SPAN_Y + EDGE_HARD;
+      a.x = Math.max(-hx, Math.min(hx, a.x));
+      a.y = Math.max(-hy, Math.min(hy, a.y));
+
+      // 朝向：头平滑转向速度方向（3D 版沿用 dt*3.4，替代参考稿的瞬间翻转）
+      var spd = Math.hypot(a.vx, a.vy);
       if (spd > 0.05 * K) {
-        var ta = Math.atan2(f.vy, f.vx);
-        var df = ta - f.angle;
+        var ta = Math.atan2(a.vy, a.vx);
+        var df = ta - a.angle;
         while (df > Math.PI) df -= Math.PI * 2;
         while (df < -Math.PI) df += Math.PI * 2;
-        f.angle += df * Math.min(1, dt * 3.4);
+        a.angle += df * Math.min(1, dt * 3.4);
       }
     }
+  }
+
+  /** 背景 quad 摆到机位前方（满屏覆盖，与机位距离/朝向无关） */
+  function placeBackdrop(camera) {
+    var h = 2 * BG_DIST * Math.tan(camera.fov * Math.PI / 360);
+    var w = h * (camera.aspect || 1.78);
+    camera.getWorldDirection(state.scratchDir);
+    state.bgMesh.position.copy(camera.position).addScaledVector(state.scratchDir, BG_DIST);
+    state.bgMesh.quaternion.copy(camera.quaternion);
+    state.bgMesh.scale.set(w, h, 1);
+  }
+
+  /** 每帧把鱼投影到屏幕算受光度（光柱内亮 / 光柱外压暗；含光柱 sway 同步） */
+  function updateLit(camera, time) {
+    var aspect = camera.aspect || 1.78;
+    for (var i = 0; i < state.fishes.length; i++) {
+      var f = state.fishes[i];
+      state.scratchV.set(f.x, f.y, f.z).project(camera);
+      var uX = state.scratchV.x * 0.5 + 0.5;
+      var uY = state.scratchV.y * 0.5 + 0.5;
+      if (state.scratchV.z > 1 || uX < -0.2 || uX > 1.2 || uY < -0.2 || uY > 1.2) {
+        state.litArr[i] = 0.25;   // 屏外/机位后方：按光柱外最暗处理
+        continue;
+      }
+      uX = Math.min(1, Math.max(0, uX));
+      uY = Math.min(1, Math.max(0, uY));
+      // 与背景 shader 同一条公式（含 sway）
+      var sway = Math.sin(time * 0.13) * 0.025 * (1 - uY);
+      var spread = 0.14 + 0.50 * (1 - uY) * (1 - uY);
+      var pxN = Math.abs((uX - 0.5) * aspect - sway);
+      var lit = 1 - smooth(spread * 0.12, spread, pxN);
+      state.litArr[i] = lit;
+    }
+    state.mesh.geometry.attributes.aLit.needsUpdate = true;
   }
 
   function update(dt, ctx) {
@@ -411,14 +575,23 @@
 
     state.time += dt;
     var audio = smoothAudio({ bass: clamp01(ctx.audio && ctx.audio.bass), beat: clamp01(ctx.audio && ctx.audio.beat) }, dt);
+    var camera = ctx.camera || null;
+    state.camera = camera;
 
     integrate(dt, audio);
 
+    if (camera) {
+      placeBackdrop(camera);
+      updateLit(camera, state.time);
+    }
+
     var u = state.mat.uniforms;
     u.uTime.value = state.time;
-    u.uOpacity.value = state.opacity;   // 淡入淡出（漏写会让整群鱼乘 0 隐形）
-    u.uBendAmp.value = 0.026 * (1 + audio.bass * 0.8);   // bass：摆尾更有力
+    u.uOpacity.value = state.opacity;
+    u.uBendAmp.value = 0.07 * (1 + audio.bass * 0.8);   // bass：摆尾更有力
     u.uBeat.value = audio.beat;
+    state.bgMat.uniforms.uTime.value = state.time;
+    state.bgMat.uniforms.uOpacity.value = state.opacity;
 
     var dummy = state.dummy;
     for (var i = 0; i < state.fishes.length; i++) {

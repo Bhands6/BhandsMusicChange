@@ -1246,7 +1246,10 @@ function animate() {
   // 必须定义在 dim 使用之前：var 提升陷阱——定义放后面时 dim 行读到 undefined，dim 恒 1（实测踩过）。
   var ringPresetActive = isAudioFxPreset(fx);
   var presetNumForBand = fx ? Number(fx.preset) : NaN;
-  var backdropBandActive = presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20 || presetNumForBand === 22 || presetNumForBand === 23;
+  // 深海鱼群(23) 2026-11-03 起自带满屏水下光柱背景 shader（用户拍板「完整水下背景」），
+  // 主粒子层整层让位，不再进背景星河带——否则星点叠在水景上会破坏参考稿观感。
+  var fishSchoolOwnsBg = !!(window.MineradioAudioFishSchool && MineradioAudioFishSchool.isActive(fx));
+  var backdropBandActive = (presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20 || presetNumForBand === 22 || presetNumForBand === 23) && !fishSchoolOwnsBg;
   // 背景带模式：主粒子层亮度对齐音域回响（0.82）——用户要的就是音域回响那种星空观感
   var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58
     : (sonicPresetActiveEarly || backdropBandActive ? 0.82 : 1);
@@ -1389,6 +1392,7 @@ function animate() {
     MineradioAudioFishSchool.update(dt, {
       scene: scene,
       fx: fx,
+      camera: camera,   // 水下背景 quad 跟机位 + 鱼体屏幕投影受光都靠它，漏传 = 背景不动/受光恒暗
       time: uniforms.uTime.value,
       visualRotation: particles && particles.rotation ? particles.rotation : null,
       audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
