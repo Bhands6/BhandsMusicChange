@@ -1246,7 +1246,7 @@ function animate() {
   // 必须定义在 dim 使用之前：var 提升陷阱——定义放后面时 dim 行读到 undefined，dim 恒 1（实测踩过）。
   var ringPresetActive = isAudioFxPreset(fx);
   var presetNumForBand = fx ? Number(fx.preset) : NaN;
-  var backdropBandActive = presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20;
+  var backdropBandActive = presetNumForBand === 18 || presetNumForBand === 19 || presetNumForBand === 20 || presetNumForBand === 22 || presetNumForBand === 23;
   // 背景带模式：主粒子层亮度对齐音域回响（0.82）——用户要的就是音域回响那种星空观感
   var skullBackdropDim = fx && fx.preset === SKULL_PRESET_INDEX ? 0.58
     : (sonicPresetActiveEarly || backdropBandActive ? 0.82 : 1);
@@ -1366,6 +1366,27 @@ function animate() {
   // 玫瑰绽放（预设21）
   if (window.MineradioAudioRose) {
     MineradioAudioRose.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+
+  // 蝶舞环阵（预设22）
+  if (window.MineradioAudioButterfly) {
+    MineradioAudioButterfly.update(dt, {
+      scene: scene,
+      fx: fx,
+      time: uniforms.uTime.value,
+      visualRotation: particles && particles.rotation ? particles.rotation : null,
+      audio: { bass: bass, mid: mid, treble: treble, beat: beatPulse, energy: audioEnergy }
+    });
+  }
+  // 深海鱼群（预设23）
+  if (window.MineradioAudioFishSchool) {
+    MineradioAudioFishSchool.update(dt, {
       scene: scene,
       fx: fx,
       time: uniforms.uTime.value,

@@ -270,7 +270,7 @@ function isAudioFxPreset(presetOrFx) {
   if (typeof window === 'undefined') return false;
   var fxObj = (presetOrFx && typeof presetOrFx === 'object') ? presetOrFx : fx;
   if (!fxObj) return false;
-  var list = [window.MineradioAudioRing, window.MineradioAudioTunnel, window.MineradioAudioOrb, window.MineradioAudioRose];
+  var list = [window.MineradioAudioRing, window.MineradioAudioTunnel, window.MineradioAudioOrb, window.MineradioAudioRose, window.MineradioAudioButterfly, window.MineradioAudioFishSchool];
   for (var i = 0; i < list.length; i++) {
     if (list[i] && typeof list[i].isActive === 'function' && list[i].isActive(fxObj)) return true;
   }

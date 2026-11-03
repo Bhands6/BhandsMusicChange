@@ -322,6 +322,8 @@ presetMeta.push({ name: '音浪环阵', nameHtml: '音浪环阵 <span class="pc-
 presetMeta.push({ name: '音浪回廊', nameHtml: '音浪回廊 <span class="pc-name-en">Audio Colonnade</span>', desc: '纵向环栈 · 穿行感' });
 presetMeta.push({ name: '声波球壳', nameHtml: '声波球壳 <span class="pc-name-en">Pulse Orb</span>', desc: '经纬尖刺 · 呼吸' });
 presetMeta.push({ name: '玫瑰花瓣', nameHtml: '玫瑰花瓣 <span class="pc-name-en">Rose Petals</span>', desc: '花瓣飘落 · 纷飞' });
+presetMeta.push({ name: '蓝光蝶群', nameHtml: '蓝光蝶群 <span class="pc-name-en">Butterfly Swarm</span>', desc: '实体蝶群 · 随机飞舞' });
+presetMeta.push({ name: '深海鱼群', nameHtml: '深海鱼群 <span class="pc-name-en">Fish School</span>', desc: '实体鱼群 · 群游巡游' });
 var presetIcons = [
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 5-2 8 0s5 2 8 0M3 10c3-2 5-2 8 0s5 2 8 0M3 18c3-2 5-2 8 0s5 2 8 0"/></svg>',
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>',
@@ -340,7 +342,9 @@ presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" st
 presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><rect x="2.6" y="2.6" width="18.8" height="18.8" rx="3"/><rect x="6.6" y="6.6" width="10.8" height="10.8" rx="2"/><rect x="10.1" y="10.1" width="3.8" height="3.8" rx="1"/></svg>');
 presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5.6"/><path d="M12 2.4v3.1M12 18.5v3.1M2.4 12h3.1M18.5 12h3.1M5.2 5.2l2.2 2.2M16.6 16.6l2.2 2.2M18.8 5.2l-2.2 2.2M7.4 16.6l-2.2 2.2"/></svg>');
 presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 12c0-3 2-5 4.4-4.4C19 8.2 19.6 11 17.4 12c2.2 1 1.6 3.8-.9 4.4C14 17 12 15 12 12z"/><path d="M12 12c0-3-2-5-4.4-4.4C5 8.2 4.4 11 6.6 12c-2.2 1-1.6 3.8.9 4.4C10 17 12 15 12 12z"/><path d="M12 12c1.4-1.6 1.4-3.8 0-5.4-1.4 1.6-1.4 3.8 0 5.4z"/><path d="M12 12c-1.6 1.4-1.6 3.6 0 5.2 1.6-1.6 1.6-3.8 0-5.2z"/></svg>');
-var presetDisplayOrder = [0, 6, 7, 8, 18, 19, 20, 21, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
+presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 11c-.3-2.5-2.2-4.6-4.8-4.9C4.6 5.8 3 7.6 3 9.5c0 2.4 2 4.2 4.6 4.6l2.9.4c.8.1 1.5-.4 1.5-1.2V11z"/><path d="M12 11c.3-2.5 2.2-4.6 4.8-4.9C19.4 5.8 21 7.6 21 9.5c0 2.4-2 4.2-4.6 4.6l-2.9.4c-.8.1-1.5-.4-1.5-1.2V11z"/><path d="M12 11v7.2l-1.6 2.3M12 18.2l1.6 2.3"/><path d="M12 9.8C11.6 8 10.4 6.6 9 6M12 9.8c.4-1.8 1.6-3.2 3-3.8"/></svg>');
+presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 12c2.6-3.4 6.4-5 10-3.6 1.9.7 3.2 1.9 3.9 3.6-.7 1.7-2 2.9-3.9 3.6-3.6 1.4-7.4-.2-10-3.6z"/><path d="M17.4 8.4 21 6.2l-1.2 5.8L21 17.8l-3.6-2.2"/><circle cx="7" cy="11" r=".8" fill="currentColor"/></svg>');
+var presetDisplayOrder = [0, 6, 7, 8, 18, 19, 20, 21, 22, 23, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 // presetMeta 已就绪：校准头部兜底的预设索引上限（启动恢复读取端使用），新增预设时只需维护 presetMeta 本身
 VISUAL_PRESET_INDEX_MAX = presetMeta.length - 1;
 var lyricColorPresets = [
@@ -1475,6 +1479,8 @@ function setPreset(p, opts) {
     if (window.MineradioAudioTunnel) MineradioAudioTunnel.onPresetChange(prev, p, { scene: scene, fx: fx });
     if (window.MineradioAudioOrb) MineradioAudioOrb.onPresetChange(prev, p, { scene: scene, fx: fx });
     if (window.MineradioAudioRose) MineradioAudioRose.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioAudioButterfly) MineradioAudioButterfly.onPresetChange(prev, p, { scene: scene, fx: fx });
+    if (window.MineradioAudioFishSchool) MineradioAudioFishSchool.onPresetChange(prev, p, { scene: scene, fx: fx });
     if (window.MineradioSonicWorkshop) MineradioSonicWorkshop.onPresetChange(prev, p, { scene: scene, fx: fx });
   }
   if (changed && prev === SKULL_PRESET_INDEX && p !== SKULL_PRESET_INDEX) clearSkullPresetResidue();
@@ -1521,6 +1527,8 @@ function setPreset(p, opts) {
     else if (p === 19) { orbit.userRadius = 14.5; orbit.userPhi = 0.03; orbit.userTheta = 0.0; orbit.baselineRadius = 14.5; orbit.baselinePhi = 0.03; }
     else if (p === 20) { orbit.userRadius = 11.0; orbit.userPhi = 0.15; orbit.userTheta = 0.0; orbit.baselineRadius = 11.0; orbit.baselinePhi = 0.15; }
     else if (p === 21) { orbit.userRadius = 8.8; orbit.userPhi = 0.30; orbit.userTheta = 0.0; orbit.baselineRadius = 8.8; orbit.baselinePhi = 0.30; }
+    else if (p === 22) { orbit.userRadius = 9.4; orbit.userPhi = 0.22; orbit.userTheta = 0.0; orbit.baselineRadius = 9.4; orbit.baselinePhi = 0.22; }
+    else if (p === 23) { orbit.userRadius = 9.4; orbit.userPhi = 0.22; orbit.userTheta = 0.0; orbit.baselineRadius = 9.4; orbit.baselinePhi = 0.22; }
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
     if (webCam) orbit.baselineTheta = 0.0;
