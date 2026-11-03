@@ -1291,13 +1291,12 @@ function animate() {
   if (bloomParticles) bloomParticles.visible = !audioFxFullOff && fx.bloom && fx.bloomStrength > 0.01;
   if (floatGroup) floatGroup.visible = !audioFxFullOff;
   if (backCoverGroup) backCoverGroup.visible = !audioFxFullOff;
-  // 背景星河带的盘随几何体机位放大：音域回响机位(6.6)在星河盘「内部」→ 四面八方粒子 = 星空；
-  // 几何体机位（环阵 11.6 / 隧道 14.5 / 球壳 11.0）在盘「外部」→ 从外面侧看 = 密集粒子堆（实测踩过）。
-  // 按机位半径等比放大盘，让相机始终处在与音域回响相同的相对位置，观感即第一张图的背景星空。
+  // 背景星河带：盘随几何体机位**直接**等比放大（不做二次 lerp——orbit.radius 本身就是
+  // 平滑渐变的，再叠一层 lerp 会双重滞后，用户在机位飞行途中看到的是中间态弧带而非满屏星野，
+  // 2026-11-03 用户截图「星河的背景点回廊后就变了」）。系数用 /5.2 而非 /6.6：
+  // 保证相机深入盘内（星河预设机位 6.6 时相机也只在盘的 80% 半径处），观感 = 满屏星野。
   var bandCamR = (orbit && Number.isFinite(Number(orbit.radius))) ? Number(orbit.radius) : 6.6;
-  var bandScaleTarget = backdropBandActive ? clampRange((bandCamR / 6.6) * 0.98, 1.0, 2.4) : 1.0;
-  var bandScaleNow = particles.scale.x;
-  particles.scale.setScalar(bandScaleNow + (bandScaleTarget - bandScaleNow) * Math.min(1, 0.06 * Math.max(1, dt * 60)));
+  particles.scale.setScalar(backdropBandActive ? clampRange(bandCamR / 5.2, 1.0, 3.0) : 1.0);
   var targetRotY = orbit.centerLocked ? 0 : (headParallax.active ? headParallax.x * 0.5 : 0) + gestureRotation.y;
   var targetRotX = orbit.centerLocked ? 0 : (headParallax.active ? -headParallax.y * 0.35 : 0) + gestureRotation.x;
   particles.rotation.y += (targetRotY - particles.rotation.y) * 0.055;
