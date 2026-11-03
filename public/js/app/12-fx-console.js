@@ -1503,7 +1503,10 @@ function setPreset(p, opts) {
   refreshPresetGrid();
   if (changed && !opts.skipTransition) triggerPresetParticleTransition(prev, p);
   // 每个预设对应的相机基线 (改 userOrbit)
-  if (changed && !opts.preserveCamera && p !== 5) {
+  // 星河(5)不再豁免：它原本假设「星野满屏与机位无关」，但 18/19/20 会把机位带到
+  // 11~14.5（盘外）——切回星河时相机停在远处，星野盘被侧看成上部弧带，与初始观感
+  // 完全不同（2026-11-03 用户截图反馈）。走 else 分支回 6.6/0.08，切回即原本样子。
+  if (changed && !opts.preserveCamera) {
     var webCam = (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_CAMERA) ? WebFxPresets.PRESET_CAMERA[p] : null;
     if (webCam) {
       orbit.userRadius = webCam.radius; orbit.userPhi = webCam.phi; orbit.userTheta = 0.0;
