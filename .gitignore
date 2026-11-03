@@ -64,5 +64,13 @@ public/media/*.mp4
 # NVIDIA 驱动在 Electron 进程工作目录下自建的日志目录（umdlogs），与项目无关
 NVIDIA Corporation/
 
+# docs 内部开发笔记与本地预览页：只留本机，不入库（README 预览图 docs/screenshots/ 仍保留）
+docs/*.md
+docs/extracts/
+docs/hero-preview/
+docs/splash-preview/
+docs/assets/
+docs/ios-port-plan.html
+
 # WorkBuddy AI 的本地工作记忆 / 会话数据，只存在于本机，不入库
 .workbuddy-ai/
