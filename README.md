@@ -396,8 +396,9 @@ BhandsMusic 不是网易云音乐、QQ 音乐或腾讯音乐娱乐集团的官�
 
 ## 版权与授权
 
-Copyright (C) 2026 XxHuberrr.
+Copyright (C) 2026 XxHuberrr.（原项目 Mineradio）
+Copyright (C) 2026 Bhands.（BhandsMusic 二次开发修改）
 
-本项目采用 GPL-3.0 授权。详见 [LICENSE](./LICENSE)。
+本项目采用 GPL-3.0-only 授权。详见 [LICENSE](./LICENSE)。
 
-BM Logo、BhandsMusic 名称、界面视觉设计与原创视觉表达归作者所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
+BM Logo、BhandsMusic 名称、界面视觉设计与原创视觉表达归 Bhands 所有；第三方依赖和第三方服务分别遵循其各自授权与服务条款。
