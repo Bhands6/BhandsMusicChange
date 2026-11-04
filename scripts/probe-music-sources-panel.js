@@ -100,14 +100,19 @@ app.whenReady().then(async function () {
         out.gridRows = rects.reduce(function(acc, r){ return acc.indexOf(r.top) < 0 ? acc.concat([r.top]) : acc; }, []).length;
         out.gridWidth = Math.round(grid.getBoundingClientRect().width);
       }
-      // ⑥ 显隐逻辑：2026-11-04 起 LX 脚本块常显（修「无脚本 → 开关点不开 → 传不了脚本」死锁）
+      // ⑥ 显隐逻辑（2026-11-04 用户指定）：启用 → 展开；未启用但点过开关 → 展开；其余收起
       if (typeof syncSourceConfigVisibility === 'function') {
         _musicSourcesConfig = { enabledSources: ['gdmusic', 'goMusic', 'kugou', 'lxMusic'], lxMusicScripts: [] };
         syncSourceConfigVisibility();
         out.lxBlockWhenLxEnabled = getComputedStyle(document.getElementById('lx-script-block')).display;
         _musicSourcesConfig = { enabledSources: ['gdmusic', 'goMusic', 'kugou'], lxMusicScripts: [] };
+        _lxScriptBlockExpanded = false;
         syncSourceConfigVisibility();
-        out.lxBlockNoScriptNoEnable = getComputedStyle(document.getElementById('lx-script-block')).display;
+        out.lxBlockCollapsedNoScript = getComputedStyle(document.getElementById('lx-script-block')).display;
+        _lxScriptBlockExpanded = true;
+        syncSourceConfigVisibility();
+        out.lxBlockExpandedNoScript = getComputedStyle(document.getElementById('lx-script-block')).display;
+        _lxScriptBlockExpanded = false;
         out.syncSurvivesRemovedIds = true;
       }
       // ⑦ 面板里不应有空标题（有 .fx-section-label 但其后没有任何控件）

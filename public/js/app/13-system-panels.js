@@ -412,6 +412,9 @@ function syncSystemSettingsUI() {
  * ============================================================ */
 var _musicSourcesConfig = null;
 var _musicSourcesLoaded = false;
+// LX 脚本区的「手动展开」标志：无脚本时点 LX 开关只展开这块（不启用），
+// 让用户能上传脚本；有脚本后开关恢复正常启用/关闭。仅内存态，不落盘。
+var _lxScriptBlockExpanded = false;
 
 /**
  * 加载音源配置
@@ -469,8 +472,8 @@ function syncMusicSourcesUI() {
       var active = scripts.find(function (s) { return s.id === activeId; });
       statusEl.textContent = active ? '已加载: ' + active.name : scripts.length + ' 个脚本';
     } else {
-      // 空状态要能指路，别只写「未加载」—— 用户看不出下一步该干什么
-      statusEl.textContent = '未导入脚本 · 点「上传脚本」导入后即可开启 LX Music';
+      // 脚本区被点开时用户在找入口，这里给一句能直接照做的说明
+      statusEl.textContent = '尚未导入脚本 · 点「上传脚本」选择 .js 文件';
     }
   }
   var listEl = document.getElementById('lx-scripts-list');
@@ -502,21 +505,26 @@ function syncMusicSourcesUI() {
 }
 
 /**
- * 配置区显隐。
- * 历史：这个函数原本让配置块跟随音源开关折叠（未启用就 display:none），
- * 2026-09-23 自定义 API 地址块 / go-music-api 地址块被移除后，只剩 LX 脚本块。
+ * 配置区显隐：LX 脚本块跟随开关折叠，另加一条「手动展开」通道。
  *
- * 2026-11-04 改为 **常显**（不再随开关折叠），修一个实打实的死锁：
- *   LX 音源启用条件 = 已有脚本（策略 canHandle 需要 listRunners().length > 0）
- *   → 无脚本时点开关被拦住
- *   → 而脚本块又只在「已启用」时才展开
- *   → 于是空状态既点不开、也看不到「上传脚本」按钮，用户彻底进不去。
- * 另外有脚本但关闭开关时，用户同样需要能切脚本 / 删脚本，所以也一并常显。
- * 函数名保留：多处调用它做复位（display 恢复默认）。
+ * 规则（2026-11-04 用户指定）：
+ *   ① 已启用 lxMusic → 展开
+ *   ② 未启用但用户点过 LX 开关（仅展开，未启用）→ 展开
+ *   ③ 其余（关掉开关后）→ 收起
+ *
+ * 为什么需要 ②：LX 音源启用条件是「已有脚本」（策略 canHandle 需要
+ * listRunners().length > 0），无脚本时点开关不能直接打开，但也不能让
+ * 用户找不到上传入口 —— 点一下就展开「上传脚本」区，传完再点开关启用。
+ *
+ * 历史：2026-09-23 自定义 API 地址块 / go-music-api 地址块移除后只剩本块；
+ * 2026-11-04 上午曾一度改为常显，当天按用户要求恢复折叠 + 点击展开。
  */
 function syncSourceConfigVisibility() {
   var el = document.getElementById('lx-script-block');
-  if (el) el.style.display = '';
+  if (!el) return;
+  var enabled = (_musicSourcesConfig && _musicSourcesConfig.enabledSources) || [];
+  var show = enabled.indexOf('lxMusic') >= 0 || _lxScriptBlockExpanded;
+  el.style.display = show ? '' : 'none';
 }
 
 /**
@@ -529,23 +537,28 @@ function toggleMusicSource(source) {
   }
   var enabled = _musicSourcesConfig.enabledSources || [];
   var idx = enabled.indexOf(source);
-  if (idx < 0 && source === 'lxMusic') {
-    // 没有脚本时不允许打开：策略的 canHandle 需要 listRunners().length > 0，
-    // 打开也是静默无效（候选列表里根本没有它），不如直接拦住并说明原因。
-    // 拦住之后必须把用户送到「上传脚本」这一步 —— 2026-11-04 之前这里只弹一句
-    // toast 就 return，配合当时会折叠的脚本块，空状态直接卡死（用户实测）。
+  if (source === 'lxMusic' && idx < 0) {
+    // 尚未启用：先看有没有脚本
     var scripts = _musicSourcesConfig.lxMusicScripts || [];
     if (!scripts.length) {
+      // 无脚本 → 不启用（没有 runner 的开关只是静默无效），改为展开脚本区，
+      // 让用户先上传。再点一次可以收起。
+      _lxScriptBlockExpanded = !_lxScriptBlockExpanded;
       syncSourceConfigVisibility();
-      showToast('LX Music 需要先导入落雪脚本，已为你打开选择框');
-      uploadLxMusicScript();
+      if (_lxScriptBlockExpanded) {
+        showToast('先上传 LX Music 脚本，导入后即可开启解析');
+      }
       return;
     }
+    // 有脚本 → 走正常启用流程
   }
   if (idx >= 0) {
     enabled.splice(idx, 1);
+    // 关掉开关就收起脚本区（回到用户指定的折叠逻辑）
+    if (source === 'lxMusic') _lxScriptBlockExpanded = false;
   } else {
     enabled.push(source);
+    if (source === 'lxMusic') _lxScriptBlockExpanded = false;
   }
   _musicSourcesConfig.enabledSources = enabled;
   syncMusicSourcesUI();
@@ -622,6 +635,9 @@ async function deleteLxScript(scriptId) {
     if (!left && lxIdx >= 0) {
       enabled.splice(lxIdx, 1);
       _musicSourcesConfig.enabledSources = enabled;
+      // 开关关掉后脚本区本会收起，但用户刚在这块操作完，直接消失会很突兀；
+      // 保持展开，方便他立刻传下一个脚本。
+      _lxScriptBlockExpanded = true;
       syncMusicSourcesUI();
       await saveMusicSourcesConfigToServer();
       showToast('脚本已删除，LX Music 已自动关闭');
