@@ -655,7 +655,7 @@ try {
         </div>
       </div>
       <div class="fx-section-label">音源开关</div>
-      <div class="fx-section-desc">默认推荐：GD音乐台 + GoMusic 换源。酷狗音源要扫码登录会员才拿得到 FLAC；LX Music 属于自备脚本，上传脚本后按需开启。</div>
+      <div class="fx-section-desc">默认推荐：GD音乐台 + GoMusic 换源。酷狗音源要扫码登录会员才拿得到 FLAC；LX Music 属于自备脚本，需先上传脚本再开启（无脚本时点开关会直接弹出上传框）。</div>
       <div class="fx-toggle-grid">
         <div class="fx-toggle" id="t-src-gdmusic" onclick="toggleMusicSource('gdmusic')" title="GD音乐台 - 通过 netease/joox 聚合搜索匹配，无损优先"><span>GD音乐台</span><span class="dot"></span></div>
         <div class="fx-toggle" id="t-src-goMusic" onclick="toggleMusicSource('goMusic')" title="GoMusic 换源 - go-music-api 服务，需本地运行该 Go 服务，用酷狗/酷我/QQ/咪咕官方音源兜底"><span>GoMusic 换源</span><span class="dot"></span></div>
@@ -666,7 +666,7 @@ try {
         <div class="fx-section-label">LX Music 脚本</div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
           <button class="fx-mini-btn" onclick="uploadLxMusicScript()">上传脚本</button>
-          <span id="lx-script-status" style="font-size:11px;color:var(--c-text-dim,#888);">未加载</span>
+          <span id="lx-script-status" style="font-size:11px;color:var(--c-text-dim,#888);">未导入脚本 · 点「上传脚本」导入后即可开启 LX Music</span>
         </div>
         <input type="file" id="lx-script-file-input" accept=".js,.txt" style="display:none" onchange="handleLxScriptUpload(event)">
         <div id="lx-scripts-list" style="font-size:11px;color:var(--c-text-dim,#888);margin-bottom:8px;"></div>

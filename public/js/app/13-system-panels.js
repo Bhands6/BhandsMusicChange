@@ -469,7 +469,8 @@ function syncMusicSourcesUI() {
       var active = scripts.find(function (s) { return s.id === activeId; });
       statusEl.textContent = active ? '已加载: ' + active.name : scripts.length + ' 个脚本';
     } else {
-      statusEl.textContent = '未加载';
+      // 空状态要能指路，别只写「未加载」—— 用户看不出下一步该干什么
+      statusEl.textContent = '未导入脚本 · 点「上传脚本」导入后即可开启 LX Music';
     }
   }
   var listEl = document.getElementById('lx-scripts-list');
@@ -501,19 +502,21 @@ function syncMusicSourcesUI() {
 }
 
 /**
- * 配置区跟随音源开关折叠：只有启用对应音源时才展开它的配置块。
- * 之前三块（LX 脚本 / 自定义 API 地址 / go-music-api 地址）无条件展开，开关全关时面板
- * 仍是一整屏配置项 —— 既冗余，又容易让人误以为「填了地址就等于启用了」。
- * 2026-09-23：自定义 API 地址块与 go-music-api 地址块已从面板移除，map 只剩 LX 脚本。
+ * 配置区显隐。
+ * 历史：这个函数原本让配置块跟随音源开关折叠（未启用就 display:none），
+ * 2026-09-23 自定义 API 地址块 / go-music-api 地址块被移除后，只剩 LX 脚本块。
+ *
+ * 2026-11-04 改为 **常显**（不再随开关折叠），修一个实打实的死锁：
+ *   LX 音源启用条件 = 已有脚本（策略 canHandle 需要 listRunners().length > 0）
+ *   → 无脚本时点开关被拦住
+ *   → 而脚本块又只在「已启用」时才展开
+ *   → 于是空状态既点不开、也看不到「上传脚本」按钮，用户彻底进不去。
+ * 另外有脚本但关闭开关时，用户同样需要能切脚本 / 删脚本，所以也一并常显。
+ * 函数名保留：多处调用它做复位（display 恢复默认）。
  */
 function syncSourceConfigVisibility() {
-  if (!_musicSourcesConfig) return;
-  var enabled = _musicSourcesConfig.enabledSources || [];
-  var map = { lxMusic: 'lx-script-block' };
-  Object.keys(map).forEach(function (src) {
-    var el = document.getElementById(map[src]);
-    if (el) el.style.display = enabled.indexOf(src) >= 0 ? '' : 'none';
-  });
+  var el = document.getElementById('lx-script-block');
+  if (el) el.style.display = '';
 }
 
 /**
@@ -529,9 +532,13 @@ function toggleMusicSource(source) {
   if (idx < 0 && source === 'lxMusic') {
     // 没有脚本时不允许打开：策略的 canHandle 需要 listRunners().length > 0，
     // 打开也是静默无效（候选列表里根本没有它），不如直接拦住并说明原因。
+    // 拦住之后必须把用户送到「上传脚本」这一步 —— 2026-11-04 之前这里只弹一句
+    // toast 就 return，配合当时会折叠的脚本块，空状态直接卡死（用户实测）。
     var scripts = _musicSourcesConfig.lxMusicScripts || [];
     if (!scripts.length) {
-      showToast('还没有导入落雪脚本，无法启用 LX Music 音源');
+      syncSourceConfigVisibility();
+      showToast('LX Music 需要先导入落雪脚本，已为你打开选择框');
+      uploadLxMusicScript();
       return;
     }
   }
@@ -568,8 +575,14 @@ async function handleLxScriptUpload(event) {
     });
     var result = await resp.json();
     if (result.success) {
-      showToast('脚本上传成功: ' + (result.sources || []).join(', '));
+      var srcList = (result.sources || []).join(', ');
+      var lxOn = !!(_musicSourcesConfig
+        && (_musicSourcesConfig.enabledSources || []).indexOf('lxMusic') >= 0);
       await loadMusicSourcesConfig();
+      // 上传成功 ≠ 已启用：开关还得点一下才生效，这里把下一步说清楚，
+      // 免得停在「导入了但没声音源」的困惑里。
+      showToast('脚本已导入' + (srcList ? '（' + srcList + '）' : '')
+        + (lxOn ? '' : '，点「LX Music」开关即可启用'));
     } else {
       showToast('脚本上传失败: ' + (result.error || '未知错误'));
     }
@@ -601,6 +614,19 @@ async function deleteLxScript(scriptId) {
       body: JSON.stringify({ id: scriptId })
     });
     await loadMusicSourcesConfig();
+    // 脚本被删光后 lxMusic 还挂在 enabledSources 里，就成了「开关亮着但没有 runner」
+    // 的静默无效状态，顺手一起关掉（2026-11-04）。
+    var left = (_musicSourcesConfig && _musicSourcesConfig.lxMusicScripts || []).length;
+    var enabled = (_musicSourcesConfig && _musicSourcesConfig.enabledSources) || [];
+    var lxIdx = enabled.indexOf('lxMusic');
+    if (!left && lxIdx >= 0) {
+      enabled.splice(lxIdx, 1);
+      _musicSourcesConfig.enabledSources = enabled;
+      syncMusicSourcesUI();
+      await saveMusicSourcesConfigToServer();
+      showToast('脚本已删除，LX Music 已自动关闭');
+      return;
+    }
     showToast('脚本已删除');
   } catch (e) {
     showToast('删除失败: ' + e.message);
