@@ -63,6 +63,9 @@ var VISUAL_PRESET_SCHEMA = 'skull-preset-v2';
 // 视觉预设索引上限：presetMeta 定义在文件后部，而启动恢复（readSavedPlaybackVisualPreset /
 // readSavedLyricLayout）先于其执行，故此处给初始化期兜底值；presetMeta 定义后按其长度校准
 var VISUAL_PRESET_INDEX_MAX = 17;
+// ⚠️ 上面这个 17 只是「presetMeta 就绪前」的兜底，绝不能拿来 clamp 读到的值 ——
+// 18~23 的新预设会被压成 17（字符雨）。读取端统一用 00-prelude.js 的
+// VISUAL_PRESET_READ_MAX（宽松上限），到 12-fx-console.js 校准后再回收越界值。
 // 歌词显示模式合法值：启动恢复（734 行附近）先于 6300 行区的显示模式函数区执行，
 // 故常量定义在文件头部（normalizeLyricDisplayMode 依赖）
 var STAGE_LYRIC_DISPLAY_MODES = { single: 1, dual: 1, triple: 1, cinema: 1, custom: 1 };
@@ -810,7 +813,8 @@ function readSavedPlaybackVisualPreset() {
   try {
     var raw = JSON.parse(localStorage.getItem(LYRIC_LAYOUT_STORE_KEY) || '{}') || {};
     if (!Object.prototype.hasOwnProperty.call(raw, 'preset')) return fxDefaults.preset;
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_INDEX_MAX);
+    // 宽松上限读取，理由见文件头 VISUAL_PRESET_INDEX_MAX 旁的注释
+    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_READ_MAX);
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) savedPreset = 5;
     return savedPreset;
   } catch (e) {

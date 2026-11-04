@@ -101,11 +101,19 @@ function readLocalBeatPrefs() {
 }
 
 // ↓ 原属 05-lyrics-stage.js
+
+// 读取期的预设索引宽松上限（2026-11-04）。
+// 不能用 VISUAL_PRESET_INDEX_MAX：读取发生在 presetMeta 就绪之前，那时它还是初始化
+// 兜底值 17。拿 17 当上限会把 18~23 的预设（音浪环阵 / 音浪回廊 / 声波球壳 /
+// 玫瑰花瓣 / 蓝光蝶群 / 深海鱼群）全部压成 17 —— 而 17 正好是「字符雨」，
+// 表现为用户选任何新预设，重启后都回到字符雨。
+// 真实长度由 12-fx-console.js 校准，那边会再回收一次越界值。
+var VISUAL_PRESET_READ_MAX = 64;
 function readSavedLyricLayout() {
   try {
     var savedLayoutRaw = localStorage.getItem(LYRIC_LAYOUT_STORE_KEY);
     var raw = savedLayoutRaw ? (JSON.parse(savedLayoutRaw) || {}) : packagedDefaultLyricLayoutRaw();
-    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_INDEX_MAX);
+    var savedPreset = clampRange(Number(raw.preset) || 0, 0, VISUAL_PRESET_READ_MAX);
     if (savedPreset === 3 && raw.visualPresetSchema !== VISUAL_PRESET_SCHEMA) {
       savedPreset = 5;
     }

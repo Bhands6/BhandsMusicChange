@@ -347,6 +347,17 @@ presetIcons.push('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" st
 var presetDisplayOrder = [0, 6, 7, 8, 18, 19, 20, 21, 22, 23, 5, 4, 2, 1, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17];
 // presetMeta 已就绪：校准头部兜底的预设索引上限（启动恢复读取端使用），新增预设时只需维护 presetMeta 本身
 VISUAL_PRESET_INDEX_MAX = presetMeta.length - 1;
+// 回收「读取期宽松上限」放过的越界值（见 00-prelude.js 的 VISUAL_PRESET_READ_MAX）。
+// 只处理真正越界的脏数据：合法的新预设 18~23 原样保留，不再被压成 17（字符雨）。
+if (typeof fx !== 'undefined' && fx) {
+  if (!(fx.preset >= 0 && fx.preset <= VISUAL_PRESET_INDEX_MAX)) {
+    fx.preset = clampRange(Number(fx.preset) || 0, 0, VISUAL_PRESET_INDEX_MAX);
+  }
+}
+if (typeof playbackVisualPreset === 'number'
+  && !(playbackVisualPreset >= 0 && playbackVisualPreset <= VISUAL_PRESET_INDEX_MAX)) {
+  playbackVisualPreset = clampRange(playbackVisualPreset, 0, VISUAL_PRESET_INDEX_MAX);
+}
 var lyricColorPresets = [
   { name:'雾蓝', color:'#a9b8c8' },
   { name:'银蓝', color:'#9db8cf' },
