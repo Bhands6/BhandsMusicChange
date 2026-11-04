@@ -66,7 +66,13 @@ var geo = buildCoverParticleGeometry(GRID_X);
 function applyCoverParticleResolution(value, opts) {
   opts = opts || {};
   fx.coverResolution = normalizeCoverResolution(value);
-  var grid = coverParticleGridForResolution(fx.coverResolution);
+  var baseGrid = coverParticleGridForResolution(fx.coverResolution);
+  // 玫瑰 / 水母花会按预设放大网格；这里重建必须带上同一倍率，
+  // 否则分辨率变动或启动恢复会把它压回基础密度（state.gridBoost 却仍记着已放大）。
+  var boost = (typeof WebFxPresets !== 'undefined' && WebFxPresets.gridBoostFor)
+    ? WebFxPresets.gridBoostFor(fx.preset) : 1;
+  var grid = boost === 1 ? baseGrid : (Math.round(baseGrid * boost) | 1);
+  if (typeof WebFxPresets !== 'undefined') WebFxPresets.state.gridBoost = boost;
   if (grid === GRID_X && geo && geo.userData && geo.userData.grid === grid) return;
   var oldGeo = geo;
   var nextGeo = buildCoverParticleGeometry(grid);
