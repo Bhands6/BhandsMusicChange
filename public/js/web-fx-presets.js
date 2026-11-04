@@ -6,8 +6,10 @@
 //  桌面预设索引（保留 0–5 原 shader + 6 安魂 + 7/8 音域回响）：
 //    9 极光 · 10 万花筒 · 11 迸发 · 12 声波地形 · 13 螺旋星云
 //    14 水母花 · 15 玫瑰 · 16 心跳 · 17 字符雨
-//  [水母花 · 蝴蝶兰·高密度] 3 朵：2 片上翼瓣(放射脉络+折痕+边缘高光)、2 片下垂小瓣、背萼片、立体发亮的唇瓣球 + 蕊柱帽、
+//  [水母花 · 蝴蝶兰·高密度] 7 朵：2 片上翼瓣(放射脉络+折痕+边缘高光)、2 片下垂小瓣、背萼片、立体发亮的唇瓣球 + 蕊柱帽、
 //    3 缕带状飘带；粒子优先铺在花瓣面/花心表面，亮度与光点大小按 uGrid 自动补偿；进入该预设时网格放大 JELLY_GRID_BOOST 倍。
+//  桌面版改动（2026-11-04）：朵数 3 -> 7、单体缩到约 0.6 倍、位置由固定机位改为各自不同频率的利萨如漂移
+//    （随机游动，永远不出取景框），yaw 随水平速度轻微侧倾。
 //  shader 内用 uEff = desktopIndex - 3 映射到 Web 的 6–14 分支阈值。
 // ============================================================
 (function (global) {
@@ -91,7 +93,7 @@
     '#define GALAXY_CORE_DIM 0.58',
     '#define GALAXY_CORE_SHRINK 0.74',
     '#define GALAXY_CORE_PULSE 0.4',
-    '#define JELLY_COUNT 3.0',
+    '#define JELLY_COUNT 7.0',
     '#define JELLY_TENDRILS 9.0',
     '#define ROSE_SIZE 500.0',
     '#define ROSE_H -250.0',
@@ -379,17 +381,26 @@
 '      Kr = max(1.0, total / 100.0 * S / nC);',
 '    }',
 '    float dk = clamp(183.0 / uGrid, 0.3, 1.6);',
-'    float cx = 1.7; float cy = 1.3; float cz = 0.0; float Sz = 1.0;',
-'    if (ci > 0.5 && ci < 1.5)      { cx = -3.2; cy = -0.5; cz = 0.7;  Sz = 0.78; }',
-'    else if (ci > 1.5)             { cx = 1.1;  cy = -2.5; cz = -0.6; Sz = 0.55; }',
-'    cx += sin(t * 0.10 + ci * 2.3) * 0.35;',
-'    cy += sin(t * 0.13 + ci * 1.7) * 0.30;',
+'    float Sz = 0.56 + hash11(ci * 23.1) * 0.18;',
+'    float ang0 = (ci / nC) * 6.2831853 + (hash11(ci * 3.7) - 0.5) * 0.9;',
+'    float Rr = 2.8 + hash11(ci * 11.3) * 0.6;',
+'    float bx = cos(ang0) * Rr * 1.20;',
+'    float by = -0.10 + sin(ang0) * Rr * 0.45;',
+'    float bz = (hash11(ci * 17.9) - 0.5) * 1.5;',
+'    float rx1 = hash11(ci * 5.9); float ry1 = hash11(ci * 7.3); float rz1 = hash11(ci * 9.7);',
+'    float ax = 1.9 + rx1 * 1.0; float ay = 0.85 + ry1 * 0.5; float az = 0.7 + rz1 * 0.7;',
+'    float wx = 0.075 + rx1 * 0.035; float wy = 0.090 + ry1 * 0.030; float wz = 0.060 + rz1 * 0.030;',
+'    float phx = ci * 2.39 + rx1 * 5.1; float phy = ci * 1.67 + ry1 * 3.7; float phz = ci * 3.11 + rz1 * 4.3;',
+'    float cx = bx + sin(t * wx + phx) * ax + sin(t * wx * 2.13 + phx * 1.7) * ax * 0.35;',
+'    float cy = by + sin(t * wy + phy) * ay + sin(t * wy * 1.87 + phy * 2.3) * ay * 0.30;',
+'    float cz = bz + cos(t * wz + phz) * az;',
+'    float vx = cos(t * wx + phx) * ax * wx + cos(t * wx * 2.13 + phx * 1.7) * ax * 0.35 * wx * 2.13;',
 '    float rate = 0.20 + 0.04 * ci;',
 '    float p = fract(t * rate + hash11(ci * 131.0));',
 '    float c = clamp(jPulse(p) + uBeat * 0.25, 0.0, 1.0);',
 '    cy += jLift(p) * 0.22 * Sz;',
 '    float Rf = 2.1 * Sz;',
-'    float yaw = sin(t * 0.12 + ci * 1.9) * 0.40;',
+'    float yaw = sin(t * 0.12 + ci * 1.9) * 0.40 + clamp(vx * 0.9, -0.35, 0.35);',
 '    float pitch = -0.10 + sin(t * 0.17 + ci) * 0.10;',
 '    float roll = (hash11(ci * 17.0 + 3.0) - 0.5) * 0.4 + sin(t * 0.10 + ci) * 0.08;',
 '    vec3 lp = vec3(0.0);',
