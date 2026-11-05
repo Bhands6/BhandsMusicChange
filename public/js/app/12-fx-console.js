@@ -1477,6 +1477,7 @@ function tickPresetTransition() {
     syncFxUniforms();
   }
 }
+var presetOrbitMemory = {};   // 记住每个预设离开时的用户机位（滚轮缩放），切回时还原
 function setPreset(p, opts) {
   opts = opts || {};
   p = Math.max(0, Math.min(presetMeta.length - 1, Number(p) || 0));
@@ -1524,6 +1525,10 @@ function setPreset(p, opts) {
   // 11~14.5（盘外）——切回星河时相机停在远处，星野盘被侧看成上部弧带，与初始观感
   // 完全不同（2026-11-03 用户截图反馈）。走 else 分支回 6.6/0.08，切回即原本样子。
   if (changed && !opts.preserveCamera) {
+    // 记住离开预设时的机位：滚轮缩放后切走再切回，还原当时视角而不是基线（安魂 6 有自己的机位逻辑，不参与）
+    if (prev !== SKULL_PRESET_INDEX) {
+      presetOrbitMemory[prev] = { radius: orbit.userRadius, phi: orbit.userPhi, theta: orbit.userTheta };
+    }
     var webCam = (typeof WebFxPresets !== 'undefined' && WebFxPresets.PRESET_CAMERA) ? WebFxPresets.PRESET_CAMERA[p] : null;
     if (webCam) {
       orbit.userRadius = webCam.radius; orbit.userPhi = webCam.phi; orbit.userTheta = 0.0;
@@ -1543,6 +1548,12 @@ function setPreset(p, opts) {
     else              { orbit.userRadius = 6.6; orbit.userPhi = 0.08; orbit.userTheta = 0.0; orbit.baselineRadius = 6.6; orbit.baselinePhi = 0.08; }
     orbit.baselineTheta = p === 6 ? 0.18 : 0.0;
     if (webCam) orbit.baselineTheta = 0.0;
+    // 还原该预设上次离开时的用户机位（baseline 仍是设计值，「视角回正」依旧回设计基线）
+    if (p !== SKULL_PRESET_INDEX && presetOrbitMemory[p]) {
+      orbit.userRadius = presetOrbitMemory[p].radius;
+      orbit.userPhi = presetOrbitMemory[p].phi;
+      orbit.userTheta = presetOrbitMemory[p].theta;
+    }
   }
   if (changed && !opts.silent) showToast('视觉预设: ' + presetMeta[p].name);
   var shouldCommitPlaybackPreset = !!opts.commitPlaybackPreset || !opts.noSave;
