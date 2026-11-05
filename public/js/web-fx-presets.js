@@ -21,7 +21,7 @@
     AURORA: 9, KALEIDO: 10, BURST: 11, SONIC: 12, SPIRAL: 13,
     JELLY: 14, ROSE: 15, HEART: 16, RAIN: 17,
     ROSE_GRID_BOOST: 1.5,
-    JELLY_GRID_BOOST: 4.0     // 水母花 10 朵：约 53.7 万粒子（183 -> 733）；卡顿先降到 3.6，再不行 3.0
+    JELLY_GRID_BOOST: 4.74    // 水母花 14 朵：约 75.2 万粒子（183 -> 867），单朵保持 ~5.37 万；卡顿先降到 4.2，再不行 3.8
   };
 
   // 主层需 Additive 的预设（水母/玫瑰/心跳/字符雨）
@@ -93,7 +93,7 @@
     '#define GALAXY_CORE_DIM 0.58',
     '#define GALAXY_CORE_SHRINK 0.74',
     '#define GALAXY_CORE_PULSE 0.4',
-    '#define JELLY_COUNT 10.0',
+    '#define JELLY_COUNT 14.0',
     '#define JELLY_TENDRILS 9.0',
     '#define ROSE_SIZE 500.0',
     '#define ROSE_H -250.0',
@@ -380,10 +380,10 @@
 '      idx = floor(m / nC);',
 '      Kr = max(1.0, total / 100.0 * S / nC);',
 '    }',
-'    float dk = clamp(380.0 / uGrid, 0.3, 1.6);',
+'    float dk = clamp(450.0 / uGrid, 0.3, 1.6);',
 '    float Sz = 0.37 + hash11(ci * 23.1) * 0.12;',
 '    float ang0 = (ci / nC) * 6.2831853 + (hash11(ci * 3.7) - 0.5) * 0.9;',
-'    float Rr = 2.2 + hash11(ci * 11.3) * 0.6;',
+'    float Rr = 2.4 + hash11(ci * 11.3) * 0.6;',
 '    float bx = cos(ang0) * Rr * 1.20;',
 '    float by = 0.55 + sin(ang0) * Rr * 0.40;',
 '    float bz = -1.6 + (hash11(ci * 17.9) - 0.5) * 1.8;',
