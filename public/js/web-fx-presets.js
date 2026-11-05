@@ -21,7 +21,7 @@
     AURORA: 9, KALEIDO: 10, BURST: 11, SONIC: 12, SPIRAL: 13,
     JELLY: 14, ROSE: 15, HEART: 16, RAIN: 17,
     ROSE_GRID_BOOST: 1.5,
-    JELLY_GRID_BOOST: 3.4     // 水母花 10 朵：约 38.8 万粒子（183 -> 623）；卡顿先降到 3.0，再不行 2.8
+    JELLY_GRID_BOOST: 4.0     // 水母花 10 朵：约 53.7 万粒子（183 -> 733）；卡顿先降到 3.6，再不行 3.0
   };
 
   // 主层需 Additive 的预设（水母/玫瑰/心跳/字符雨）
@@ -380,7 +380,7 @@
 '      idx = floor(m / nC);',
 '      Kr = max(1.0, total / 100.0 * S / nC);',
 '    }',
-'    float dk = clamp(320.0 / uGrid, 0.3, 1.6);',
+'    float dk = clamp(380.0 / uGrid, 0.3, 1.6);',
 '    float Sz = 0.37 + hash11(ci * 23.1) * 0.12;',
 '    float ang0 = (ci / nC) * 6.2831853 + (hash11(ci * 3.7) - 0.5) * 0.9;',
 '    float Rr = 2.2 + hash11(ci * 11.3) * 0.6;',
