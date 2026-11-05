@@ -373,6 +373,7 @@
 '    maxRippleAmp = max(maxRippleAmp, uMid * 0.14 + uBass * 0.10 + galaxyTwinkle * 0.10 + (galaxyStar - 0.3) * 0.06);',
 '  }',
 '  else if (uEff < 11.5) {',
+'    float jt = max(0.0, uJellyAge);',
 '    float nC = JELLY_COUNT;',
 '    float jgx = floor(aUv.x * uGrid);',
 '    float jgy = floor(aUv.y * uGrid);',
@@ -402,9 +403,9 @@
 '    }',
 '    float dk = clamp(450.0 / uGrid, 0.3, 1.6);',
 '    float jSz0; vec2 jMyAnchor;',
-'    vec3 jMyCenter = jellyCenter(ci, t, nC, jSz0, jMyAnchor);',
+'    vec3 jMyCenter = jellyCenter(ci, jt, nC, jSz0, jMyAnchor);',
 '    float jSzPast; vec2 jAnchPast;',
-'    vec3 jMyPast = jellyCenter(ci, t - 2.5, nC, jSzPast, jAnchPast);',
+'    vec3 jMyPast = jellyCenter(ci, jt - 2.5, nC, jSzPast, jAnchPast);',
 '    float Sz = jSz0;',
 '    float cx = jMyCenter.x; float cy = jMyCenter.y; float cz = jMyCenter.z;',
 '    // 汇集时自动分开：与其它花中心做两两排斥（只在 xy 平面推，z 不动）',
@@ -416,8 +417,8 @@
 '      vec2 janch = jellyAnchor(fj, nC);',
 '      if (distance(janch, jMyAnchor) > 6.8) continue;',
 '      float jSzOther;',
-'      vec3 jncNow = jellyCenter(fj, t, nC, jSzOther, janch);',
-'      vec3 jncPast = jellyCenter(fj, t - 2.5, nC, jSzOther, janch);',
+'      vec3 jncNow = jellyCenter(fj, jt, nC, jSzOther, janch);',
+'      vec3 jncPast = jellyCenter(fj, jt - 2.5, nC, jSzOther, janch);',
 '      vec2 d2 = vec2(cx, cy) - jncNow.xy;',
 '      vec2 d2p = vec2(jMyPast.x, jMyPast.y) - jncPast.xy;',
 '      d2 += vec2(hash11(ci * 91.7 + fj * 3.1) - 0.5, hash11(ci * 77.3 + fj * 5.3) - 0.5) * 0.06;',
@@ -437,16 +438,16 @@
 '    cx = clamp(cx, -6.5, 6.5);',
 '    cy = clamp(cy, -2.9, 3.6);',
 '    float jSzNext; vec2 jAnchNext;',
-'    vec3 jcNext = jellyCenter(ci, t + 1.0, nC, jSzNext, jAnchNext);',
+'    vec3 jcNext = jellyCenter(ci, jt + 1.0, nC, jSzNext, jAnchNext);',
 '    float vx = jcNext.x - jMyCenter.x;',
 '    float rate = 0.20 + 0.04 * ci;',
-'    float p = fract(t * rate + hash11(ci * 131.0));',
+'    float p = fract(jt * rate + hash11(ci * 131.0));',
 '    float c = clamp(jPulse(p) + uBeat * 0.25, 0.0, 1.0);',
 '    cy += jLift(p) * 0.22 * Sz;',
 '    float Rf = 2.1 * Sz;',
-'    float yaw = sin(t * 0.12 + ci * 1.9) * 0.40 + clamp(vx * 1.4, -0.35, 0.35);',
-'    float pitch = -0.10 + sin(t * 0.17 + ci) * 0.10;',
-'    float roll = (hash11(ci * 17.0 + 3.0) - 0.5) * 0.4 + sin(t * 0.10 + ci) * 0.08;',
+'    float yaw = sin(jt * 0.12 + ci * 1.9) * 0.40 + clamp(vx * 1.4, -0.35, 0.35);',
+'    float pitch = -0.10 + sin(jt * 0.17 + ci) * 0.10;',
+'    float roll = (hash11(ci * 17.0 + 3.0) - 0.5) * 0.4 + sin(jt * 0.10 + ci) * 0.08;',
 '    vec3 lp = vec3(0.0);',
 '    vec3 jc = vec3(0.78, 0.90, 1.0);',
 '    float jellyAlpha = 0.0;',
@@ -508,7 +509,7 @@
 '        jc = mix(vec3(0.97, 0.99, 1.0), vec3(0.66, 0.82, 1.0), s);',
 '        sizeTag = 1.0 * sqrt(dk);',
 '      }',
-'      lp = fPetal(k, s, w, Rf, c, t, ci);',
+'      lp = fPetal(k, s, w, Rf, c, jt, ci);',
 '      maxRippleAmp = max(maxRippleAmp, uMid * 0.07);',
 '    } else {',
 '      isTendril = true;',
@@ -519,7 +520,7 @@
 '      float tt = fract(q * 0.6180339 + hash11(ci * 9.1 + tn * 3.7));',
 '      float bs = b - 1.0;',
 '      float L = (2.2 + 0.9 * hash11(ci * 31.0 + b * 5.3)) * Rf * (1.0 - 0.10 * c * tt);',
-'      float ph = b * 2.1 + ci * 1.3 + si * 0.12 - t * 0.30;',
+'      float ph = b * 2.1 + ci * 1.3 + si * 0.12 - jt * 0.30;',
 '      float lat = bs * 0.8 + 0.3 * sin(b * 1.7 + ci);',
 '      float x = Rf * (lat * 1.5 * pow(tt, 1.2) + 0.45 * sin(tt * 3.2 + ph) * pow(tt, 0.8)) + (si - 1.0) * 0.035 * Rf * (0.3 + tt * 1.2);',
 '      float y = -L * tt * (1.0 - 0.15 * tt) + Rf * 0.14 * sin(tt * 5.0 + ph * 1.3) * tt;',
@@ -836,6 +837,8 @@
     galaxyAt: 0,
     burstRequested: true,
     galaxyResetRequested: true,
+    jellyAt: 0,
+    jellyResetRequested: true,
     baseGrid: 0,
     activeGrid: 0,
     roseBoosted: false,
@@ -853,6 +856,11 @@
       state.galaxyResetRequested = false;
     }
     uniforms.uGalaxyAge.value = time - state.galaxyAt;
+    if (state.jellyResetRequested) {
+      state.jellyAt = time;
+      state.jellyResetRequested = false;
+    }
+    uniforms.uJellyAge.value = time - state.jellyAt;
   }
 
   function onTrackSwitch(uniforms, time) {
@@ -872,6 +880,8 @@
   function onPresetChanged(prev, next, ctx) {
     if (webFxNeedsGalaxyReset(next)) state.galaxyResetRequested = true;
     if (next === WEB_FX.BURST) state.burstRequested = true;
+    // 进入水母花时重置相位：构图回到与「第一次进入程序」完全一致的排布
+    if (next === WEB_FX.JELLY) state.jellyResetRequested = true;
     if (ctx && typeof ctx.boostGrid === 'function') {
       var wantBoost = gridBoostFor(next);
       if (state.gridBoost !== wantBoost) {

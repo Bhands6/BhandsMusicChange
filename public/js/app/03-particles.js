@@ -183,6 +183,7 @@ var uniforms = {
   // Web 移植特效（预设 9–17）
   uBurstAge:   { value: 0 },
   uGalaxyAge:  { value: 0 },
+  uJellyAge:   { value: 0 },
   uMeteorSize: { value: 140 },
   uGrid:       { value: GRID_X },
   uJellyAura:  { value: 240 },
@@ -204,7 +205,7 @@ uniform float uVinylSpin;
 uniform float uColorBoost, uScatter, uCoverRes, uBgFade;
 uniform float uHasCover, uHasDepth, uEdgeEnabled, uAiBoost;
 uniform float uMouseActive, uPixel, uColorMixT, uLoading;
-uniform float uBurstAge, uGalaxyAge, uMeteorSize, uGrid, uJellyAura;
+uniform float uBurstAge, uGalaxyAge, uJellyAge, uMeteorSize, uGrid, uJellyAura;
 uniform vec2 uResolution;
 uniform sampler2D uCoverTex, uPrevCoverTex, uEdgeTex, uRippleTex;
 uniform int uRippleCount;
