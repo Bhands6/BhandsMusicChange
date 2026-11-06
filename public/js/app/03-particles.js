@@ -576,6 +576,9 @@ void main(){
   // ---- Web 移植 9 预设分支（uEff = 6..14）----
 ${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_BRANCHES : ''}
 
+  // ---- 取景下沉（极光 / 声波地形 / 螺旋星云；只平移粒子层，不动相机）----
+${typeof WebFxPresets !== 'undefined' ? WebFxPresets.GLSL_FRAMING : ''}
+
   // ====================================================
   //  鼠标交互 (仅 SILK)
   // ====================================================

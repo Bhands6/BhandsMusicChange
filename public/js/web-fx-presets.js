@@ -77,6 +77,32 @@
     17: { radius: 9.5,  phi: 0.02 }   // rain
   };
 
+  // 取景下沉（世界单位，正数 = 主体整体向下；0/缺省 = 不动）
+  // 2026-11-06 用户反馈（截图实测）：极光 / 声波地形 / 螺旋星云的构图重心偏上，
+  // 亮像素垂直重心 0.41 / 0.40 / 0.44（0=顶 1=底，正常约 0.47~0.50），底部留白 260~290px。
+  // 只平移粒子层 pos.y，不动相机 —— 相机的 lookAt 一动，歌词会跟着整体下移（歌词已居中）。
+  // 换算参考（该预设机位下每世界单位约合多少屏像素）：极光 ~197px、声波地形 ~117px、螺旋星云 ~154px。
+  // 调大 = 更靠下；想回到原位就把对应项删掉或写 0。
+  var PRESET_FRAMING = {
+    9: 0.35,   // 极光    ≈ +69px
+    12: 0.80,  // 声波地形 ≈ +94px（地形包围盒 216~678 → 约居中）
+    13: 0.50    // 螺旋星云 ≈ +77px
+  };
+
+  // 由 PRESET_FRAMING 生成 GLSL（uPreset 用 ±0.5 判档，与其它分支同风格）
+  var GLSL_FRAMING = (function () {
+    var lines = ['  if (uPreset > 8.5) {', '    float frameDrop = 0.0;'];
+    Object.keys(PRESET_FRAMING).forEach(function (key) {
+      var idx = Number(key);
+      var dy = Number(PRESET_FRAMING[key]) || 0;
+      if (!dy) return;
+      lines.push('    if (uPreset > ' + (idx - 0.5).toFixed(1) + ' && uPreset < ' + (idx + 0.5).toFixed(1) + ') frameDrop = ' + dy.toFixed(3) + ';');
+    });
+    lines.push('    pos.y -= frameDrop;');
+    lines.push('  }');
+    return lines.join('\n');
+  })();
+
   // ---- GLSL：常量 + 辅助（插在 hash11 之后）----
   var GLSL_CONSTANTS = [
     '#define METEOR_SLOTS 5.0',
@@ -934,6 +960,8 @@
     PRESET_META: PRESET_META,
     PRESET_ICONS: PRESET_ICONS,
     PRESET_CAMERA: PRESET_CAMERA,
+    PRESET_FRAMING: PRESET_FRAMING,
+    GLSL_FRAMING: GLSL_FRAMING,
     GLSL_CONSTANTS: GLSL_CONSTANTS,
     GLSL_BRANCHES: GLSL_BRANCHES,
     GLSL_BRIGHT_PATCH: GLSL_BRIGHT_PATCH,
