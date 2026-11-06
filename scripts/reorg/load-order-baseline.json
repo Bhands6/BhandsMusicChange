@@ -24,6 +24,7 @@
     "20-window-gesture.js"
   ],
   "itemHashes": {
+    "55532f0e6060deb1": 1,
     "01a6dbedb98557b5": 1,
     "f5809e391f22fe25": 1,
     "111b92162073f13f": 1,
@@ -317,12 +318,12 @@
     "d51ea353c23dbdfa": 1,
     "8a318850d7a42b26": 1,
     "e1b476aaa54377e7": 1,
-    "5dc51dacc62caf12": 1,
+    "ee683b402fcea1fd": 1,
     "a4d2a140a5d9683c": 1,
     "2114b2f65a89c2de": 1,
     "bac6bfae01c8275c": 1,
     "59402ec31f8fea93": 1,
-    "04a33852a1a06d5a": 1,
+    "dec4dee029757ca4": 1,
     "c02cf6056ce9200c": 1,
     "867516aff57e0bf7": 1,
     "d7751eafadf08b72": 1,
@@ -518,6 +519,8 @@
     "ac459b1dacee90e3": 1,
     "08f95c660ff29a9d": 1,
     "d9518798f1ba4eff": 1,
+    "02de2ea0ed39cdb9": 1,
+    "bef4de3a04d8ea28": 1,
     "71960c822261fb92": 1,
     "0c6afd8b8932cb8b": 1,
     "77715532110ff6f7": 1,
@@ -540,6 +543,7 @@
     "eb1bbdac4413421a": 1,
     "ba750170f5e0a3b2": 1,
     "e34c2744bcd10ea9": 1,
+    "31c713c31f2a4294": 1,
     "51d1a14db6470847": 1,
     "1336b4dbdff1df23": 1,
     "95d9bcb4a3e326c3": 1,
@@ -2109,7 +2113,6 @@
       "6be8d40d47a485e8": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
-      "51d1a14db6470847": false,
       "5624be9892e126d8": false,
       "61787d62eeccee3f": false,
       "03f3c73d4274ebba": false,
@@ -2236,6 +2239,7 @@
       "7e9f2deaf4eb9bf6": false,
       "6be8d40d47a485e8": false,
       "2b1f8e5835303d7e": false,
+      "02de2ea0ed39cdb9": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
       "51d1a14db6470847": false,
@@ -2276,6 +2280,8 @@
       "f31cacd1ec28cb38": false,
       "6be8d40d47a485e8": false,
       "2b1f8e5835303d7e": false,
+      "02de2ea0ed39cdb9": false,
+      "bef4de3a04d8ea28": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
       "690ce3c865a411bc": false,
@@ -2568,10 +2574,9 @@
       "9503d2715a8b28b2": true,
       "40aae9d97b64df31": true
     },
-    "VISUAL_PRESET_INDEX_MAX": {
+    "VISUAL_PRESET_READ_MAX": {
       "6ccb723c39ae366f": true,
-      "ac2696772e8290f7": true,
-      "d9518798f1ba4eff": true
+      "ac2696772e8290f7": true
     },
     "clampRange": {
       "6ccb723c39ae366f": false,
@@ -2582,6 +2587,8 @@
       "7e9f2deaf4eb9bf6": false,
       "6be8d40d47a485e8": false,
       "2b1f8e5835303d7e": false,
+      "02de2ea0ed39cdb9": false,
+      "bef4de3a04d8ea28": false,
       "11a52bbbe5123731": false,
       "ed7fe9ee51fbe9a5": false,
       "5624be9892e126d8": false,
@@ -2879,6 +2886,7 @@
       "90875fe57edeb59a": true,
       "bac6bfae01c8275c": true,
       "59402ec31f8fea93": true,
+      "02de2ea0ed39cdb9": true,
       "5624be9892e126d8": true,
       "61787d62eeccee3f": true,
       "f7c040a61fc9b918": true,
@@ -2982,7 +2990,7 @@
       "bffadcea56d86e2a": false,
       "d51ea353c23dbdfa": false,
       "8a318850d7a42b26": false,
-      "5dc51dacc62caf12": false,
+      "ee683b402fcea1fd": false,
       "867516aff57e0bf7": false,
       "8444ffb7ac4d1508": false,
       "f1393a60a4929f66": false,
@@ -3080,7 +3088,7 @@
       "c3d575002de9a35c": true,
       "62a7f4d0d1db597b": true,
       "191cf5f62d9acd65": true,
-      "5dc51dacc62caf12": true,
+      "ee683b402fcea1fd": true,
       "59402ec31f8fea93": true,
       "f046cc5038ab3a79": true,
       "22fb3308be171bbf": true,
@@ -3290,7 +3298,7 @@
     },
     "WebFxPresets": {
       "b70d49b6274e47f9": false,
-      "04a33852a1a06d5a": false,
+      "dec4dee029757ca4": false,
       "69155c38cef68dc5": false,
       "ae1406074e69e7d8": false,
       "5624be9892e126d8": false,
@@ -3303,7 +3311,7 @@
       "90875fe57edeb59a": false,
       "b8551ac065512a0e": true,
       "7e9f2deaf4eb9bf6": true,
-      "5dc51dacc62caf12": true,
+      "ee683b402fcea1fd": true,
       "2114b2f65a89c2de": true
     },
     "coverParticleGridForResolution": {
@@ -3362,7 +3370,7 @@
     "rippleTex": {
       "8e731c345bf61edd": true,
       "3bac3eee5cdcaca9": true,
-      "5dc51dacc62caf12": true,
+      "ee683b402fcea1fd": true,
       "48d43e1c74a26e76": true
     },
     "ri": {
@@ -3382,23 +3390,23 @@
       "076c2e181f40b218": true,
       "8d6bae53ad7f2d35": true,
       "1caff9810f9e8ea6": true,
-      "5dc51dacc62caf12": true,
+      "ee683b402fcea1fd": true,
       "48d43e1c74a26e76": true
     },
     "coverEdgeTex": {
       "345e557748722e8b": true,
       "fc44ce71e09ed372": true,
       "1caff9810f9e8ea6": true,
-      "5dc51dacc62caf12": true
+      "ee683b402fcea1fd": true
     },
     "prevCoverTex": {
       "d51ea353c23dbdfa": true,
       "8a318850d7a42b26": true,
       "e1b476aaa54377e7": true,
-      "5dc51dacc62caf12": true
+      "ee683b402fcea1fd": true
     },
     "dotTexture": {
-      "5dc51dacc62caf12": true,
+      "ee683b402fcea1fd": true,
       "f3d14d1f4d6e7301": true,
       "40aae9d97b64df31": true,
       "48d43e1c74a26e76": true
@@ -3794,6 +3802,19 @@
     "wfic": {
       "ae1406074e69e7d8": false
     },
+    "VISUAL_PRESET_INDEX_MAX": {
+      "d9518798f1ba4eff": true,
+      "02de2ea0ed39cdb9": true,
+      "bef4de3a04d8ea28": true
+    },
+    "playbackVisualPreset": {
+      "bef4de3a04d8ea28": true,
+      "5624be9892e126d8": true,
+      "d6d805144fb9e1d5": true,
+      "3fde340b99fc0191": true,
+      "9503d2715a8b28b2": true,
+      "40aae9d97b64df31": true
+    },
     "USER_FX_ARCHIVE_STORE_KEY": {
       "5f4e4ba37323b978": true,
       "11a52bbbe5123731": true,
@@ -3864,6 +3885,9 @@
     "userFxArchives": {
       "ed7fe9ee51fbe9a5": true,
       "61787d62eeccee3f": true
+    },
+    "_lxScriptBlockExpanded": {
+      "51d1a14db6470847": true
     },
     "_musicSourcesConfig": {
       "51d1a14db6470847": true,
@@ -4808,13 +4832,6 @@
     "peekTimers": {
       "5624be9892e126d8": true,
       "79b7c839245f5cde": true,
-      "9503d2715a8b28b2": true,
-      "40aae9d97b64df31": true
-    },
-    "playbackVisualPreset": {
-      "5624be9892e126d8": true,
-      "d6d805144fb9e1d5": true,
-      "3fde340b99fc0191": true,
       "9503d2715a8b28b2": true,
       "40aae9d97b64df31": true
     },
