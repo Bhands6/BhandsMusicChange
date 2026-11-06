@@ -600,7 +600,7 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 .update-entry.downloading .update-progress-ring{opacity:1}
 .update-entry.downloading .update-ring{opacity:.28}
 #update-modal.modal-mask{background:rgba(0,0,0,.74);backdrop-filter:blur(12px) saturate(1.08);-webkit-backdrop-filter:blur(12px) saturate(1.08)}
-.modal.update-modal{width:min(408px,92vw);max-width:min(408px,92vw);padding:0;text-align:left;border-radius:18px;overflow:hidden;background:rgba(8,8,9,.965);border-color:rgba(255,255,255,.10);box-shadow:0 32px 96px rgba(0,0,0,.66),0 0 0 1px rgba(244,210,138,.055),inset 0 1px 0 rgba(255,255,255,.08)}
+.modal.update-modal{width:min(760px,94vw);max-width:min(760px,94vw);padding:0;text-align:left;border-radius:18px;overflow:hidden;background:rgba(8,8,9,.965);border-color:rgba(255,255,255,.10);box-shadow:0 32px 96px rgba(0,0,0,.66),0 0 0 1px rgba(244,210,138,.055),inset 0 1px 0 rgba(255,255,255,.08)}
 .modal.update-modal::before{content:'';position:absolute;top:0;left:24px;right:24px;height:1px;background:linear-gradient(90deg,transparent,rgba(244,210,138,.58),rgba(255,255,255,.20),transparent);opacity:.72;pointer-events:none}
 .update-panel-inner{position:relative;z-index:1;padding:28px 30px 24px}
 .update-panel-head{display:block;margin-bottom:17px;padding:0 0 17px;border-bottom:1px solid rgba(255,255,255,.075)}
@@ -611,11 +611,13 @@ body.desktop-shell.empty-home-active.controls-visible #empty-home{bottom:126px}
 .update-hero-main{max-width:none;font-size:13.5px;font-weight:560;color:rgba(255,244,218,.82);line-height:1.55;letter-spacing:0}
 .update-hero-sub{display:none}
 /* 2026-10-20：条数上限 4→6 且超长行会折行，给列表加滚动上限，防止弹窗被撑出屏幕 */
-.update-list{display:flex;flex-direction:column;margin:0 0 19px;border-top:0;max-height:min(38vh,320px);overflow-y:auto;padding-right:2px}
-.update-item{display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.055);background:transparent}
-.update-item-dot{width:auto;height:auto;margin:0;border-radius:0;background:transparent;box-shadow:none;flex-shrink:0;font-size:10px;font-weight:760;letter-spacing:.08em;color:rgba(244,210,138,.58);font-variant-numeric:tabular-nums}
+/* 2026-11-06：一条更新说明固定占一行（不折行），放不下时整块横向滚动。
+   行用 max-content 撑开，min-width:100% 保证短条目也铺满分隔线。 */
+.update-list{display:flex;flex-direction:column;margin:0 0 19px;border-top:0;max-height:min(38vh,320px);overflow-y:auto;overflow-x:auto;padding-right:2px;overscroll-behavior:contain}
+.update-item{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid rgba(255,255,255,.055);background:transparent;width:max-content;min-width:100%}
+.update-item-dot{width:34px;height:auto;margin:0;border-radius:0;background:transparent;box-shadow:none;flex:0 0 34px;font-size:10px;font-weight:760;letter-spacing:.08em;color:rgba(244,210,138,.58);font-variant-numeric:tabular-nums}
 .update-item-dot::before{content:attr(data-index)}
-.update-item-text{font-size:13px;font-weight:560;line-height:1.45;color:rgba(255,255,255,.76)}
+.update-item-text{font-size:13px;font-weight:560;line-height:1.45;color:rgba(255,255,255,.76);white-space:nowrap;flex:0 0 auto}
 .update-actions{display:grid;grid-template-columns:1fr 76px;gap:10px;align-items:center;padding-top:0}
 .update-primary-btn{position:relative;height:44px;border-radius:13px;border:1px solid rgba(244,210,138,.34);background:rgba(244,210,138,.105);color:rgba(255,244,214,.96);font-family:inherit;font-size:13px;font-weight:760;letter-spacing:.2px;cursor:pointer;overflow:hidden;box-shadow:0 14px 36px rgba(0,0,0,.28),0 0 22px rgba(244,210,138,.060),inset 0 1px 0 rgba(255,255,255,.10);transition:background .22s,border-color .22s,transform .22s,color .22s,box-shadow .22s}
 .update-primary-btn:hover{border-color:rgba(244,210,138,.58);background:rgba(244,210,138,.15);box-shadow:0 16px 42px rgba(0,0,0,.30),0 0 28px rgba(244,210,138,.11),inset 0 1px 0 rgba(255,255,255,.12);transform:translateY(-1px)}

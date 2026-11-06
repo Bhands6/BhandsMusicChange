@@ -1202,25 +1202,58 @@ function cleanReleaseLine(line) {
   return String(line || '')
     .replace(/^\s*#{1,6}\s*/, '')
     .replace(/^\s*[-*]\s+/, '')
-    .replace(/^\s*\d+[.)]\s+/, '')
+    // 2026-11-06：同时认中文序号（1、/ 1．/ 1）），此前只认 1. 与 1)，写「1、修改…」时序号会留在正文里
+    .replace(/^\s*\d+\s*[.、．)）]\s*/, '')
     .replace(/\*\*/g, '')
     .replace(/`/g, '')
     .trim();
 }
+/** 该行是否开启一个新条目（有序号前缀或列表符号） */
+function isReleaseNoteStart(line) {
+  return /^\s*(?:\d+\s*[.、．)）]|[-*])\s*/.test(String(line || ''));
+}
+/** 续行并入上一条：中文直接拼接，西文补一个空格，避免 "rockroll" 这种粘连 */
+function joinReleaseNote(prev, next) {
+  if (!prev) return next;
+  var lastChar = prev.slice(-1);
+  var firstChar = String(next || '').slice(0, 1);
+  var cjk = /[\u2e80-\u9fff\u3000-\u303f\uff00-\uffef]/;
+  return (cjk.test(lastChar) || cjk.test(firstChar)) ? prev + next : prev + ' ' + next;
+}
 function extractReleaseNotes(body) {
   const notes = [];
-  String(body || '').split(/\r?\n/).forEach(line => {
-    let text = cleanReleaseLine(line);
-    if (!text) return;
+  let current = '';
+  const pushCurrent = () => {
+    if (!current) return;
+    // 2026-10-20：超长条目不再整行丢弃，改为截到 160 字符加省略号（条数上限 6）
+    // 2026-11-06：截断改到「合并之后」做，否则续行会被提前切断
+    let text = current.length > 160 ? current.slice(0, 160).replace(/\s+\S*$/, '') + '…' : current;
+    notes.push(text);
+    current = '';
+  };
+  const lines = String(body || '').split(/\r?\n/);
+  /* 全文一个序号/列表符号都没有时，退回旧行为（一行一条）——
+   * 否则「修复登录 / 优化下载」这种纯行列表会被合并成一整条。 */
+  const hasAnyMarker = lines.some(line => isReleaseNoteStart(line));
+  lines.forEach(line => {
+    const text = cleanReleaseLine(line);
+    // 空行只当作条目分隔，不并入上一条
+    if (!text) { pushCurrent(); return; }
     if (/^(what'?s changed|changes|changelog|full changelog|更新日志)$/i.test(text)) return;
     if (/^https?:\/\//i.test(text)) return;
     // 2026-10-09：跳过纯版本号行（tag 标题在弹窗大标题里已显示，避免 "01 v2.1.0" 冗余行）
     if (/^v?\d+(?:\.\d+){1,3}$/i.test(text)) return;
-    // 2026-10-20：超长行不再整行丢弃（之前 >72 字符直接 return，会静默丢更新内容），
-    // 改为截到 160 字符加省略号；条数上限 4 → 6，弹窗列表加了滚动上限兜底
-    if (text.length > 160) text = text.slice(0, 160).replace(/\s+\S*$/, '') + '…';
-    notes.push(text);
+    /* 2026-11-06：序号行 = 新条目，没序号的行归到上一条（用户写作习惯：一条长句折行仍算同一条，
+     * 之前每行都独立成条，长句会被拆成 03/04 两条）。全文无序号时见上面的 hasAnyMarker 兜底。 */
+    const startsNew = !hasAnyMarker || isReleaseNoteStart(line) || !current;
+    if (startsNew) {
+      pushCurrent();
+      current = text;
+    } else {
+      current = joinReleaseNote(current, text);
+    }
   });
+  pushCurrent();
   return notes.slice(0, 6);
 }
 /** 当前平台的安装包扩展名（Windows = exe/msi，macOS = dmg） */
